@@ -85,3 +85,6 @@
 {"ts":"2026-10-13T21:02:44.623Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":1,"commit":"5310fad6effc45841697395df35eeeb344695186"}
 {"ts":"2026-10-13T21:20:34.391Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":1,"commit":"334b2c0e0ebb8d280c8cb0711d80526ac5e69acb"}
 {"ts":"2026-10-13T21:31:04.779Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":1,"commit":"3cda48712829261651a64f56782327690e428751"}
+{"ts":"2026-10-13T21:44:35.593Z","kind":"task.ingested","task":"TASK-101","source":"raw/operativni-vodic.md","actor":"operator"}
+{"ts":"2026-10-13T21:44:35.596Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T21:44:35.598Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"ready","phase":"inbox","moved":null}

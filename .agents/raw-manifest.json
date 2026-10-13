@@ -7,7 +7,13 @@
       "bytes": true,
       "size": 24206,
       "upgradedFrom": "v1"
+    },
+    "operativni-vodic.md": {
+      "sha256": "7e65a97ced628fc0508a4562f5ec5dc37782e77df5749f240de8f92297d00840",
+      "bytes": true,
+      "size": 1435,
+      "registeredAt": "2026-10-13T21:44:35.590Z"
     }
   },
-  "updated": "2026-10-13T21:31:04.750Z"
+  "updated": "2026-10-13T21:44:35.590Z"
 }
