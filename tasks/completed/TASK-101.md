@@ -1,9 +1,9 @@
 ---
 id: TASK-101
 title: Operativni vodic asinhronog sistema
-status: in_progress
+status: consolidated
 created: 2026-10-13T21:44:35.592Z
-updated: 2026-10-13T22:02:55.858Z
+updated: 2026-10-13T22:02:56.008Z
 source: raw/operativni-vodic.md
 priority: normal
 tags:
@@ -12,10 +12,11 @@ tags:
 depends_on: []
 authors:
   - researcher
+  - consolidator
 assignee: codex
-lock_owner: codex
-locked_at: 2026-10-13T22:02:14.269Z
-lease_expires_at: 2026-10-13T22:12:14.269Z
+lock_owner: null
+locked_at: null
+lease_expires_at: null
 artifacts:
   - wiki/Operativni_vodic_asinhronog_sistema.md
 verification:
@@ -113,6 +114,13 @@ history:
     status: in_progress
     actor: consolidator
     note: "konsolidovano: wiki/Operativni_vodic_asinhronog_sistema.md"
+  - at: 2026-10-13T22:02:56.005Z
+    status: consolidated
+    actor: agentctl
+    note: merge a186fc8c
+  - at: 2026-10-13T22:02:56.008Z
+    status: consolidated
+    actor: agentctl
 ---
 
 # Operativni vodic asinhronog sistema
