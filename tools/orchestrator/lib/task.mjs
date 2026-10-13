@@ -23,9 +23,10 @@ export const TRANSITIONS = {
   // sme direktno u `consolidated`. Prelaze izvodi isključivo kontrolni sloj —
   // agenti nikad ne menjaju status zadatka.
   in_progress: ['review', 'ready', 'verified', 'consolidated', 'blocked'],
-  // `review -> ready` je odbijen nacrt: vraća se istraživaču, ne produkcionom wiki-ju.
-  review: ['verified', 'ready', 'blocked'],
-  verified: ['consolidated', 'review', 'ready', 'blocked'],
+  // `-> in_progress` iz `review`/`verified` je preuzimanje zadatka u sledeću
+  // fazu (zakup); `review -> ready` je odbijen nacrt koji se vraća istraživaču.
+  review: ['in_progress', 'verified', 'ready', 'blocked'],
+  verified: ['in_progress', 'consolidated', 'review', 'ready', 'blocked'],
   consolidated: [],
   blocked: ['ready'],
 };

@@ -36,17 +36,28 @@ export function branchName(config, role, id) {
 export async function listWorktrees(config) {
   const { stdout } = await git(config.root, ['worktree', 'list', '--porcelain']);
   const entries = [];
-  let current = {};
+  let current = null;
   for (const line of stdout.split('\n')) {
     if (!line.trim()) {
-      if (current.path) entries.push(current);
-      current = {};
+      if (current) entries.push(current);
+      current = null;
       continue;
     }
-    const [key, ...rest] = line.split(' ');
-    current[key] = rest.join(' ');
+    const index = line.indexOf(' ');
+    const key = index === -1 ? line : line.slice(0, index);
+    const value = index === -1 ? '' : line.slice(index + 1);
+    if (key === 'worktree') {
+      if (current) entries.push(current);
+      current = { path: value };
+      continue;
+    }
+    if (!current) continue;
+    if (key === 'HEAD') current.head = value;
+    else if (key === 'branch') current.branch = value.replace('refs/heads/', '');
+    else if (key === 'detached') current.detached = true;
+    else if (key === 'bare') current.bare = true;
   }
-  if (current.path) entries.push(current);
+  if (current) entries.push(current);
   return entries;
 }
 
@@ -192,6 +203,21 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
 export async function branchChangedPaths(config, branch, base = MAIN_BRANCH) {
   const { stdout } = await git(config.root, ['diff', '--name-only', `${base}...${branch}`], { allowFailure: true });
   return stdout ? stdout.split('\n').filter(Boolean) : [];
+}
+
+/**
+ * Izvedeni artefakti (npr. `wiki/Index.md`) se ne merge-uju kao sadržaj: svaka
+ * grana ih menja na svoj način, pa bi svaki paralelni rad pravio tekstualni
+ * konflikt. Zato se pre merge-a u radnom stablu poravnaju sa `main`, a
+ * kontrolni sloj ih posle merge-a regeneriše iz stanja vault-a.
+ */
+export async function alignGeneratedPaths(config, worktreeDir, paths, { base = MAIN_BRANCH, actor = 'agentctl' } = {}) {
+  if (!paths.length) return { aligned: [] };
+  const before = await git(worktreeDir, ['diff', '--name-only', base, '--', ...paths], { allowFailure: true });
+  if (!before.stdout) return { aligned: [] };
+  await git(worktreeDir, ['checkout', base, '--', ...paths], { actor, allowFailure: true });
+  const commit = await commitPaths(worktreeDir, paths, `agentctl: izvedeni artefakti poravnati sa ${base} pre merge-a`, { actor });
+  return { aligned: before.stdout.split('\n').filter(Boolean), commit };
 }
 
 export async function pruneWorktrees(config) {

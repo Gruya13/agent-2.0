@@ -126,10 +126,10 @@ export function createStore(config, options = {}) {
         if (current.data.status === 'in_progress' && info.held && info.owner !== owner && !canTakeOver(current.data, owner, now)) {
           throw new TaskError(`zadatak ${id} je pod živim zakupom vlasnika "${info.owner}"`, 'LEASE_HELD');
         }
-        if (!['ready', 'in_progress'].includes(current.data.status)) {
+        if (!['ready', 'review', 'verified', 'in_progress'].includes(current.data.status)) {
           throw new TaskError(`zadatak ${id} je u stanju "${current.data.status}" i ne može se preuzeti`, 'NOT_READY');
         }
-        if (current.data.status === 'ready') assertTransition('ready', 'in_progress');
+        if (current.data.status !== 'in_progress') assertTransition(current.data.status, 'in_progress');
         const lease = newLease(owner, ttlMs, now);
         let data = { ...current.data, ...lease, status: 'in_progress', assignee: owner, updated: now.toISOString() };
         data = appendHistory(data, { status: 'in_progress', actor: owner, note: info.held ? 'preuzet istekao zakup' : null, now: now.toISOString() });

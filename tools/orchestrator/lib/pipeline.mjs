@@ -18,8 +18,8 @@ import { createStore } from './store.mjs';
 import { exists } from './fsx.mjs';
 import { commitPaths, log as gitLog } from './git.mjs';
 import {
-  createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
-  removeWorktree, removeWorktreesForTask, MAIN_BRANCH,
+  alignGeneratedPaths, createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
+  removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
 } from './worktree.mjs';
 import { buildPrompt, parseVerdict, runAgent } from './agents/index.mjs';
 import { lintVault, updateRawManifest } from './lint.mjs';
@@ -131,6 +131,7 @@ export function createPipeline(config, options = {}) {
     }
     await removeWorktree(config, id, { role });
     await store.emit('phase.failed', { task: id, role, reason });
+    await commitBookkeeping(`agentctl: ${id} -> ${toStatus} (neuspeh faze ${role})`);
   }
 
   // ------------------------------------------------------------- faza 2
@@ -194,6 +195,7 @@ export function createPipeline(config, options = {}) {
       note: 'faza research završena',
     });
     await store.release(id, role, { toStatus: 'review', note: `nacrt spreman: ${produced.join(', ')}` });
+    await commitBookkeeping(`agentctl: ${id} -> review (nacrt: ${produced.join(', ')})`);
     await store.emit('phase.done', { task: id, phase: 'research', role, artifacts: produced, commit: commit.sha });
     logger(`research: ${id} -> ${produced.join(', ')} (${result.harness})`);
     return { phase: 'research', task: id, ok: true, artifacts: produced, commit: commit.sha, branch };
@@ -264,6 +266,7 @@ export function createPipeline(config, options = {}) {
 
     if (verdict === 'pass') {
       await store.release(id, role, { toStatus: 'verified', note: 'verifikator dao pečat' });
+      await commitBookkeeping(`agentctl: ${id} -> verified (${result.harness})`);
       await store.emit('phase.done', { task: id, phase: 'verify', role, verdict });
       logger(`verify: ${id} -> pass`);
       return { phase: 'verify', task: id, ok: true, verdict, commit: commit.sha };
@@ -276,11 +279,13 @@ export function createPipeline(config, options = {}) {
         actor: 'agentctl',
         note: `nacrt je odbijen ${attempts} puta; potrebna ljudska intervencija`,
       });
+      await commitBookkeeping(`agentctl: ${id} -> blocked (previse revizija)`);
       await removeWorktree(config, id, { role });
       await store.emit('phase.failed', { task: id, role, reason: 'previse revizija' });
       return { phase: 'verify', task: id, ok: false, verdict: 'fail', blocked: true };
     }
     await store.release(id, role, { toStatus: 'ready', note: `odbijen nacrt (pokušaj ${attempts}); vraćeno istraživaču` });
+    await commitBookkeeping(`agentctl: ${id} -> ready (nacrt odbijen, pokušaj ${attempts})`);
     await removeWorktree(config, id, { role });
     await store.emit('phase.rejected', { task: id, role, attempts });
     logger(`verify: ${id} -> fail (pokušaj ${attempts})`);
@@ -338,6 +343,9 @@ export function createPipeline(config, options = {}) {
 
     const branch = `agent/${role}/${id}`;
     const commit = await commitWorktreeSafe(config, id, role, `consolidator(${id}): konsolidacija u wiki/`, role);
+    // Indeks je izveden artefakt: poravnaj ga sa main pre merge-a, pa ga
+    // kontrolni sloj regeneriše posle spajanja (faza 5).
+    await alignGeneratedPaths(config, worktreePath(config, id, role), [config.vault.index]);
     const merge = await mergeIntoMain(config, {
       branch,
       message: `agentctl(${id}): konsolidacija (researcher+verifier+consolidator)`,
@@ -355,6 +363,7 @@ export function createPipeline(config, options = {}) {
           note: 'konflikt pri merge-u',
         });
       }
+      await commitBookkeeping(`agentctl: ${id} -> blocked (merge: ${merge.reason})`);
       await store.emit('phase.failed', { task: id, phase: 'consolidate', reason: merge.reason, conflict: Boolean(merge.conflict) });
       logger(`consolidate: ${id} -> KONFLIKT/ODBIJENO (${merge.reason})`);
       return { phase: 'consolidate', task: id, ok: false, conflict: Boolean(merge.conflict), reason: merge.reason };
@@ -379,21 +388,34 @@ export function createPipeline(config, options = {}) {
     const { text, entries } = await renderIndex(config.root, { dirs: [config.vault.production], generatedAt });
     const indexFile = path.join(config.root, config.vault.index);
     await fs.mkdir(path.dirname(indexFile), { recursive: true });
-    await fs.writeFile(indexFile, text, 'utf8');
+
+    // `wiki/Index.md` je izveden: ako se sadržaj nije promenio, ne diraj fajl.
+    // Bez ovoga svaki krug kontrolne petlje proizvodi novi commit samo zbog
+    // vremenske oznake, a main i grane se razilaze bez razloga.
+    const stripTimestamps = (value) => value.replace(/^(created|updated):.*$/gm, '');
+    let existing = null;
+    try {
+      existing = await fs.readFile(indexFile, 'utf8');
+    } catch { /* prvi prolaz */ }
+    const changed = !existing || stripTimestamps(existing) !== stripTimestamps(text);
+    if (changed) await fs.writeFile(indexFile, text, 'utf8');
 
     const { added, total } = await updateRawManifest(config);
-    const commit = await commitBookkeeping('agentctl: reflect (indeks + manifest izvora)');
+    const commit = await commitBookkeeping(changed
+      ? 'agentctl: reflect (indeks + manifest izvora)'
+      : 'agentctl: reflect (manifest izvora)');
     const history = await gitLog(config.root, { limit: 10 });
 
     await store.emit('phase.done', {
       task: null,
       phase: 'reflect',
       notes: entries.length,
+      indexChanged: changed,
       rawManifestAdded: added,
       rawManifestTotal: total,
       commit: commit.sha,
     });
-    return { phase: 'reflect', ok: true, notes: entries.length, manifest: { added, total }, commit: commit.sha, history };
+    return { phase: 'reflect', ok: true, notes: entries.length, indexChanged: changed, manifest: { added, total }, commit: commit.sha, history };
   }
 
   // ------------------------------------------------------------- petlja
