@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: blocked
+status: ready
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T23:32:06.505Z
+updated: 2026-10-13T23:42:47.784Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -55,7 +55,7 @@ challenge:
   correlationRisk: true
   by: dsh
   at: 2026-10-13T23:32:06.499Z
-blocked_reason: red-team je reprodukovao nalaz 3 put(a) (dozvoljeno 3); potrebna ljudska intervencija
+blocked_reason: null
 history:
   - at: 2026-10-13T22:42:31.949Z
     status: proposed
@@ -202,6 +202,10 @@ history:
     status: blocked
     actor: agentctl
     note: red-team je reprodukovao nalaz 3 put(a) (dozvoljeno 3); potrebna ljudska intervencija
+  - at: 2026-10-13T23:42:47.784Z
+    status: ready
+    actor: operator
+    note: sistem je popravljen posle nalaza red-teama; vracam zadatak da autor prepravi nacrt
 lock_token: null
 ---
 
