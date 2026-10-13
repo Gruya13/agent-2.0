@@ -75,7 +75,14 @@ i u `agentctl` kontrolnom sloju (Git sloj).
     ulozi kroz MCP.
 14. **Manifest izvora hashira bajtove, ne tekst.** Izmena jednog bajta u
     binarnom izvoru (`.pdf`, slika) mora biti prijavljena; `readFile(..., 'utf8')`
-    bi različite bajtove sveo na isti zamenski znak.
+    bi različite bajtove sveo na isti zamenski znak. Zapis iz manifesta v1 se
+    nadograđuje samo kada je osnova uporediva (validan UTF-8 i hash se poklapa);
+    za binarne izvore se prijavljuje `raw.legacy-unknown` dok čovek ne uspostavi
+    novu osnovu.
+15. **Odluka o obaveznosti zadatka vezana je za skladište, ne za env.** Ako
+    skladište koje se piše nosi `.agents/AGENTS.md`, upis bez zadatka, zakupa i
+    (za `wiki/`) verifikacionog pečata je odbijen — bez obzira na
+    `OBSIDIAN_TASK_ROOT`. Zadatak bez artefakata ne otvara produkciju.
 
 ## 3. Životni ciklus zadatka
 

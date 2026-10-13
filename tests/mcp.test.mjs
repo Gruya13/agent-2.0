@@ -233,7 +233,38 @@ test('MCP: upis bez zadatka, sa isteklim zakupom ili pogrešnim stanjem je odbij
   assert.match(wrongArtifact.content[0].text, /nije artefakt/);
   tudjaBeleska.close();
 
+  // 6. Zadatak bez artefakata ne otvara produkciju ("sme bilo šta").
+  await makeTask(vault, { id: 'TASK-205', owner: 'consolidator', status: 'verified', artifacts: [] });
+  const bezArtefakata = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-205' });
+  const noArtifact = await bezArtefakata.callTool('obsidian_write_note', { path: 'wiki/Bilo_sta.md', content: '# x\n' });
+  assert.equal(noArtifact.isError, true, 'zadatak bez artefakata ne sme da otvori produkciju');
+  assert.match(noArtifact.content[0].text, /nema artefakte/);
+  bezArtefakata.close();
+
   assert.equal(await vault.exists('wiki/Neproverena.md'), false, 'odbijeni upis nije nastao');
+  assert.equal(await vault.exists('wiki/Bilo_sta.md'), false);
+  await vault.cleanup();
+});
+
+test('MCP: kontrolni koren se ne može zaobići praznim direktorijumom', async (t) => {
+  const vault = await seededVault();
+  // Skladište nosi ugovor, pa je zadatak obavezan — i kada je OBSIDIAN_TASK_ROOT
+  // usmeren na prazan direktorijum koji nema ni ugovor ni tasks/.
+  const prazan = await fs.mkdtemp(path.join(path.dirname(vault.root), 'agent2-empty-'));
+  const client = await connect(vault.root, 'consolidator', 'codex', t, {
+    OBSIDIAN_TASK_ROOT: prazan,
+    OBSIDIAN_TASK: 'TASK-999',
+  });
+  const write = await client.callTool('obsidian_write_note', { path: 'wiki/NoStamp.md', content: '# x\n' });
+  assert.equal(write.isError, true, 'prazan kontrolni koren ne sme da ukine zahtev za zadatkom');
+  assert.match(write.content[0].text, /ugovor/);
+  assert.equal(await vault.exists('wiki/NoStamp.md'), false);
+
+  // Isto važi i bez OBSIDIAN_TASK, čak i kada kontrolni koren nema ugovor.
+  const bez = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK_ROOT: prazan });
+  const noTask = await bez.callTool('obsidian_write_note', { path: 'wiki/NoStamp2.md', content: '# x\n' });
+  assert.equal(noTask.isError, true);
+  await fs.rm(prazan, { recursive: true, force: true });
   await vault.cleanup();
 });
 

@@ -70,6 +70,42 @@ test('lint: manifest v1 (hash teksta) se nadograđuje bez lažne prijave', async
   await vault.cleanup();
 });
 
+test('lint: v1 manifest ne sme tiho da "nadogradi" binarni izvor bez osnove', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  const original = Buffer.concat([Buffer.from('%PDF-1.7\n', 'utf8'), Buffer.from([0x80]), Buffer.from('\n', 'utf8')]);
+  await fs.writeFile(path.join(vault.root, 'raw', 'binary.pdf'), original);
+  // v1 osnova: hash DEKODIRANOG teksta (dva različita bajta daju isti string).
+  const legacyHash = sha256(original.toString('utf8'));
+  await fs.writeFile(path.join(vault.root, '.agents', 'raw-manifest.json'), JSON.stringify({
+    version: 1,
+    files: { 'binary.pdf': { sha256: legacyHash, registeredAt: '2025-01-01T00:00:00.000Z' } },
+  }, null, 2));
+
+  const changed = Buffer.concat([Buffer.from('%PDF-1.7\n', 'utf8'), Buffer.from([0x81]), Buffer.from('\n', 'utf8')]);
+  await fs.writeFile(path.join(vault.root, 'raw', 'binary.pdf'), changed);
+
+  const result = await lintVault(config);
+  assert.equal(result.ok, false, 'izmena se ne sme prećutati zbog neuporedive v1 osnove');
+  assert.equal(find(result.findings, 'raw.legacy-unknown').length, 1);
+  assert.deepEqual(find(result.findings, 'raw.modified'), [], 'ne tvrdimo izmenu koju ne možemo da dokažemo');
+
+  // `index` ne sme da upiše izmenjene bajtove kao novu osnovu.
+  const upgrade = await updateRawManifest(config);
+  assert.equal(upgrade.upgraded, 0, 'binarni v1 zapis se ne nadograđuje automatski');
+  const manifest = JSON.parse(await vault.read('.agents/raw-manifest.json'));
+  assert.equal(manifest.files['binary.pdf'].sha256, legacyHash, 'osnova ostaje nepromenjena dok je čovek ne potvrdi');
+
+  // Eksplicitna re-osnova (brisanje zapisa) uspostavlja novu, proverljivu osnovu.
+  await fs.writeFile(path.join(vault.root, '.agents', 'raw-manifest.json'), JSON.stringify({ version: 2, files: {} }, null, 2));
+  await updateRawManifest(config);
+  assert.deepEqual(find((await lintVault(config)).findings, 'raw.legacy-unknown'), []);
+  assert.deepEqual(find((await lintVault(config)).findings, 'raw.modified'), []);
+  await fs.writeFile(path.join(vault.root, 'raw', 'binary.pdf'), Buffer.concat([Buffer.from('%PDF-1.7\n', 'utf8'), Buffer.from([0x82]), Buffer.from('\n', 'utf8')]));
+  assert.equal(find((await lintVault(config)).findings, 'raw.modified').length, 1, 'posle re-osnove izmena je vidljiva');
+  await vault.cleanup();
+});
+
 test('lint: novo u raw/ je dozvoljeno (append-only)', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);

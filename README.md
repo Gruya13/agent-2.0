@@ -179,6 +179,22 @@ Upis kroz MCP ima tri kapije, i sve tri su pokrivene testovima:
    artefakti (`wiki/Index.md`, `.agents/raw-manifest.json`, `tasks/events.jsonl`)
    nisu upisivi.
 
+Kapija 2 se ne može zaobići preusmeravanjem `OBSIDIAN_TASK_ROOT` na prazan
+direktorijum: odluka „da li je zadatak obavezan" donosi se po skladištu koje se
+piše, a kontrolni koren mora sam da nosi `.agents/AGENTS.md`. Zadatak bez
+artefakata ne otvara produkciju — prazna lista ne znači „sme bilo šta", nego da
+zadatak nije prošao kroz fazu istraživanja.
+
+## Manifest izvora (v1 → v2)
+
+Manifest v2 čuva hash **bajtova**. Zapis iz v1 (hash dekodiranog teksta)
+nadograđuje se automatski **samo** kada je osnova uporediva: fajl je validan
+UTF-8 i hash se poklapa. Za binarne izvore stara osnova ne dokazuje ništa, pa
+linter prijavljuje `raw.legacy-unknown` (greška) i ne dozvoljava da `index`
+izmenu pretvori u novu osnovu. Rešenje je svesna ljudska radnja: ukloni zapis iz
+`.agents/raw-manifest.json` i pokreni `agentctl index` — tada se uspostavlja
+proverljiva osnova nad bajtovima.
+
 Skladište koje ne nosi `.agents/AGENTS.md` (običan Obsidian vault) zadržava samo
 kapiju 1 — tako MCP server ostaje upotrebljiv i van crne table.
 

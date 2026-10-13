@@ -33,6 +33,16 @@ export async function hashRawFile(file) {
   return sha256File(file);
 }
 
+/**
+ * Da li se bajtovi mogu dekodirati u UTF-8 i vratiti bez promene?
+ * Za takve fajlove je `sha256` teksta isto što i `sha256` bajtova, pa je stara
+ * (v1) osnova uporediva. Za binarne fajlove nije: različiti bajtovi se
+ * dekodiraju u isti zamenski znak, pa se izmena ne može isključiti.
+ */
+export function isRoundTripUtf8(buffer) {
+  return Buffer.from(buffer.toString('utf8'), 'utf8').equals(buffer);
+}
+
 /** Uporedi trenutno stanje `raw/` sa manifestom; svaka izmena je error. */
 export async function lintRawImmutability(config) {
   const findings = [];
@@ -61,9 +71,16 @@ export async function lintRawImmutability(config) {
     const known = recorded[rel];
     if (!known) continue; // novo u raw/ je dozvoljeno (append-only)
     if (known.sha256 === hash) continue;
-    // Zapisi iz manifesta v1 hashirali su UTF-8 dekodiran tekst. Ako se bajtovi
-    // razlikuju samo u nevalidnim sekvencama, to nije izmena izvora.
-    if (!known.bytes && known.sha256 === legacyHash) continue;
+
+    if (!known.bytes) {
+      // v1 osnova je hash dekodiranog teksta. Za validan UTF-8 je to isto što i
+      // hash bajtova, pa je uporedivo; za binarne fajlove osnova ne dokazuje
+      // ništa — izmenu ne smemo ni prijaviti kao sigurnu ni prećutati.
+      if (known.sha256 === legacyHash && isRoundTripUtf8(buffer)) continue;
+      findings.push(makeFinding('error', 'raw.legacy-unknown', `raw/${rel}`,
+        'manifest v1 ne može da dokaže nepromenljivost binarnog izvora; potrebna je eksplicitna re-osnova (ukloni zapis iz manifesta pa pokreni `agentctl index`)'));
+      continue;
+    }
     findings.push(makeFinding('error', 'raw.modified', `raw/${rel}`, `izvorni fajl je izmenjen (očekivan ${String(known.sha256).slice(0, 12)}, stvarni ${hash.slice(0, 12)})`));
   }
   for (const rel of Object.keys(recorded)) {
@@ -206,10 +223,13 @@ export async function updateRawManifest(config) {
       added += 1;
       continue;
     }
-    // v1 zapis (hash teksta) se nadograđuje na hash bajtova samo ako se sadržaj
-    // nije promenio — inače bi nadogradnja zamaskirala izmenu.
+    // v1 zapis (hash teksta) se nadograđuje na hash bajtova SAMO kada je osnova
+    // uporediva: validan UTF-8 i hash koji se poklapa. Za binarne fajlove se
+    // zapis NE dira — nadogradnja bi izmenu pretvorila u novu osnovu.
     if (!existing.bytes) {
-      if (existing.sha256 === byteHash || existing.sha256 === sha256(buffer.toString('utf8'))) {
+      const comparable = isRoundTripUtf8(buffer)
+        && (existing.sha256 === byteHash || existing.sha256 === sha256(buffer.toString('utf8')));
+      if (comparable) {
         manifest.files[rel] = { ...existing, sha256: byteHash, bytes: true, size: buffer.byteLength, upgradedFrom: 'v1' };
         upgraded += 1;
       }

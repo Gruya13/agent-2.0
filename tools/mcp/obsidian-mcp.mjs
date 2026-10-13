@@ -164,8 +164,14 @@ async function controlConfig() {
  * zakupa i verifikacionog pečata.
  */
 async function requireTaskContext(relative) {
-  if (!(await exists(path.join(TASK_ROOT, '.agents', 'AGENTS.md')))) {
+  // Odluka se donosi po SKLADIŠTU koje se piše, ne po kontrolnom korenu:
+  // inače bi dovoljno bilo proslediti OBSIDIAN_TASK_ROOT na prazan direktorijum
+  // i zaobići zahtev za zadatkom.
+  if (!(await exists(path.join(VAULT, '.agents', 'AGENTS.md')))) {
     return { skipped: 'skladište ne nosi ugovor .agents/AGENTS.md' };
+  }
+  if (!(await exists(path.join(TASK_ROOT, '.agents', 'AGENTS.md')))) {
+    throw new AccessError(`kontrolni koren ${TASK_ROOT} ne nosi ugovor .agents/AGENTS.md — upis je odbijen`);
   }
   if (!TASK_ID) {
     throw new AccessError(`upis u "${relative}" zahteva OBSIDIAN_TASK (id zadatka) — bez njega nema zakupa ni verifikacije`);
@@ -199,9 +205,15 @@ async function requireTaskContext(relative) {
     throw new AccessError(`zakup nad zadatkom ${TASK_ID} je istekao (${task.data.lease_expires_at})`);
   }
   if (zone === 'production') {
+    // Produkcioni upis mora biti konsolidacija deklarisanog artefakta. Prazna
+    // lista artefakata ne znači "bilo šta sme" — znači da zadatak nije prošao
+    // kroz fazu istraživanja.
     const target = path.basename(relative, '.md');
     const artifacts = (task.data.artifacts ?? []).map((rel) => path.basename(rel, '.md'));
-    if (artifacts.length && !artifacts.includes(target)) {
+    if (!artifacts.length) {
+      throw new AccessError(`zadatak ${TASK_ID} nema artefakte — nema šta da se konsoliduje u "${target}"`);
+    }
+    if (!artifacts.includes(target)) {
       throw new AccessError(
         `beleška "${target}" nije artefakt zadatka ${TASK_ID} (artefakti: ${artifacts.join(', ')})`,
       );
