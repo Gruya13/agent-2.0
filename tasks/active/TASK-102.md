@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
-status: verified
+status: in_progress
 created: 2026-10-13T20:46:03.466Z
-updated: 2026-10-13T20:46:03.749Z
+updated: 2026-10-13T20:46:03.784Z
 source: raw/arhitektura-asinhronog-multi-agentskog-sistema.md
 priority: normal
 tags:
@@ -12,10 +12,10 @@ tags:
 depends_on: []
 authors:
   - researcher
-assignee: null
-lock_owner: null
-locked_at: null
-lease_expires_at: null
+assignee: consolidator
+lock_owner: consolidator
+locked_at: 2026-10-13T20:46:03.784Z
+lease_expires_at: 2026-10-13T20:56:03.784Z
 artifacts:
   - wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md
 verification:
@@ -69,6 +69,9 @@ history:
     status: verified
     actor: verifier
     note: verifikator dao pečat
+  - at: 2026-10-13T20:46:03.784Z
+    status: in_progress
+    actor: consolidator
 ---
 
 # Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
