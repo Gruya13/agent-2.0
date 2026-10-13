@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: review
+status: ready
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T23:10:31.644Z
+updated: 2026-10-13T23:12:13.111Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -23,22 +23,22 @@ lease_expires_at: null
 artifacts:
   - wiki/drafts/Sest_uloga_i_dve_kapije.md
 verification:
-  verdict: pass
+  verdict: fail
   harness: dsh
-  at: 2026-10-13T23:00:55.591Z
-  commit: db590fbd2add9ab79fc9b1ec2bcbe88718e21e9d
+  at: 2026-10-13T23:12:13.104Z
+  commit: 64909f0fb9317672763b84ed7ccf52d830000d58
   summary: |-
-    Revizija je završena. Provera je rađena nezavisno u worktree-u `TASK-102-verifier`, nad nacrtom `wiki/drafts/Sest_uloga_i_dve_kapije.md` (blob `d25d0baf`, revizija `7945aa53`) i izvorom `raw/sest-uloga-i-dve-kapije.md`.
-    **Šta je provereno i potvrđeno:**
-    1. **Izvor** — `sha256sum` daje `3baa723e…b5191b3d3`, poklapa se sa `.agents/raw-manifest.json` (red 18); izvor je i u Gitu.
-    2. **Svih 6 citata red-po-red** odgovara izvoru (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27); tri direktna citata potvrđena poklapanjem podstringa.
-    3. **Vikilinkovi** — samo `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]`; oba fajla postoje, `obsidian_backlinks` ih potvrđuje; nema markdown linkova.
-    4. **Lint** — `obsidian_lint_vault`: grešaka 0, upozorenja 0.
-    5. **Kod-tvrdnje** — `worktree.mjs:163` (zone `wiki/`, `tasks/reviews/`, `tasks/audits/`, `tasks/challenges/`), `agents.yml:35–36` (`challengeTimeoutMs`, `challengeMaxScripts`), `pipeline.mjs:676–677` i `:693/:724` (`falsePositives`), `AGENTS.md:178–183` (šest uloga), `KONSULTACIJA-ULOGA.md:103` (`red-team → dsh`).
-    6. **Nema kontradikcija sa produkcijom** (`wiki/Operativni_vodic_asinhronog_sistema.md`, redovi 24–28).
-    Tri informativna zapažanja (npr. citiranje merge-kapije upućuje na sekciju 1 umesto na invarijantu 16; dvostruka negacija „bez odsustva…") nisu nalazi protiv nacrta — svako ima dokaz i predlog teksta, bez izmene fajla.
-    Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (poslednja linija `VERDICT: pass`). Commit nije moguć iz ovog worktree-a: Git indeks je na read-only delu (`.git/worktrees/…/index.lock`), pa fajl ostaje nekomitovan za kontrolni sloj.
-    VERDICT: pass
+    Verifikacija završena. Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (samo moja zona upisa; `wiki/`, `raw/` i nacrt nisu dirani).
+    - **Izvor je verodostojan:** `raw/sest-uloga-i-dve-kapije.md` je pod Gitom (blob `395bcabe`), a disk, blob i `.agents/raw-manifest.json` (red 18) daju isti SHA-256 `3baa723e…`.
+    - **Svih 6 nosivih tvrdnji** odgovara izvoru red-po-red (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27) — nijedan citat nije izmišljen.
+    - **Vikilinkovi** `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]` su validni; nema hipotetičkih veza.
+    - **Lint** prolazi: `grešaka: 0, upozorenja: 0`; zaglavlje nosi sva obavezna polja.
+    - **Reference na kod/ugovor** su proverene komandama (npr. `worktree.mjs` red 163, `pipeline.mjs` `falsePositives`, `agents.yml` redovi 35–36, `.agents/AGENTS.md` sekcija 5).
+    1. **N1 — misattribucija izvora (red 76):** otvoreno pitanje 1 tvrdi da su lista zona znanja i zabranjene putanje (`raw/`, `tools/`, `tests/`, `scripts/`, `.agents/`) u `.agents/AGENTS.md`, **sekcija 1**. Sekcija 1 (redovi 12–37) to ne sadrži; mandat i spisak su u **invarijanti 16** (redovi 96–99). Sama tvrdnja o putanjama je tačna — greška je u referenci.
+    2. **N2 — netočan broj produkcionih beležaka (red 71):** nacrt tvrdi da postoje „samo dve produkcione beleške", ali `wiki/` sadrži i `wiki/drafts/Sest_uloga_i_dve_kapije.md` (dakle tri `.md` fajla); tačno bi bilo „dve konsolidovane beleške (van `drafts/`)".
+    Oba nalaza su mehanički ispravljiva bez prepisivanja sadržaja, ali po pravilu verdikta `pass` nije dozvoljen dok postoje nalazi sa dokazom protiv nacrta.
+    VERDICT: fail
+    REASONS: 2
   by: dsh
 challenge:
   verdict: reproducible
@@ -144,6 +144,21 @@ history:
     status: review
     actor: dsh
     note: red-team oborio 3 tvrdnji; vraćeno autoru
+  - at: 2026-10-13T23:10:31.724Z
+    status: in_progress
+    actor: dsh
+  - at: 2026-10-13T23:12:13.105Z
+    status: in_progress
+    actor: dsh
+    note: "verdikt: fail"
+  - at: 2026-10-13T23:12:13.108Z
+    status: in_progress
+    actor: dsh
+    note: "faza verify: fail"
+  - at: 2026-10-13T23:12:13.111Z
+    status: ready
+    actor: dsh
+    note: odbijen nacrt (pokušaj 3); vraćeno istraživaču
 lock_token: null
 ---
 
@@ -320,4 +335,33 @@ NALAZI: 3
 LAZNI: 0
 SUM NJE: 8
 ```
+```
+
+### Faza verify (2026-10-13T23:12:13.107Z)
+
+- harnes: dsh
+- trajanje: 101306 ms
+- verdikt: fail
+- grana: agent/researcher/TASK-102 -> verifier @ 64909f0fb9317672763b84ed7ccf52d830000d58
+
+```
+Verifikacija završena. Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (samo moja zona upisa; `wiki/`, `raw/` i nacrt nisu dirani).
+
+## Šta je provereno
+
+- **Izvor je verodostojan:** `raw/sest-uloga-i-dve-kapije.md` je pod Gitom (blob `395bcabe`), a disk, blob i `.agents/raw-manifest.json` (red 18) daju isti SHA-256 `3baa723e…`.
+- **Svih 6 nosivih tvrdnji** odgovara izvoru red-po-red (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27) — nijedan citat nije izmišljen.
+- **Vikilinkovi** `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]` su validni; nema hipotetičkih veza.
+- **Lint** prolazi: `grešaka: 0, upozorenja: 0`; zaglavlje nosi sva obavezna polja.
+- **Reference na kod/ugovor** su proverene komandama (npr. `worktree.mjs` red 163, `pipeline.mjs` `falsePositives`, `agents.yml` redovi 35–36, `.agents/AGENTS.md` sekcija 5).
+
+## Nalazi protiv nacrta (2, oba sa dokazom)
+
+1. **N1 — misattribucija izvora (red 76):** otvoreno pitanje 1 tvrdi da su lista zona znanja i zabranjene putanje (`raw/`, `tools/`, `tests/`, `scripts/`, `.agents/`) u `.agents/AGENTS.md`, **sekcija 1**. Sekcija 1 (redovi 12–37) to ne sadrži; mandat i spisak su u **invarijanti 16** (redovi 96–99). Sama tvrdnja o putanjama je tačna — greška je u referenci.
+2. **N2 — netočan broj produkcionih beležaka (red 71):** nacrt tvrdi da postoje „samo dve produkcione beleške", ali `wiki/` sadrži i `wiki/drafts/Sest_uloga_i_dve_kapije.md` (dakle tri `.md` fajla); tačno bi bilo „dve konsolidovane beleške (van `drafts/`)".
+
+Oba nalaza su mehanički ispravljiva bez prepisivanja sadržaja, ali po pravilu verdikta `pass` nije dozvoljen dok postoje nalazi sa dokazom protiv nacrta.
+
+VERDICT: fail
+REASONS: 2
 ```
