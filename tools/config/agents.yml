@@ -1,0 +1,50 @@
+# Konfiguracija kontrolnog sloja (agentctl).
+#
+# `adapter: mock` je deterministički zamenik harnesa za testove i demo.
+# `adapter: harness` poziva pravi CLI iz tabele HARNESS_COMMANDS:
+#   researcher   -> agy  (Google Antigravity / Gemini)
+#   verifier     -> dsh  (DeepSeek Harness, headless profil)
+#   consolidator -> codex (OpenAI Codex, codex exec)
+#
+# Prelazak na prave harnese je izmena isključivo ovog fajla; kod se ne dira.
+
+vault:
+  sources: raw
+  drafts: wiki/drafts
+  production: wiki
+  index: wiki/Index.md
+  tasks: tasks
+  reviews: tasks/reviews
+  events: tasks/events.jsonl
+  contracts: .agents
+
+lease:
+  ttlMs: 600000        # 10 minuta
+  heartbeatMs: 120000  # obnova zakupa na 2 minuta
+
+worktree:
+  dir: .worktrees
+  branchPrefix: agent
+
+pipeline:
+  maxRounds: 10
+  intervalMs: 0
+  agentTimeoutMs: 900000
+  maxRevisions: 3
+
+agents:
+  researcher:
+    adapter: mock
+    harness: agy
+    model: null
+    timeoutMs: 900000
+  verifier:
+    adapter: mock
+    harness: dsh
+    model: null
+    timeoutMs: 900000
+  consolidator:
+    adapter: mock
+    harness: codex
+    model: null
+    timeoutMs: 900000

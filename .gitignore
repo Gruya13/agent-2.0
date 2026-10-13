@@ -1,0 +1,11 @@
+# Izolovana radna stabla agenata — nikad se ne komituju.
+.worktrees/
+# Privremeni fajlovi i atomski upisi.
+*.tmp
+.tmp/
+# Interni lockovi kontrolnog sloja.
+.locks/
+# Sesije harnesa i lokalni logovi.
+.runtime/
+# Lokalna konfiguracija koja ne pripada repozitorijumu.
+.agents/AGENTS.local.md

@@ -1,0 +1,21 @@
+{
+  "name": "agent-2.0",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Asinhroni multi-agentski sistem nad zajednickom bazom znanja (Obsidian vault + dsh/codex/agy harnesi)",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "agentctl": "./tools/orchestrator/cli.mjs",
+    "obsidian-mcp": "./tools/mcp/obsidian-mcp.mjs"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "lint": "node tools/orchestrator/cli.mjs lint",
+    "index": "node tools/orchestrator/cli.mjs index",
+    "status": "node tools/orchestrator/cli.mjs status",
+    "demo": "node scripts/demo.mjs"
+  }
+}
