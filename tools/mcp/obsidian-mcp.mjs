@@ -555,6 +555,15 @@ const HANDLERS = {
   obsidian_vault_info: opInfo,
 };
 
+function guardEpipe() {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error) => {
+      if (error.code === 'EPIPE') process.exit(0);
+      throw error;
+    });
+  }
+}
+
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 }
@@ -665,6 +674,7 @@ async function cliMain(argv) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMain) {
+  guardEpipe();
   const argv = process.argv.slice(2);
   if (argv.length) {
     cliMain(argv)

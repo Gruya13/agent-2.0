@@ -39,6 +39,19 @@ function parseArgs(argv) {
   return { flags, positional };
 }
 
+/**
+ * Zatvorena cev (`agentctl status | head`) nije greška u radu: izlaz se
+ * prekida tiho, bez stack trace-a na stderr.
+ */
+function guardEpipe() {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error) => {
+      if (error.code === 'EPIPE') process.exit(0);
+      throw error;
+    });
+  }
+}
+
 const out = (text) => process.stdout.write(`${text}\n`);
 const json = (value) => process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 
@@ -319,6 +332,8 @@ async function main() {
   const context = await buildContext(flags);
   return handler(context, rest);
 }
+
+guardEpipe();
 
 main()
   .then((code) => { process.exitCode = code ?? 0; })

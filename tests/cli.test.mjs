@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
 import { makeVault, runCli } from './helpers/vault.mjs';
+import { PACKAGE_ROOT } from '../tools/orchestrator/lib/config.mjs';
 
 test('CLI: init uspostavlja topologiju, main granu, manifest i indeks', async () => {
   const vault = await makeVault({ initGit: false });
@@ -153,6 +156,24 @@ test('CLI: nepoznata komanda i nepoznata faza daju grešku', async () => {
   const noSource = await runCli(vault.root, ['ingest']);
   assert.equal(noSource.code, 1);
   assert.match(noSource.stderr, /zahteva putanju izvora/);
+  await vault.cleanup();
+});
+
+test('CLI: zatvorena cev (| head) ne obara proces', async () => {
+  const vault = await makeVault();
+  await runCli(vault.root, ['init']);
+
+  const child = spawn(process.execPath, [
+    path.join(PACKAGE_ROOT, 'tools', 'orchestrator', 'cli.mjs'), 'status', '--vault', vault.root,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+  // Potrošač odustaje odmah, kao `head -1`.
+  child.stdout.once('data', () => child.stdout.destroy());
+
+  const code = await new Promise((resolve) => child.on('close', resolve));
+  assert.equal(code, 0, `proces je morao tiho da se završi (kod ${code}); stderr: ${stderr}`);
+  assert.doesNotMatch(stderr, /EPIPE|Unhandled 'error'/, 'zatvorena cev ne sme da proizvede stack trace');
   await vault.cleanup();
 });
 
