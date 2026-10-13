@@ -74,7 +74,9 @@ export async function makeVault({ documents = { 'dokument.md': RAW_DOCUMENT }, i
     },
     /** Ukloni privremeni vault; toleriše otvorene worktree-e. */
     async cleanup() {
-      await fs.rm(root, { recursive: true, force: true });
+      // Git ume da drži `.git/objects/pack` u trenutku brisanja; par pokušaja
+      // sprečava da čišćenje obori test koji je inače prošao.
+      await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     },
   };
 }

@@ -211,6 +211,16 @@ export function createStore(config, options = {}) {
       });
     },
 
+    /** Postavi proizvoljna polja zadatka (npr. `extracted: true`) uz trag u istoriji. */
+    async setFields(id, patch, { actor = 'agentctl', note = null } = {}) {
+      return mutate(id, actor, (current) => ({
+        data: appendHistory(
+          { ...current.data, ...patch },
+          { status: current.data.status, actor, note, now: nowIso() },
+        ),
+      }));
+    },
+
     /** Zameni listu artefakata (npr. nacrt -> produkciona beleška posle konsolidacije). */
     async setArtifacts(id, artifacts, { actor = 'agentctl', note = null } = {}) {
       return mutate(id, actor, (current) => ({

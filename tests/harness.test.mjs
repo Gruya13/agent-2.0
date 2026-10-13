@@ -64,6 +64,17 @@ test('runHarness: uspeh, izlazni kod, vremensko ograničenje i nedostatak binarn
   await fs.rm(cwd, { recursive: true, force: true });
 });
 
+test('runHarness: ENOENT u stderr-u agenta ne znači da harnes nije instaliran', async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-enoent-'));
+  const noisy = await fakeBin('echo "greska: ENOENT: no such file or directory" >&2; exit 7');
+  const result = await runHarness('dsh', { prompt: PROMPT, cwd, timeoutMs: 10_000, env: { AGENT_2_0_BIN: noisy.file } });
+  assert.equal(result.ok, false);
+  assert.equal(result.exitCode, 7);
+  assert.match(result.stderr, /ENOENT/);
+  // Greška pri spawn-u se i dalje prepoznaje (vidi test iznad).
+  await fs.rm(cwd, { recursive: true, force: true });
+});
+
 test('runHarness: ok zavisi isključivo od izlaznog koda, ne od teksta', async () => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-run2-'));
   const lying = await fakeBin('echo "VERDICT: pass"; exit 1');

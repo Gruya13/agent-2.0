@@ -15,7 +15,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { loadConfig } from './config.mjs';
 import { createStore } from './store.mjs';
-import { exists } from './fsx.mjs';
+import { exists, sha256File } from './fsx.mjs';
 import { commitPaths, log as gitLog } from './git.mjs';
 import {
   createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
@@ -23,7 +23,7 @@ import {
 } from './worktree.mjs';
 import { buildPrompt, identityFor, parseVerdict, runAgent } from './agents/index.mjs';
 import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
-import { listNotes, normalizeConsolidatedNote, renderIndex } from './vault.mjs';
+import { listNotes, normalizeConsolidatedNote, readNote, renderIndex } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
 
 export class PipelineError extends Error {
@@ -35,6 +35,7 @@ export class PipelineError extends Error {
 }
 
 const ROLE_OF_PHASE = {
+  extract: 'extractor',
   research: 'researcher',
   verify: 'verifier',
   consolidate: 'consolidator',
@@ -80,7 +81,7 @@ export function createPipeline(config, options = {}) {
   /**
    * Faza 1 — unos: registruj izvor (append-only manifest) i otvori zadatak.
    */
-  async function ingest({ source, title = null, request = '', tags = [], dependsOn = [], priority = 'normal' } = {}) {
+  async function ingest({ source, title = null, request = '', tags = [], dependsOn = [], priority = 'normal', extract = null } = {}) {
     if (!source) throw new PipelineError('izvor je obavezan', 'BAD_INPUT');
     const rel = source.split(path.sep).join('/');
     const abs = path.resolve(config.root, rel);
@@ -92,6 +93,9 @@ export function createPipeline(config, options = {}) {
     const manifest = await updateRawManifest(config);
     const id = await nextTaskId(config);
     const resolvedTitle = title ?? path.basename(rel, path.extname(rel));
+    // Ekstrakcija je obavezna za sve što nije goli tekst: PDF, slike, skenovi,
+    // tabele. Za tekstualne izvore bi bila čist gubitak vremena.
+    const extractRequired = extract ?? !/\.(md|markdown|txt)$/i.test(rel);
     const { data, body } = newTaskData({
       id,
       title: resolvedTitle,
@@ -99,6 +103,7 @@ export function createPipeline(config, options = {}) {
       tags,
       dependsOn,
       priority,
+      extractRequired,
       now: now(),
       body: defaultBody(resolvedTitle, request),
     });
@@ -175,6 +180,9 @@ export function createPipeline(config, options = {}) {
     if (task.data.status !== 'ready') {
       throw new PipelineError(`${id} nije u stanju ready (${task.data.status})`, 'NOT_READY');
     }
+    if (task.data.extract_required && !task.data.extracted) {
+      throw new PipelineError(`${id}: izvor čeka fazu extract`, 'AWAIT_EXTRACT');
+    }
     const readiness = await evaluateReadiness(id);
     if (!readiness.ready) {
       throw new PipelineError(`${id}: nezadovoljene zavisnosti ${JSON.stringify(readiness.blocking)}`, 'DEPS');
@@ -184,8 +192,10 @@ export function createPipeline(config, options = {}) {
     const owner = identityFor(config, role);
     await store.claim(id, owner);
     const claimed = await store.get(id);
+    // Nacrt se gradi nad fragmentima ekstraktora, ako ih ima.
+    const researchBase = task.data.extract_required ? `agent/${ROLE_OF_PHASE.extract}/${id}` : MAIN_BRANCH;
     const { path: wt, branch, config: wtConfig } = await prepareWorktree({
-      id, role, fresh: true, branch: `agent/${role}/${id}`,
+      id, role, base: researchBase, fresh: true, branch: `agent/${role}/${id}`,
     });
     await store.emit('phase.start', { task: id, phase: 'research', role, worktree: wt, branch });
 
@@ -236,6 +246,105 @@ export function createPipeline(config, options = {}) {
     await store.emit('phase.done', { task: id, phase: 'research', role, artifacts: produced, commit: commit.sha });
     logger(`research: ${id} -> ${produced.join(', ')} (${result.harness})`);
     return { phase: 'research', task: id, ok: true, artifacts: produced, commit: commit.sha, branch };
+  }
+
+  // ------------------------------------------------------------- faza 2a
+
+  /**
+   * Faza `extract`: multimodalni unos pre istraživanja.
+   *
+   * Kontrolni sloj ne veruje transkriptu: pre nego što fragment uđe u lanac,
+   * proverava da `source_sha256` u zaglavlju odgovara stvarnom izvoru u `raw/`.
+   * Bez toga bi fragment mogao da tvrdi da potiče iz dokumenta koji nikad nije
+   * pročitan.
+   */
+  async function runExtract(id) {
+    const task = await store.get(id);
+    if (task.data.status !== 'ready') {
+      throw new PipelineError(`${id} nije u stanju ready (${task.data.status})`, 'NOT_READY');
+    }
+    if (!task.data.extract_required) {
+      throw new PipelineError(`${id}: izvor ne zahteva ekstrakciju`, 'NO_EXTRACT');
+    }
+    if (task.data.extracted) {
+      throw new PipelineError(`${id}: izvor je već ekstraktovan`, 'ALREADY_EXTRACTED');
+    }
+    const role = ROLE_OF_PHASE.extract;
+    const owner = identityFor(config, role);
+    await store.claim(id, owner);
+    const claimed = await store.get(id);
+    const { path: wt, branch, config: wtConfig } = await prepareWorktree({
+      id, role, fresh: true, branch: `agent/${role}/${id}`,
+    });
+    await store.emit('phase.start', { task: id, phase: 'extract', role, worktree: wt, branch });
+
+    const prompt = await buildPrompt(config, {
+      role,
+      task: claimed,
+      extra: {
+        worktree: wt,
+        instructions: `Izvor: ${claimed.data.source}. Fragmente piši u ${config.vault.drafts}/fragments/.`,
+      },
+    });
+
+    let result;
+    try {
+      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+    } catch (error) {
+      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
+      throw error;
+    }
+
+    const produced = await detectArtifacts(wtConfig, { role });
+    if (!result.ok || produced.length === 0) {
+      await failPhase(id, role, { reason: result.timedOut ? 'isteklo vreme harnesa' : `nema fragmenata (exit ${result.exitCode})` });
+      return { phase: 'extract', task: id, ok: false, reason: 'nema fragmenata' };
+    }
+
+    // Dokaz porekla: svaki fragment mora da nosi heš stvarnog izvora.
+    const sourceFile = path.resolve(config.root, claimed.data.source);
+    if (!(await exists(sourceFile))) {
+      await failPhase(id, role, { reason: `izvor ${claimed.data.source} ne postoji u raw/` });
+      return { phase: 'extract', task: id, ok: false, reason: 'nema izvora' };
+    }
+    const sourceSha = await sha256File(sourceFile);
+    const badFragments = [];
+    for (const rel of produced) {
+      const fragment = await readNote(wt, rel);
+      if (fragment.frontmatter?.source_sha256 !== sourceSha) {
+        badFragments.push(`${rel} (${String(fragment.frontmatter?.source_sha256).slice(0, 12)}… ≠ ${sourceSha.slice(0, 12)}…)`);
+      }
+    }
+    if (badFragments.length) {
+      await failPhase(id, role, { reason: `fragmenti ne odgovaraju izvoru: ${badFragments.join(', ')}` });
+      return { phase: 'extract', task: id, ok: false, reason: 'heš izvora se ne poklapa' };
+    }
+
+    const commit = await commitWorktreeSafe(config, id, role, `extractor(${id}): fragmenti iz ${claimed.data.source}`, owner);
+    await store.attachArtifacts(id, produced, { actor: owner, note: `fragmenti: ${produced.join(', ')}` });
+    await store.setFields(id, { extracted: true }, { actor: owner, note: `ekstrakcija: ${produced.length} fragmenata` });
+    await store.updateBody(id, {
+      actor: owner,
+      append: [
+        `### Faza extract (${now()})`,
+        '',
+        `- harnes: ${result.harness}`,
+        `- trajanje: ${result.durationMs} ms`,
+        `- fragmenti: ${produced.join(', ')}`,
+        `- izvor: \`${claimed.data.source}\` sha256 \`${sourceSha}\``,
+        `- grana: ${branch} @ ${commit.sha ?? '(bez komita)'}`,
+        '',
+        '```',
+        result.output.slice(0, 2000),
+        '```',
+      ].join('\n'),
+      note: 'faza extract završena',
+    });
+    await store.release(id, owner, { toStatus: 'ready', note: `fragmenti spremni: ${produced.join(', ')}` });
+    await commitBookkeeping(`agentctl: ${id} -> ready (fragmenti: ${produced.length})`);
+    await store.emit('phase.done', { task: id, phase: 'extract', role, artifacts: produced, commit: commit.sha, sourceSha });
+    logger(`extract: ${id} -> ${produced.length} fragment(a) (${result.harness})`);
+    return { phase: 'extract', task: id, ok: true, artifacts: produced, commit: commit.sha };
   }
 
   // ------------------------------------------------------------- faza 3
@@ -497,15 +606,25 @@ export function createPipeline(config, options = {}) {
     const tasks = await store.list();
     const pick = (status) => tasks.filter((t) => t.data.status === status).map((t) => t.data.id);
 
-    const phases = only ? [only] : ['consolidate', 'verify', 'research'];
+    const phases = only ? [only] : ['consolidate', 'verify', 'extract', 'research'];
     for (const phase of phases) {
-      const status = { consolidate: 'verified', verify: 'review', research: 'ready' }[phase];
+      const status = {
+        consolidate: 'verified', verify: 'review', extract: 'ready', research: 'ready',
+      }[phase];
       for (const id of pick(status)) {
         const role = ROLE_OF_PHASE[phase];
+        // Stanje se čita iznova: faza `extract` u istom krugu pušta `research`.
+        const fresh = await store.tryGet(id);
+        if (!fresh) continue;
+        if (phase === 'extract' && (!fresh.data.extract_required || fresh.data.extracted)) continue;
+        if (phase === 'research' && fresh.data.extract_required && !fresh.data.extracted) continue;
+        if (phase === 'verify' && fresh.data.status !== 'review') continue;
+        if (phase === 'consolidate' && fresh.data.status !== 'verified') continue;
         try {
           const result = phase === 'consolidate' ? await runConsolidate(id)
             : phase === 'verify' ? await runVerify(id)
-              : await runResearch(id);
+              : phase === 'extract' ? await runExtract(id)
+                : await runResearch(id);
           actions.push(result);
         } catch (error) {
           await store.emit('phase.error', { task: id, phase, role, error: error.message });
@@ -566,7 +685,7 @@ export function createPipeline(config, options = {}) {
 
   return {
     config, store, clock, logger,
-    ingest, runResearch, runVerify, runConsolidate, reflect, runOnce, run, status,
+    ingest, runExtract, runResearch, runVerify, runConsolidate, reflect, runOnce, run, status,
     evaluateReadiness, failPhase,
   };
 }
@@ -576,6 +695,7 @@ export function createPipeline(config, options = {}) {
 /** Detektuj artefakte koje je faza proizvela u radnom stablu. */
 async function detectArtifacts(worktreeConfig, { role, before = [] }) {
   const zone = {
+    extractor: [path.join(worktreeConfig.paths.drafts, 'fragments')],
     researcher: [worktreeConfig.paths.drafts],
     verifier: [worktreeConfig.paths.reviews],
     consolidator: [worktreeConfig.paths.production],
@@ -586,7 +706,10 @@ async function detectArtifacts(worktreeConfig, { role, before = [] }) {
     const notes = await listNotes(worktreeConfig.root, [relBase || '.']).catch(() => []);
     for (const rel of notes) {
       if (before.includes(rel)) continue;
+      // Konsolidator ne prisvaja nacrte; istraživač ne prisvaja tuđe fragmente —
+      // inače bi fragment mogao da završi kao produkciona beleška.
       if (role === 'consolidator' && rel.includes('/drafts/')) continue;
+      if (role === 'researcher' && rel.includes('/fragments/')) continue;
       found.push(rel);
     }
   }

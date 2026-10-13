@@ -9,7 +9,7 @@ import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
 import { lintVault } from '../tools/orchestrator/lib/lint.mjs';
 import { listWorktrees } from '../tools/orchestrator/lib/worktree.mjs';
 import { log as gitLog } from '../tools/orchestrator/lib/git.mjs';
-import { listNotes } from '../tools/orchestrator/lib/vault.mjs';
+import { listNotes, readNote } from '../tools/orchestrator/lib/vault.mjs';
 import { readJsonl, sha256 } from '../tools/orchestrator/lib/fsx.mjs';
 
 async function setup(options = {}) {
@@ -181,6 +181,55 @@ test('E2E: konsolidator sa izlaznim kodom 0 ali bez beleške ne ulazi u main', a
     delete process.env.AGENT_2_0_MOCK_NOOP;
     await vault.cleanup();
   }
+});
+
+test('E2E: netekstualni izvor ide kroz extract pre istraživanja, sa dokazom porekla', async () => {
+  const vault = await makeVault({ documents: { 'sken.pdf': 'sadrzaj skena kao tekst (fixture)' } });
+  const config = await loadConfig(vault.root);
+  const store = createStore(config);
+  const pipeline = createPipeline(config, { store });
+
+  const task = await pipeline.ingest({ source: 'raw/sken.pdf', title: 'Skenirani dokument' });
+  assert.equal(task.data.extract_required, true, 'PDF zahteva ekstrakciju');
+  assert.equal(task.data.extracted, false);
+
+  // Istraživanje ne sme da krene pre ekstrakcije.
+  await assert.rejects(() => pipeline.runResearch('TASK-101'), /čeka fazu extract/);
+
+  const extract = await pipeline.runExtract('TASK-101');
+  assert.equal(extract.ok, true, extract.reason);
+  assert.deepEqual(extract.artifacts, ['wiki/drafts/fragments/sken.md']);
+  assert.equal((await store.get('TASK-101')).data.extracted, true);
+
+  // Fragment dokazuje poreklo: heš bajtova izvora.
+  const fragment = await readNote(vault.path('.worktrees', 'TASK-101-extractor'), 'wiki/drafts/fragments/sken.md');
+  assert.equal(fragment.frontmatter.source_path, 'raw/sken.pdf');
+  assert.equal(fragment.frontmatter.source_sha256, sha256(await vault.read('raw/sken.pdf')));
+
+  // Pun lanac: extract -> research -> verify -> consolidate.
+  const research = await pipeline.runResearch('TASK-101');
+  assert.equal(research.ok, true, research.reason);
+  // Fragment je sirovina ekstraktora i ne sme da se pripiše istraživaču, inače
+  // ga konsolidator može proglasiti produkcionom beleškom.
+  assert.equal(research.artifacts.includes('wiki/drafts/fragments/sken.md'), false, `istraživač je prisvojio fragment: ${research.artifacts.join(', ')}`);
+  assert.equal((await pipeline.runVerify('TASK-101')).verdict, 'pass');
+  assert.equal((await pipeline.runConsolidate('TASK-101')).ok, true);
+
+  // Fragmenti putuju sa granom i ostaju u bazi kao trag porekla.
+  assert.equal(await vault.exists('wiki/drafts/fragments/sken.md'), true, 'fragment stiže u main kroz lanac');
+  assert.equal((await lintVault(config)).errors.length, 0, 'fragment sa tačnim hešom prolazi linter');
+  await vault.cleanup();
+});
+
+test('E2E: tekstualni izvor preskače ekstrakciju', async () => {
+  const { vault, pipeline, store } = await setup();
+  const task = await pipeline.ingest({ source: 'raw/dokument.md', title: 'Običan tekst' });
+  assert.equal(task.data.extract_required, false);
+  assert.equal(task.data.extracted, true);
+  const extract = await pipeline.runOnce({ only: 'extract' });
+  assert.equal(extract.actions.length, 0, 'nema šta da se ekstraktuje');
+  assert.equal((await store.get('TASK-101')).data.status, 'ready');
+  await vault.cleanup();
 });
 
 test('E2E: ponovni pokušaj istraživanja kreće od svežeg stabla sa aktuelnim izvorima', async () => {

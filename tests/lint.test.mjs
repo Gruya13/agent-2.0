@@ -6,7 +6,7 @@ import { makeVault, gitExec } from './helpers/vault.mjs';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
 import { formatFindings, lintVault, updateRawManifest } from '../tools/orchestrator/lib/lint.mjs';
 import { writeNote } from '../tools/orchestrator/lib/vault.mjs';
-import { sha256 } from '../tools/orchestrator/lib/fsx.mjs';
+import { sha256, sha256Bytes } from '../tools/orchestrator/lib/fsx.mjs';
 
 const NOW = '2025-01-01T00:00:00.000Z';
 
@@ -182,6 +182,38 @@ test('lint: prekinut Vikilink je greška u produkciji, upozorenje u nacrtu', asy
   const broken = find(result.findings, 'note.broken-link');
   assert.equal(broken.find((f) => f.target === 'wiki/A.md').level, 'error');
   assert.equal(broken.find((f) => f.target === 'wiki/drafts/B.md').level, 'warning');
+  await vault.cleanup();
+});
+
+test('lint: fragment bez tačnog heša izvora je greška', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  const NOW2 = '2025-01-01T00:00:00.000Z';
+  const telo = {
+    frontmatter: {
+      title: 'Fragment: probe', created: NOW2, updated: NOW2, authors: ['extractor'],
+      status: 'draft', tags: ['fragment'], source_path: 'raw/dokument.md',
+      source_sha256: 'a'.repeat(64), source_location: 'ceo dokument',
+    },
+    body: '# Fragment\n\ntekst\n',
+  };
+  await writeNote(vault.root, 'wiki/drafts/fragments/probe.md', telo);
+  const pogresan = await lintVault(config);
+  assert.equal(find(pogresan.findings, 'fragment.source-mismatch').length, 1);
+
+  // Ispravan heš prolazi.
+  await writeNote(vault.root, 'wiki/drafts/fragments/probe.md', {
+    frontmatter: { ...telo.frontmatter, source_sha256: sha256Bytes(await fs.readFile(path.join(vault.root, 'raw', 'dokument.md'))) },
+    body: telo.body,
+  });
+  assert.deepEqual(find((await lintVault(config)).findings, 'fragment.source-mismatch'), []);
+
+  // Bez polja porekla je takođe greška.
+  await writeNote(vault.root, 'wiki/drafts/fragments/probe.md', {
+    frontmatter: { title: 'F', created: NOW2, updated: NOW2, authors: ['e'], status: 'draft', tags: [] },
+    body: '# F\n',
+  });
+  assert.equal(find((await lintVault(config)).findings, 'fragment.schema').length, 1);
   await vault.cleanup();
 });
 

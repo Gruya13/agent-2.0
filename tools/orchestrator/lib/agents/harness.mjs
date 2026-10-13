@@ -63,6 +63,7 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
     let stderr = '';
     let timedOut = false;
     let settled = false;
+    let spawnError = null;
 
     if (typeof onSpawn === 'function') onSpawn(child);
 
@@ -102,13 +103,20 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
         exitCode: code,
         stdout,
         stderr: error ? `${stderr}\n${error.message}` : stderr,
+        spawnError: spawnError?.code ?? null,
         timedOut,
         durationMs: Date.now() - started,
         command: `${command} ${args.map((a) => (a.length > 60 ? `${a.slice(0, 60)}…` : a)).join(' ')}`,
       });
     };
 
-    child.on('error', (error) => finish(null, error));
+    child.on('error', (error) => {
+      // Samo greška PRI SPAWN-ovanju znači da harnes ne postoji. Tekst stderr-a
+      // nije dokaz: agent može legitimno da prijavi ENOENT iz svog rada, pa je
+      // ranije ovaj podstring odbacivao ispravne rezultate.
+      spawnError = error;
+      finish(null, error);
+    });
     child.on('close', (code) => finish(code, null));
   });
 }
@@ -132,7 +140,7 @@ export async function runHarness(harness, { prompt, cwd, timeoutMs = 15 * 60 * 1
     result = await exec();
   }
 
-  if (result.errno === 'ENOENT' || /ENOENT/.test(result.stderr ?? '')) {
+  if (result.spawnError === 'ENOENT') {
     throw new HarnessError(`harnes "${harness}" nije instaliran (${bin})`, { harness, bin });
   }
   return {

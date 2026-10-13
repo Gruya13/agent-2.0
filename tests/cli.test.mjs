@@ -136,7 +136,7 @@ test('CLI: doctor proverava okruženje i prijavljuje adaptere', async () => {
   assert.ok(names.some((n) => n.includes('harnes codex')));
   assert.ok(names.some((n) => n.includes('harnes agy')));
   const roles = checks.filter((c) => c.name.startsWith('uloga '));
-  assert.equal(roles.length, 3);
+  assert.equal(roles.length, 4, 'extractor, researcher, verifier, consolidator');
   assert.match(roles.map((r) => r.detail).join(','), /mock/);
   await vault.cleanup();
 });

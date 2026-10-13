@@ -138,6 +138,26 @@ export async function lintNotes(config) {
         findings.push(makeFinding(isDraft ? 'warning' : 'error', 'note.frontmatter', rel, problem));
       }
     }
+    // Fragmenti (multimodalni unos) moraju da dokažu poreklo: tačan put i heš
+    // bajtova izvora. Bez toga transkript može da tvrdi bilo šta.
+    if (rel.includes('/fragments/')) {
+      const izvor = note.frontmatter?.source_path;
+      const zapisani = note.frontmatter?.source_sha256;
+      if (!izvor || !zapisani) {
+        findings.push(makeFinding('error', 'fragment.schema', rel, 'fragment mora imati "source_path" i "source_sha256"'));
+      } else {
+        const putanja = path.join(config.root, izvor);
+        if (!(await exists(putanja))) {
+          findings.push(makeFinding('error', 'fragment.source-missing', rel, `izvor iz fragmenta ne postoji: ${izvor}`));
+        } else {
+          const stvarni = await sha256File(putanja);
+          if (stvarni !== zapisani) {
+            findings.push(makeFinding('error', 'fragment.source-mismatch', rel,
+              `source_sha256 (${String(zapisani).slice(0, 12)}…) ne odgovara izvoru ${izvor} (${stvarni.slice(0, 12)}…)`));
+          }
+        }
+      }
+    }
     for (const link of extractWikilinks(note.text)) {
       const resolved = names.get(link.normalized);
       if (!resolved) {

@@ -32,7 +32,7 @@ export const TRANSITIONS = {
 };
 
 export const TASK_FIELD_ORDER = [
-  'id', 'title', 'status', 'created', 'updated', 'source', 'priority', 'tags',
+  'id', 'title', 'status', 'created', 'updated', 'source', 'extract_required', 'extracted', 'priority', 'tags',
   'depends_on', 'authors', 'assignee', 'lock_owner', 'locked_at',
   'lease_expires_at', 'artifacts', 'verification', 'blocked_reason', 'history',
 ];
@@ -217,7 +217,10 @@ export async function listTasks(config) {
 
 // ------------------------------------------------------------------ mutacije
 
-export function newTaskData({ id, title, source = null, priority = 'normal', tags = [], dependsOn = [], now = new Date().toISOString(), body = '' }) {
+export function newTaskData({
+  id, title, source = null, priority = 'normal', tags = [], dependsOn = [],
+  now = new Date().toISOString(), body = '', extractRequired = false,
+}) {
   const data = {
     id,
     title,
@@ -225,6 +228,8 @@ export function newTaskData({ id, title, source = null, priority = 'normal', tag
     created: now,
     updated: now,
     source,
+    extract_required: Boolean(extractRequired),
+    extracted: !extractRequired,
     priority,
     tags,
     depends_on: dependsOn,

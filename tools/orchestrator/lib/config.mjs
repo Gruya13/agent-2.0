@@ -11,7 +11,7 @@ import { exists } from './fsx.mjs';
 
 export const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-export const ROLES = ['researcher', 'verifier', 'consolidator'];
+export const ROLES = ['extractor', 'researcher', 'verifier', 'consolidator'];
 
 export const DEFAULT_CONFIG = {
   vault: {
@@ -38,6 +38,7 @@ export const DEFAULT_CONFIG = {
     agentTimeoutMs: 15 * 60 * 1000,
   },
   agents: {
+    extractor: { harness: 'agy', adapter: 'mock', model: null, timeoutMs: 300000 },
     researcher: { harness: 'agy', adapter: 'mock', model: null },
     verifier: { harness: 'dsh', adapter: 'mock', model: null },
     consolidator: { harness: 'codex', adapter: 'mock', model: null },

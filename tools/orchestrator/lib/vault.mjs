@@ -173,6 +173,8 @@ export async function renderIndex(vaultRoot, { dirs = ['wiki'], generatedAt = ne
   const entries = [];
   for (const rel of notes) {
     if (rel === 'wiki/Index.md') continue;
+    // Fragmenti su sirovina za nacrt, ne enciklopedijske beleške: ne ulaze u indeks.
+    if (rel.includes('/fragments/')) continue;
     const note = await readNote(vaultRoot, rel);
     const fm = note.frontmatter ?? {};
     entries.push({

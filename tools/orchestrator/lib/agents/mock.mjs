@@ -13,7 +13,7 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { loadConfig } from '../config.mjs';
-import { exists } from '../fsx.mjs';
+import { exists, sha256File } from '../fsx.mjs';
 import { lintVault } from '../lint.mjs';
 import {
   extractWikilinks, listNotes, noteFrontmatterProblems, noteName, noteSlug,
@@ -96,10 +96,12 @@ async function researcher(config, { task, cwd, now }) {
 }
 
 async function verifier(config, { task, cwd, now }) {
-  const candidates = (task.data.artifacts ?? []).length
+  // Fragment je sirovina, ne nacrt: bira se prvi artefakt koji nije fragment.
+  const svi = (task.data.artifacts ?? []).length
     ? task.data.artifacts
     : await listNotes(cwd, ['wiki/drafts']).catch(() => []);
-  const draftRel = candidates.find((rel) => rel.startsWith('wiki/drafts/')) ?? candidates[0];
+  const nacrti = svi.filter((rel) => rel.startsWith('wiki/drafts/') && !rel.includes('/fragments/'));
+  const draftRel = nacrti[0] ?? svi.find((rel) => rel.startsWith('wiki/drafts/'));
   if (!draftRel) return { ok: false, output: 'nema nacrta za verifikaciju', artifacts: [] };
 
   const findings = [];
@@ -176,8 +178,9 @@ async function verifier(config, { task, cwd, now }) {
 }
 
 async function consolidator(config, { task, cwd, now }) {
-  const drafts = (task.data.artifacts ?? []).filter((rel) => rel.startsWith('wiki/drafts/'));
-  const draftRel = drafts[0] ?? (await listNotes(cwd, ['wiki/drafts']))[0];
+  const svi = (task.data.artifacts ?? []).filter((rel) => rel.startsWith('wiki/drafts/'));
+  const nacrti = svi.filter((rel) => !rel.includes('/fragments/'));
+  const draftRel = nacrti[0] ?? svi[0] ?? (await listNotes(cwd, ['wiki/drafts']))[0];
   if (!draftRel) return { ok: false, output: 'nema verifikovanog nacrta za konsolidaciju', artifacts: [] };
 
   const draft = await readNote(cwd, draftRel);
@@ -227,9 +230,68 @@ async function consolidator(config, { task, cwd, now }) {
   };
 }
 
+/**
+ * Extractor: verna transkripcija u fragmente. Mock ne ume da čita slike, pa to i
+ * kaže — fragment nosi tačan `source_sha256` i eksplicitnu napomenu šta nije
+ * preuzeto. Time testira plumbing (šema, heš, zona), ne kvalitet transkripcije.
+ */
+async function extractor(config, { task, cwd, now }) {
+  const source = task.data.source;
+  if (!source) return { ok: false, output: 'zadatak nema polje "source"', artifacts: [] };
+  const sourcePath = path.resolve(cwd, source);
+  if (!(await exists(sourcePath))) {
+    return { ok: false, output: `izvor ne postoji u radnom stablu: ${source}`, artifacts: [] };
+  }
+  const sha = await sha256File(sourcePath);
+  const base = path.basename(source, path.extname(source));
+  const tekstualan = /\.(md|txt|markdown)$/i.test(source);
+  const raw = tekstualan ? await fs.readFile(sourcePath, 'utf8') : null;
+
+  const body = [
+    `# Fragment: ${base}`,
+    '',
+    `- izvor: \`${source}\``,
+    `- sha256: \`${sha}\``,
+    `- obim: ${tekstualan ? `${raw.split('\n').length} redova` : 'binarni format'}`,
+    '',
+    '## Transkript',
+    '',
+    ...(tekstualan
+      ? ['<!-- ceo dokument -->', '```text', raw.replace(/```/g, "'''").trimEnd(), '```']
+      : ['_Mock adapter ne transkribuje binarne formate (bez OCR-a); sadržaj nije preuzet._',
+         '_Za pravu transkripciju koristi se harnes `agy` (multimodalni)._']),
+    '',
+    '## Nečitko / nepreuzeto',
+    '',
+    tekstualan ? '- nema' : '- ceo dokument (binarni format)',
+    '',
+  ].join('\n');
+
+  const rel = `wiki/drafts/fragments/${noteSlug(base)}.md`;
+  await writeNote(cwd, rel, {
+    frontmatter: {
+      title: `Fragment: ${base}`,
+      created: now,
+      updated: now,
+      authors: ['extractor'],
+      status: 'draft',
+      tags: ['fragment'],
+      source_path: source,
+      source_sha256: sha,
+      source_location: tekstualan ? 'ceo dokument' : 'binarni format',
+    },
+    body,
+  });
+  return {
+    ok: true,
+    output: `MOCK extractor: ${rel} (sha256 ${sha.slice(0, 12)}…, ${tekstualan ? 'tekstualni' : 'binarni'} izvor)`,
+    artifacts: [rel],
+  };
+}
+
 export async function runMock(config, { role, task, cwd, now = new Date().toISOString() }) {
   const started = Date.now();
-  const handlers = { researcher, verifier, consolidator };
+  const handlers = { extractor, researcher, verifier, consolidator };
   const handler = handlers[role];
   if (!handler) throw new Error(`mock adapter ne poznaje ulogu "${role}"`);
 

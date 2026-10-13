@@ -90,6 +90,7 @@ const READ_PREFIXES = ['wiki', 'raw', 'tasks', '.agents'];
  * `consolidator` NE sme u `wiki/drafts/` iako je nacrt „unutar wiki/".
  */
 const ROLE_WRITE_ZONES = {
+  extractor: ['draft'],
   researcher: ['draft'],
   verifier: ['review'],
   consolidator: ['production'],
@@ -97,6 +98,7 @@ const ROLE_WRITE_ZONES = {
 };
 
 const ROLE_WRITE_PREFIXES = {
+  extractor: ['wiki/drafts'],
   researcher: ['wiki/drafts'],
   verifier: ['tasks/reviews'],
   consolidator: ['wiki'],

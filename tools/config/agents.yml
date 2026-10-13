@@ -38,6 +38,11 @@ agents:
     harness: agy
     model: null
     timeoutMs: 900000
+  extractor:
+    adapter: mock
+    harness: agy
+    model: null
+    timeoutMs: 300000
   verifier:
     adapter: mock
     harness: dsh
