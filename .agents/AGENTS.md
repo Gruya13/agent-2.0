@@ -26,7 +26,11 @@ fajlova u ovom repozitorijumu.
 | `tasks/events.jsonl` | append-only tok događaja kontrolnog sloja | `agentctl` |
 
 Zone su **ortogonalne**: nijedan agent ne piše van svoje zone, čak i ako ima
-tehničku mogućnost. Pristup se sprovodi u `tools/mcp/obsidian-mcp.mjs` (MCP sloj)
+tehničku mogućnost. `wiki/drafts/` je zona istraživača i nije „deo" konsolidatora
+samo zato što počinje sa `wiki/`; produkciona beleška živi isključivo na vrhu
+`wiki/` (`wiki/<Slug>.md`). Svi fajlovi u `raw/` — uključujući skrivene i
+binarne — moraju biti pod manifestom izvora, jer neevidentiran fajl se može
+izmeniti bez prijave. Pristup se sprovodi u `tools/mcp/obsidian-mcp.mjs` (MCP sloj)
 i u `agentctl` kontrolnom sloju (Git sloj).
 
 ## 2. Invarijante

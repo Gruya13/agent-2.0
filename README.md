@@ -168,8 +168,9 @@ scripts/demo.mjs    petofazna demonstracija
 
 Upis kroz MCP ima tri kapije, i sve tri su pokrivene testovima:
 
-1. **Zona uloge** — `researcher` → `wiki/drafts/`, `verifier` → `tasks/reviews/`,
-   `consolidator` → `wiki/`, `readonly` → ništa; `raw/` nikad.
+1. **Zona uloge (ortogonalna)** — `researcher` → `wiki/drafts/`, `verifier` →
+   `tasks/reviews/`, `consolidator` → `wiki/<Slug>.md` (vrh, bez `drafts/`),
+   `readonly` → ništa; `raw/` nikad.
 2. **Zadatak i zakup** — `OBSIDIAN_TASK` mora da postoji u kontrolnom korenu
    (`OBSIDIAN_TASK_ROOT`, podrazumevano `main`), zakup mora biti živ i vlasništvo
    tog agenta. Za upis u produkciju dodatno je obavezan `verification.verdict:

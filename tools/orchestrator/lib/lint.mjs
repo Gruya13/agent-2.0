@@ -23,9 +23,15 @@ export function makeFinding(level, code, target, message) {
   return { level, code, target, message };
 }
 
-/** Svi regularni fajlovi u `raw/` (bez skrivenih), bez obzira na format. */
+/**
+ * SVI regularni fajlovi u `raw/`, uključujući skrivene i binarne.
+ * Nikakvo filtriranje po imenu ili formatu: fajl koji nije pod manifestom je
+ * fajl koji se može izmeniti bez prijave.
+ */
 export async function rawFiles(config) {
-  return walkFiles(config.paths.sources, { filter: (f) => !path.basename(f).startsWith('.') });
+  return walkFiles(config.paths.sources, {
+    filter: (rel) => !rel.split('/').includes('.git'),
+  });
 }
 
 /** Hash izvora: bajtovi za sve formate (vidi `sha256File`). */

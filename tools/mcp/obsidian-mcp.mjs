@@ -63,6 +63,17 @@ const NEVER_WRITABLE = ['raw'];
 const PROTECTED_FILES = ['wiki/Index.md', '.agents/raw-manifest.json', 'tasks/events.jsonl'];
 const READ_PREFIXES = ['wiki', 'raw', 'tasks', '.agents'];
 
+/**
+ * Zone su ortogonalne: svaka uloga piše tačno u svoju.
+ * `consolidator` NE sme u `wiki/drafts/` iako je nacrt „unutar wiki/".
+ */
+const ROLE_WRITE_ZONES = {
+  researcher: ['draft'],
+  verifier: ['review'],
+  consolidator: ['production'],
+  readonly: [],
+};
+
 const ROLE_WRITE_PREFIXES = {
   researcher: ['wiki/drafts'],
   verifier: ['tasks/reviews'],
@@ -72,8 +83,8 @@ const ROLE_WRITE_PREFIXES = {
 
 /** Zona upisa za datu putanju (zahteva status zadatka i proveru artefakta). */
 function zoneOf(relative) {
-  if (relative.startsWith('wiki/drafts/')) return 'draft';
-  if (relative.startsWith('tasks/reviews/')) return 'review';
+  if (relative === 'wiki/drafts' || relative.startsWith('wiki/drafts/')) return 'draft';
+  if (relative === 'tasks/reviews' || relative.startsWith('tasks/reviews/')) return 'review';
   if (relative.startsWith('wiki/')) return 'production';
   return 'other';
 }
@@ -137,11 +148,17 @@ export async function assertWritable(rel) {
   if (PROTECTED_FILES.includes(relative)) {
     throw new AccessError(`"${relative}" je izveden artefakt kontrolnog sloja i ne piše se kroz MCP`);
   }
-  const allowed = ROLE_WRITE_PREFIXES[ROLE];
-  if (!allowed) throw new AccessError(`nepoznata uloga "${ROLE}"`);
-  if (!allowed.length) throw new AccessError(`uloga "${ROLE}" je samo za čitanje`);
-  if (!allowed.some((prefix) => relative === prefix || relative.startsWith(`${prefix}/`))) {
-    throw new AccessError(`uloga "${ROLE}" ne sme da piše u "${relative}" (dozvoljeno: ${allowed.join(', ')})`);
+  const zones = ROLE_WRITE_ZONES[ROLE];
+  if (!zones) throw new AccessError(`nepoznata uloga "${ROLE}"`);
+  if (!zones.length) throw new AccessError(`uloga "${ROLE}" je samo za čitanje`);
+  const zone = zoneOf(relative);
+  if (!zones.includes(zone)) {
+    throw new AccessError(
+      `uloga "${ROLE}" ne sme da piše u zonu "${zone}" (${relative}); dozvoljene zone: ${zones.join(', ')}`,
+    );
+  }
+  if (zone === 'production' && !/^wiki\/[^/]+\.md$/.test(relative)) {
+    throw new AccessError(`produkciona beleška mora biti na vrhu wiki/ (dobijeno: ${relative})`);
   }
   await requireTaskContext(relative);
   return full;

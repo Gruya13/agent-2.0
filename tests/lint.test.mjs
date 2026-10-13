@@ -106,6 +106,24 @@ test('lint: v1 manifest ne sme tiho da "nadogradi" binarni izvor bez osnove', as
   await vault.cleanup();
 });
 
+test('lint: skriveni fajl u raw/ je pod manifestom kao i svaki drugi', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await fs.writeFile(path.join(vault.root, 'raw', '.skriveni-izvor.bin'), Buffer.from([0x00, 0x80, 0xff]));
+
+  const manifest = await updateRawManifest(config);
+  assert.equal(manifest.total, 2, 'skriveni fajl mora biti registrovan');
+  assert.deepEqual(find((await lintVault(config)).findings, 'raw.modified'), []);
+
+  await fs.writeFile(path.join(vault.root, 'raw', '.skriveni-izvor.bin'), Buffer.from([0x00, 0x81, 0xff]));
+  const result = await lintVault(config);
+  const modified = find(result.findings, 'raw.modified');
+  assert.equal(modified.length, 1, 'izmena skrivenog izvora mora biti prijavljena');
+  assert.equal(modified[0].target, 'raw/.skriveni-izvor.bin');
+  assert.equal(result.ok, false);
+  await vault.cleanup();
+});
+
 test('lint: novo u raw/ je dozvoljeno (append-only)', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);

@@ -268,6 +268,42 @@ test('MCP: kontrolni koren se ne može zaobići praznim direktorijumom', async (
   await vault.cleanup();
 });
 
+test('MCP: zone su ortogonalne — konsolidator ne piše u zonu nacrta', async (t) => {
+  const vault = await seededVault();
+  await makeTask(vault, {
+    id: 'TASK-601', owner: 'consolidator', status: 'verified',
+    artifacts: ['wiki/drafts/Produkcija.md'],
+  });
+  const client = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-601' });
+
+  // Zona nacrta pripada istraživaču, iako je „unutar wiki/".
+  const draft = await client.callTool('obsidian_write_note', { path: 'wiki/drafts/KonsolidatorDraft.md', content: '# x\n' });
+  assert.equal(draft.isError, true, 'konsolidator ne sme da piše u wiki/drafts/');
+  assert.match(draft.content[0].text, /zonu "draft"/);
+  assert.equal(await vault.exists('wiki/drafts/KonsolidatorDraft.md'), false);
+
+  // Produkcija mora biti na vrhu wiki/ i mora biti artefakt zadatka.
+  const nested = await client.callTool('obsidian_write_note', { path: 'wiki/podfolder/Produkcija.md', content: '# x\n' });
+  assert.equal(nested.isError, true, 'produkciona beleška ne sme u podfolder');
+  assert.match(nested.content[0].text, /na vrhu wiki/);
+
+  const ok = await client.callTool('obsidian_write_note', { path: 'wiki/Produkcija.md', content: '# x\n' });
+  assert.equal(ok.isError, false, ok.content[0].text);
+  await vault.cleanup();
+});
+
+test('MCP: istraživač ne piše u produkciju ni u revizije', async (t) => {
+  const vault = await seededVault();
+  await makeTask(vault, { id: 'TASK-602', owner: 'researcher', status: 'in_progress', artifacts: ['wiki/drafts/Produkcija.md'] });
+  const client = await connect(vault.root, 'researcher', 'agy', t, { OBSIDIAN_TASK: 'TASK-602' });
+  for (const [target, zone] of [['wiki/Produkcija.md', 'production'], ['tasks/reviews/R.md', 'review']]) {
+    const result = await client.callTool('obsidian_write_note', { path: target, content: '# x\n' });
+    assert.equal(result.isError, true, `istraživač ne sme u ${target}`);
+    assert.match(result.content[0].text, new RegExp(`zonu "${zone}"`));
+  }
+  await vault.cleanup();
+});
+
 test('MCP: izvedeni artefakti kontrolnog sloja su zaštićeni', async (t) => {
   const vault = await seededVault();
   await makeTask(vault, { id: 'TASK-301', owner: 'consolidator', status: 'verified', artifacts: ['wiki/Index.md', 'wiki/drafts/Index.md'] });
