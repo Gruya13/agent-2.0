@@ -108,3 +108,9 @@
 {"ts":"2026-10-13T21:59:46.094Z","kind":"task.write","task":"TASK-101","actor":"researcher","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T21:59:46.096Z","kind":"task.write","task":"TASK-101","actor":"agy","status":"review","phase":"review","moved":"active->review"}
 {"ts":"2026-10-13T21:59:46.128Z","kind":"phase.done","task":"TASK-101","phase":"research","role":"researcher","artifacts":["wiki/drafts/Operativni_vodic_asinhronog_sistema.md"],"commit":"af6655fc59f16b0aad9715c5b8f7c778718f1555"}
+{"ts":"2026-10-13T21:59:46.163Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":2,"commit":"d7cff2d2e5cd46c30cf1a5a4cfacf7190eb70e99"}
+{"ts":"2026-10-13T21:59:46.167Z","kind":"task.write","task":"TASK-101","actor":"dsh","status":"in_progress","phase":"active","moved":"review->active"}
+{"ts":"2026-10-13T21:59:46.199Z","kind":"phase.start","task":"TASK-101","phase":"verify","role":"verifier","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-101-verifier"}
+{"ts":"2026-10-13T22:02:14.199Z","kind":"task.write","task":"TASK-101","actor":"verifier","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T22:02:14.201Z","kind":"task.write","task":"TASK-101","actor":"verifier","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T22:02:14.203Z","kind":"task.write","task":"TASK-101","actor":"dsh","status":"verified","phase":"review","moved":"active->review"}
