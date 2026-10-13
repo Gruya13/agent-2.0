@@ -88,3 +88,8 @@
 {"ts":"2026-10-13T21:44:35.593Z","kind":"task.ingested","task":"TASK-101","source":"raw/operativni-vodic.md","actor":"operator"}
 {"ts":"2026-10-13T21:44:35.596Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
 {"ts":"2026-10-13T21:44:35.598Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T21:44:38.591Z","kind":"task.write","task":"TASK-101","actor":"agy","status":"in_progress","phase":"active","moved":"inbox->active"}
+{"ts":"2026-10-13T21:44:38.624Z","kind":"phase.start","task":"TASK-101","phase":"research","role":"researcher","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-101-researcher","branch":"agent/researcher/TASK-101"}
+{"ts":"2026-10-13T21:51:44.327Z","kind":"task.write","task":"TASK-101","actor":"researcher","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T21:51:44.329Z","kind":"task.write","task":"TASK-101","actor":"researcher","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T21:51:44.331Z","kind":"task.write","task":"TASK-101","actor":"agy","status":"review","phase":"review","moved":"active->review"}
