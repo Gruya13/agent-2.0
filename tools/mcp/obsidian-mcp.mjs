@@ -227,6 +227,18 @@ async function requireTaskContext(relative) {
 
   const zone = zoneOf(relative);
   const kind = task.data.kind ?? 'ingest';
+
+  // Uloge se ne preklapaju po VRSTI zadatka: `librarian` održava postojeću bazu
+  // (revizorski zadaci), `consolidator` unosi novo (izvorni zadaci). Bez ovoga
+  // bi oba mogla da pišu istu produkcionu putanju — dokazano skriptom NALAZ-1
+  // drugog red-team prolaza.
+  if (ROLE === 'librarian' && kind !== 'audit') {
+    throw new AccessError(`uloga "librarian" radi samo na revizorskim zadacima (kind: audit), a ${TASK_ID} je "${kind}"`);
+  }
+  if (ROLE === 'consolidator' && kind === 'audit') {
+    throw new AccessError(`uloga "consolidator" ne radi na revizorskim zadacima; ${TASK_ID} je "audit"`);
+  }
+
   if (zone === 'production' && kind === 'audit') {
     // Revizorski zadatak menja POSTOJEĆE beleške, pa pečat ne može da prethodi
     // izmeni — verifikacija ide posle, pre merge-a (automat stanja je garantuje).
@@ -274,6 +286,11 @@ async function requireTaskContext(relative) {
     // `audit_scope`, proveren iznad.
     const target = path.basename(relative, '.md');
     const artifacts = (task.data.artifacts ?? []).map((rel) => path.basename(rel, '.md'));
+    // Konsolidacija NIKAD ne prepisuje postojeću belešku: time bi se izgubio
+    // tuđi rad (npr. izmene bibliotekara). Za izmene postoji revizorski zadatak.
+    if (await exists(path.join(VAULT, relative))) {
+      throw new AccessError(`beleška "${relative}" već postoji — konsolidacija ne prepisuje postojeće; za izmene otvori revizorski zadatak (agentctl audit)`);
+    }
     if (!artifacts.length) {
       throw new AccessError(`zadatak ${TASK_ID} nema artefakte — nema šta da se konsoliduje u "${target}"`);
     }

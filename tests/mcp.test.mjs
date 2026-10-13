@@ -332,6 +332,37 @@ test('MCP: zone fragment i draft su razdvojene (tačno jedan autor po izmeni)', 
   await vault.cleanup();
 });
 
+test('MCP: librarian i consolidator se ne preklapaju (vrsta zadatka + bez prepisivanja)', async (t) => {
+  const vault = await seededVault();
+  // Običan zadatak: librarian je odbijen, konsolidator sme (nova beleška).
+  await makeTask(vault, { id: 'TASK-911', owner: 'codex', status: 'verified', artifacts: ['wiki/Nova.md'], verdict: 'pass' });
+  const libNaObicnom = await connect(vault.root, 'librarian', 'codex', t, { OBSIDIAN_TASK: 'TASK-911' });
+  const odbijen = await libNaObicnom.callTool('obsidian_write_note', { path: 'wiki/Nova.md', content: '# x\n' });
+  assert.equal(odbijen.isError, true, 'librarian radi samo na revizorskim zadacima');
+  assert.match(odbijen.content[0].text, /samo na revizorskim zadacima/);
+  libNaObicnom.close();
+
+  const kons = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-911' });
+  const nova = await kons.callTool('obsidian_write_note', { path: 'wiki/Nova.md', content: '# nova\n' });
+  assert.equal(nova.isError, false, nova.content[0].text);
+  // Postojeću belešku konsolidator NE prepisuje.
+  const prepisivanje = await kons.callTool('obsidian_write_note', { path: 'wiki/Crna_tabla.md', content: '# x\n' });
+  assert.equal(prepisivanje.isError, true);
+  assert.match(prepisivanje.content[0].text, /već postoji|nije artefakt/);
+  kons.close();
+
+  // Revizorski zadatak: consolidator je odbijen.
+  await makeTask(vault, { id: 'TASK-912', owner: 'codex', status: 'in_progress', artifacts: [], verdict: null });
+  await vault.write('tasks/active/TASK-912.md', (await vault.read('tasks/active/TASK-912.md'))
+    .replace('source: raw/dokument.md', 'kind: audit\nsource: null\naudit_scope:\n  - wiki/Crna_tabla.md'));
+  const konsNaReviziji = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-912' });
+  const odbijenKons = await konsNaReviziji.callTool('obsidian_write_note', { path: 'wiki/Crna_tabla.md', content: '# x\n' });
+  assert.equal(odbijenKons.isError, true);
+  assert.match(odbijenKons.content[0].text, /ne radi na revizorskim zadacima/);
+  konsNaReviziji.close();
+  await vault.cleanup();
+});
+
 test('MCP: izvedeni artefakti kontrolnog sloja su zaštićeni', async (t) => {
   const vault = await seededVault();
   await makeTask(vault, { id: 'TASK-301', owner: 'codex', status: 'verified', artifacts: ['wiki/Index.md', 'wiki/drafts/Index.md'] });
@@ -452,8 +483,12 @@ test('MCP: revizorski zadatak menja samo ono što je u opsegu', async (t) => {
 
 test('MCP: patch menja samo zadati odeljak', async (t) => {
   const vault = await seededVault();
-  await makeTask(vault, { id: 'TASK-501', owner: 'codex', status: 'verified', artifacts: ['wiki/Crna_tabla.md'] });
-  const client = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-501' });
+  // Izmenu POSTOJEĆE beleške radi bibliotekar u revizorskom zadatku; konsolidator
+  // ne prepisuje postojeće (inače bi pregazio tuđi rad).
+  await makeTask(vault, { id: 'TASK-501', owner: 'codex', status: 'in_progress', artifacts: ['wiki/Crna_tabla.md'], verdict: null });
+  await vault.write('tasks/active/TASK-501.md', (await vault.read('tasks/active/TASK-501.md'))
+    .replace('source: raw/dokument.md', 'kind: audit\nsource: null\naudit_scope:\n  - wiki/Crna_tabla.md'));
+  const client = await connect(vault.root, 'librarian', 'codex', t, { OBSIDIAN_TASK: 'TASK-501' });
   const original = await vault.read('wiki/Crna_tabla.md');
 
   await client.callTool('obsidian_patch_note', { path: 'wiki/Crna_tabla.md', section: 'Crna tabla', content: 'Novi sadržaj odeljka.' });
@@ -474,8 +509,10 @@ test('MCP: patch menja samo zadati odeljak', async (t) => {
 
 test('MCP: patch sa create=false odbija nepostojeći odeljak', async (t) => {
   const vault = await seededVault();
-  await makeTask(vault, { id: 'TASK-502', owner: 'codex', status: 'verified', artifacts: ['wiki/Crna_tabla.md'] });
-  const client = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-502' });
+  await makeTask(vault, { id: 'TASK-502', owner: 'codex', status: 'in_progress', artifacts: ['wiki/Crna_tabla.md'], verdict: null });
+  await vault.write('tasks/active/TASK-502.md', (await vault.read('tasks/active/TASK-502.md'))
+    .replace('source: raw/dokument.md', 'kind: audit\nsource: null\naudit_scope:\n  - wiki/Crna_tabla.md'));
+  const client = await connect(vault.root, 'librarian', 'codex', t, { OBSIDIAN_TASK: 'TASK-502' });
   const result = await client.callTool('obsidian_patch_note', { path: 'wiki/Crna_tabla.md', section: 'Ne postoji', content: 'x', create: false });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /ne postoji/);
