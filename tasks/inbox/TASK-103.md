@@ -3,7 +3,7 @@ id: TASK-103
 title: Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
 status: ready
 created: 2026-10-13T20:43:47.091Z
-updated: 2026-10-13T20:43:47.097Z
+updated: 2026-10-13T20:44:07.255Z
 source: raw/arhitektura-asinhronog-multi-agentskog-sistema.md
 priority: normal
 tags:
@@ -30,6 +30,17 @@ history:
   - at: 2026-10-13T20:43:47.097Z
     status: ready
     actor: agentctl
+  - at: 2026-10-13T20:44:07.207Z
+    status: in_progress
+    actor: researcher
+  - at: 2026-10-13T20:44:07.252Z
+    status: in_progress
+    actor: researcher
+    note: neuspešna faza research
+  - at: 2026-10-13T20:44:07.255Z
+    status: ready
+    actor: researcher
+    note: "neuspeh: nema artefakta (exit 0)"
 ---
 
 # Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
@@ -41,3 +52,9 @@ _Operater nije ostavio opis; vidi `source`._
 ## Nalazi
 
 _Prazno do prvog nalaza._
+
+### Neuspešna faza research (2026-10-13T20:44:07.250Z)
+
+```
+MOCK researcher: nacrt upisan u wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md (2355 B, 1 veza).
+```

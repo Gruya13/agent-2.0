@@ -6,3 +6,10 @@
 {"ts":"2026-10-13T20:43:47.093Z","kind":"task.ingested","task":"TASK-103","source":"raw/arhitektura-asinhronog-multi-agentskog-sistema.md","actor":"operator"}
 {"ts":"2026-10-13T20:43:47.096Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
 {"ts":"2026-10-13T20:43:47.098Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T20:43:57.198Z","kind":"phase.error","task":"TASK-101","phase":"research","role":"researcher","error":"nije moguće zaključati TASK-101.lock u zadatom roku"}
+{"ts":"2026-10-13T20:44:07.205Z","kind":"phase.error","task":"TASK-102","phase":"research","role":"researcher","error":"nije moguće zaključati TASK-102.lock u zadatom roku"}
+{"ts":"2026-10-13T20:44:07.210Z","kind":"task.write","task":"TASK-103","actor":"researcher","status":"in_progress","phase":"active","moved":"inbox->active"}
+{"ts":"2026-10-13T20:44:07.244Z","kind":"phase.start","task":"TASK-103","phase":"research","role":"researcher","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-103-researcher","branch":"agent/researcher/TASK-103"}
+{"ts":"2026-10-13T20:44:07.253Z","kind":"task.write","task":"TASK-103","actor":"researcher","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T20:44:07.256Z","kind":"task.write","task":"TASK-103","actor":"researcher","status":"ready","phase":"inbox","moved":"active->inbox"}
+{"ts":"2026-10-13T20:44:07.264Z","kind":"phase.failed","task":"TASK-103","role":"researcher","reason":"nema artefakta (exit 0)"}
