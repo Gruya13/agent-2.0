@@ -34,3 +34,7 @@
 {"ts":"2026-10-13T20:45:05.528Z","kind":"phase.start","task":"TASK-103","phase":"consolidate","role":"consolidator","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-103-consolidator"}
 {"ts":"2026-10-13T20:45:05.591Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"blocked","phase":"inbox","moved":"active->inbox"}
 {"ts":"2026-10-13T20:45:05.591Z","kind":"phase.failed","task":"TASK-103","phase":"consolidate","reason":"glavni repozitorijum nije registrovan kao radno stablo","conflict":false}
+{"ts":"2026-10-13T20:45:05.619Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"rawManifestAdded":0,"rawManifestTotal":1,"commit":"81af33b9ce2634a1accf6b207252e28489a81e5e"}
+{"ts":"2026-10-13T20:45:20.389Z","kind":"task.ingested","task":"TASK-101","source":"raw/arhitektura-asinhronog-multi-agentskog-sistema.md","actor":"operator"}
+{"ts":"2026-10-13T20:45:20.392Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T20:45:20.395Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
