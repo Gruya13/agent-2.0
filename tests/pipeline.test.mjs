@@ -34,6 +34,10 @@ test('E2E: izvor -> nacrt -> verifikacija -> konsolidacija u main', async () => 
   assert.equal(ingested.data.status, 'ready');
   assert.equal(ingested.phase, 'inbox');
   assert.equal(ingested.data.source, 'raw/dokument.md');
+  // Izvor mora biti komitovan: bez toga ga sveže radno stablo ne vidi, a
+  // verifikator prijavljuje `raw.deleted` (nalaz N1 iz prave verifikacije).
+  const tracked = await gitExec(vault.root, ['ls-tree', '-r', '--name-only', 'HEAD', '--', 'raw']);
+  assert.ok(tracked.stdout.split('\n').includes('raw/dokument.md'), 'izvor nije u Gitu posle ingest-a');
 
   // Faza 2 — istraživanje u izolaciji: main NE sme da vidi nacrt.
   const research = await pipeline.runResearch('TASK-101');
@@ -145,6 +149,49 @@ test('E2E: odbijen nacrt se vraća istraživaču, pa na kraju blokira zadatak', 
     assert.match(task.data.blocked_reason, /odbijen \d+ puta/i);
     // Zadržan zadatak i dalje mora da poštuje šemu i fazu.
     assert.equal((await lintVault(config)).errors.length, 0);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_VERDICT;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: konsolidator sa izlaznim kodom 0 ali bez beleške ne ulazi u main', async () => {
+  const { vault, config, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Prazna konsolidacija' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  assert.equal((await store.get('TASK-101')).data.status, 'verified');
+
+  process.env.AGENT_2_0_MOCK_NOOP = '1';
+  try {
+    const result = await pipeline.runConsolidate('TASK-101');
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /produkcione beleške/);
+    const task = await store.get('TASK-101');
+    assert.equal(task.data.status, 'review', 'zadatak se vraća u review, ne u produkcionu granu');
+    assert.equal((await lintVault(config)).errors.length, 0);
+    // main nije dobio ni jednu produkcionu belešku
+    assert.deepEqual((await listNotes(vault.root, ['wiki'])).filter((n) => n !== 'wiki/Index.md'), []);
+    assert.match(task.body, /Konsolidacija bez artefakta/);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_NOOP;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: run() sam troši dozvoljene pokušaje i blokira zadatak posle njih', async () => {
+  const { vault, store, pipeline } = await setup({ maxRevisions: 1 });
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Uporno odbijana beleška' });
+  process.env.AGENT_2_0_MOCK_VERDICT = 'fail';
+  try {
+    // Bez ovoga bi petlja stala posle prvog `fail` i retry se nikad ne bi desio.
+    const rounds = await pipeline.run({ rounds: 6 });
+    const task = await store.get('TASK-101');
+    assert.equal(task.data.status, 'blocked', `očekivan blocked, dobijeno ${task.data.status}`);
+    assert.ok(rounds.length >= 3, `petlja mora da nastavi posle odbijenog nacrta (krugova: ${rounds.length})`);
+    const phases = rounds.flatMap((r) => r.actions).map((a) => a.phase);
+    assert.ok(phases.filter((p) => p === 'research').length >= 2, 'istraživač mora dobiti drugi pokušaj');
+    assert.ok(phases.filter((p) => p === 'verify').length >= 2, 'verifikator mora ponovo suditi');
   } finally {
     delete process.env.AGENT_2_0_MOCK_VERDICT;
     await vault.cleanup();

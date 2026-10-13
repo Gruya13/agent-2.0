@@ -101,3 +101,4 @@
 {"ts":"2026-10-13T21:55:22.967Z","kind":"task.write","task":"TASK-101","actor":"verifier","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T21:55:22.969Z","kind":"task.write","task":"TASK-101","actor":"dsh","status":"ready","phase":"inbox","moved":"active->inbox"}
 {"ts":"2026-10-13T21:55:23.003Z","kind":"phase.rejected","task":"TASK-101","role":"verifier","attempts":1}
+{"ts":"2026-10-13T21:55:23.035Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":2,"commit":"1af5da67c79ca9144c8a7209ee797eb1c109bd9a"}

@@ -22,7 +22,7 @@ import {
   removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
 } from './worktree.mjs';
 import { buildPrompt, parseVerdict, runAgent } from './agents/index.mjs';
-import { lintVault, updateRawManifest } from './lint.mjs';
+import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
 import { listNotes, renderIndex } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
 
@@ -60,11 +60,30 @@ export function createPipeline(config, options = {}) {
   /**
    * Knjigovodstvo kontrolnog sloja: komituju se isključivo zone crne table.
    * Izmene u kodu ili tuđim zonama se ne diraju.
+   *
+   * `raw/` je tu zbog novih izvora: ako izvor uđe u manifest a ne u Git, svako
+   * sveže radno stablo (uključujući verifikatorovo) prijavljuje `raw.deleted`, a
+   * citati iz nacrta postaju neproverljivi. Zato se novi izvori komituju zajedno
+   * sa manifestom — ALI samo ako manifest ne prijavljuje prekršaj: izmenjen ili
+   * obrisan izvor se nikad ne komituje, da se prekršaj ne bi sakrio u istoriji.
    */
-  const BOOKKEEPING_PATHS = ['tasks', 'wiki', '.agents/raw-manifest.json'];
+  const BOOKKEEPING_PATHS = ['tasks', 'wiki', '.agents/raw-manifest.json', 'raw'];
 
   async function commitBookkeeping(message, actor = 'agentctl') {
-    return commitPaths(config.root, BOOKKEEPING_PATHS, message, { actor });
+    let paths = BOOKKEEPING_PATHS;
+    const rawProblems = (await lintRawImmutability(config))
+      .filter((f) => f.level === 'error' && ['raw.modified', 'raw.deleted', 'raw.legacy-unknown'].includes(f.code));
+    if (rawProblems.length) {
+      paths = BOOKKEEPING_PATHS.filter((p) => p !== 'raw');
+      await store.emit('raw.violation', {
+        task: null,
+        actor,
+        findings: rawProblems.map((f) => ({ code: f.code, target: f.target, message: f.message })),
+        note: 'raw/ nije komitovan; prekršaj mora da reši čovek',
+      });
+      logger(`raw/ nije komitovan: ${rawProblems.map((f) => f.code).join(', ')}`);
+    }
+    return commitPaths(config.root, paths, message, { actor });
   }
 
   /**
@@ -356,7 +375,18 @@ export function createPipeline(config, options = {}) {
 
     // Nacrt više ne postoji: artefakti zadatka od sada pokazuju na produkciju.
     const produced = await detectArtifacts(wtConfig, { role });
-    if (produced.length) await store.setArtifacts(id, produced, { actor: role, note: `konsolidovano: ${produced.join(', ')}` });
+    if (!produced.length) {
+      // Izlazni kod 0 nije dokaz: bez produkcione beleške u radnom stablu nema
+      // šta da se spoji u `main`.
+      await store.updateBody(id, {
+        actor: role,
+        append: `### Konsolidacija bez artefakta (${now()})\n\nHarnes je izašao sa kodom ${result.exitCode}, ali u \`${config.vault.production}/\` nema ni jedne produkcione beleške.\n\n\`\`\`\n${result.output.slice(0, 2000)}\n\`\`\``,
+        note: 'konsolidacija bez produkcione beleške',
+      });
+      await failPhase(id, role, { reason: 'nema produkcione beleške u radnom stablu', toStatus: 'review' });
+      return { phase: 'consolidate', task: id, ok: false, reason: 'nema produkcione beleške' };
+    }
+    await store.setArtifacts(id, produced, { actor: role, note: `konsolidovano: ${produced.join(', ')}` });
 
     const branch = `agent/${role}/${id}`;
     const commit = await commitWorktreeSafe(config, id, role, `consolidator(${id}): konsolidacija u wiki/`, role);
@@ -468,12 +498,18 @@ export function createPipeline(config, options = {}) {
       }
     }
 
+    // Napredak nije samo uspeh: opozvan zakup i odbijen verdikt takođe menjaju
+    // stanje crne table. Bez toga `run()` stane posle prvog `fail` i dozvoljeni
+    // broj pokušaja (maxRevisions) se nikad ne potroši.
+    const progressed = (a) => a.ok === true
+      || a.phase === 'reclaim'
+      || (a.phase === 'verify' && a.verdict === 'fail');
+
     if (!only) {
       const reflected = await reflect();
-      const changed = actions.some((a) => a.ok);
-      return { actions, changed, reflect: reflected };
+      return { actions, changed: actions.some(progressed), reflect: reflected };
     }
-    return { actions, changed: actions.some((a) => a.ok) };
+    return { actions, changed: actions.some(progressed) };
   }
 
   async function run({ rounds = config.pipeline.maxRounds, intervalMs = config.pipeline.intervalMs } = {}) {

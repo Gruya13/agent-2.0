@@ -233,6 +233,25 @@ export async function runMock(config, { role, task, cwd, now = new Date().toISOS
   const handler = handlers[role];
   if (!handler) throw new Error(`mock adapter ne poznaje ulogu "${role}"`);
 
+  // Testni režim: harnes izlazi uspešno, ali ne proizvodi artefakt. Služi da se
+  // dokaže da kontrolni sloj ne veruje izlaznom kodu, nego artefaktu.
+  if (process.env.AGENT_2_0_MOCK_NOOP === '1') {
+    return {
+      ok: true,
+      exitCode: 0,
+      output: `MOCK ${role}: NOOP (namerno bez artefakta)`,
+      stderr: '',
+      durationMs: Date.now() - started,
+      command: `mock:${role}`,
+      timedOut: false,
+      harness: 'mock',
+      role,
+      artifacts: [],
+      verdict: null,
+      lintErrors: null,
+    };
+  }
+
   let result;
   try {
     result = await handler(config, { task, cwd, now });

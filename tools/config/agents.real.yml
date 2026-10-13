@@ -1,0 +1,50 @@
+# Konfiguracija kontrolnog sloja (agentctl).
+#
+# PRAVI harnesi: researcher -> agy, verifier -> dsh, consolidator -> codex.
+#
+#   node tools/orchestrator/cli.mjs run --config tools/config/agents.real.yml
+#
+# Podrazumevana konfiguracija (`agents.yml`) ostaje na `mock`: testovi i demo
+# moraju da budu deterministički i besplatni. Ovaj fajl se koristi svesno, po
+# pozivu, i troši pravu kvotu.
+
+vault:
+  sources: raw
+  drafts: wiki/drafts
+  production: wiki
+  index: wiki/Index.md
+  tasks: tasks
+  reviews: tasks/reviews
+  events: tasks/events.jsonl
+  contracts: .agents
+
+lease:
+  ttlMs: 600000        # 10 minuta
+  heartbeatMs: 120000  # obnova zakupa na 2 minuta
+
+worktree:
+  dir: .worktrees
+  branchPrefix: agent
+
+pipeline:
+  maxRounds: 10
+  intervalMs: 0
+  agentTimeoutMs: 900000
+  maxRevisions: 3
+
+agents:
+  researcher:
+    adapter: harness
+    harness: agy
+    model: null
+    timeoutMs: 900000
+  verifier:
+    adapter: harness
+    harness: dsh
+    model: null
+    timeoutMs: 900000
+  consolidator:
+    adapter: harness
+    harness: codex
+    model: null
+    timeoutMs: 900000

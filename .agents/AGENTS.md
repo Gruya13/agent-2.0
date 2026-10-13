@@ -61,9 +61,11 @@ i u `agentctl` kontrolnom sloju (Git sloj).
 9. **`raw/` → `wiki/` je jednosmeran tok.** Nijedan sadržaj ne ulazi u `wiki/`
    bez `id` zadatka u `tasks/completed/` i revizorskog traga.
 10. **`wiki/Index.md` je izveden artefakt.** Generiše ga isključivo kontrolni
-    sloj (`agentctl index`) u `main`, posle merge-a. Nijedna agentska grana ga
-    ne nosi — inače svako paralelno spajanje pravi konflikt „dodato na obe
-    strane". Isto važi za `.agents/raw-manifest.json`.
+    sloj (`agentctl index`) u `main`, posle merge-a. Grane ga nasleđuju kao
+    praćeni fajl i mogu da ga izmene, ali se njegov sadržaj **ne spaja**: pre
+    rebase-a kontrolni sloj poravnava izvedene artefakte sa aktuelnim `main`
+    (`alignGeneratedPaths`), pa nema konflikta tipa „dodato na obe strane".
+    Isto važi za `.agents/raw-manifest.json`.
 11. **Granа agenta se pre spajanja rebase-uje na `main`.** Tako grana ne nosi
     zastarelo stanje crne table (`tasks/`), a merge u `main` ostaje sekvencijalan
     i eksplicitan (`--no-ff`), sa autorstvom svakog doprinosa u Git dnevniku.

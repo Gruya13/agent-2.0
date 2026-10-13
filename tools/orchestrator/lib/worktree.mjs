@@ -160,7 +160,7 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
   // 1. Knjigovodstvo crne table u main mora biti komitovano pre spajanja.
   const dirty = await statusPorcelain(config.root);
   if (dirty.length) {
-    await commitPaths(config.root, ['tasks', 'wiki', '.agents/raw-manifest.json'], `agentctl: knjigovodstvo pre merge-a ${branch}`, { actor: 'agentctl' });
+    await commitPaths(config.root, ['tasks', 'wiki', '.agents/raw-manifest.json', 'raw'], `agentctl: knjigovodstvo pre merge-a ${branch}`, { actor: 'agentctl' });
     const stillDirty = await statusPorcelain(config.root);
     if (stillDirty.length) {
       const changed = await branchChangedPaths(config, branch);

@@ -103,15 +103,20 @@ posle `maxRevisions` pokušaja zadatak ide u `blocked` (nikad u produkcioni
 
 Podrazumevano su sva tri adaptera `mock`: to je deterministički zamenik istog
 ugovora (iste zone upisa, isti izlazni format) koji omogućava da testovi i demo
-provere **arhitekturu**, a ne kvalitet sadržaja. Za prave modele dovoljna je
-izmena [`tools/config/agents.yml`](tools/config/agents.yml):
+provere **arhitekturu**, a ne kvalitet sadržaja. Pravi harnesi se uključuju
+svesno, po pozivu, kroz odvojen config — da testovi ostanu deterministički i
+besplatni:
 
-```yaml
-agents:
-  researcher:   { adapter: harness, harness: agy }    # agy --print
-  verifier:     { adapter: harness, harness: dsh }    # dsh --profile headless
-  consolidator: { adapter: harness, harness: codex }  # codex exec
+```bash
+node tools/orchestrator/cli.mjs ingest raw/<izvor>.md --title "Naslov" \
+  --config tools/config/agents.real.yml
+node tools/orchestrator/cli.mjs run --rounds 4 \
+  --config tools/config/agents.real.yml
 ```
+
+[`tools/config/agents.real.yml`](tools/config/agents.real.yml) je isti config sa
+`adapter: harness` (`agy` → `dsh` → `codex`). Izlazni kod harnesa nije dokaz
+uspeha: faza se priznaje samo ako je artefakt stvarno nastao u njenoj zoni.
 
 Harnesi se pozivaju neinteraktivno, sa `cwd` postavljenim na njihovo izolovano
 radno stablo i sa `OBSIDIAN_ROLE`/`OBSIDIAN_VAULT` u okruženju, pa im MCP server
@@ -129,13 +134,13 @@ globalni fajl-lock (`agy` ne trpi paralelne sesije).
 
 ## Odluke koje odstupaju od bukvalnog teksta specifikacije
 
-1. **`wiki/Index.md` je izveden artefakt i ne putuje kroz grane.** Specifikacija
-   dodeljuje ažuriranje indeksa Codex-u. U praksi bi ga tada svaka grana menjala
-   na svoj način, pa bi svaki paralelni merge padao na konfliktu (ili, gore, na
-   konfliktu tipa „dodato na obe strane" kada `main` već ima indeks). Zato
-   konsolidator uređuje belešku, a indeks regeneriše kontrolni sloj u `main`
-   posle spajanja (`agentctl index`). Uloge i tok su isti; vlasništvo nad
-   generisanim fajlom je eksplicitno.
+1. **`wiki/Index.md` je izveden artefakt i njegov sadržaj se ne spaja.** Grane
+   ga nasleđuju (praćen je fajl) i mogu da ga izmene, pa bi ga bez zaštite svaka
+   grana menjala na svoj način i paralelni merge bi padao — ili, gore, na
+   konfliktu tipa „dodato na obe strane". Zato kontrolni sloj pre rebase-a
+   poravnava izvedene artefakte sa aktuelnim `main` (`alignGeneratedPaths`), a
+   posle spajanja ih regeneriše iz stvarnog stanja skladišta (`agentctl index`).
+   Isto važi za `.agents/raw-manifest.json`.
 2. **Grana se pre spajanja rebase-uje na `main`.** Bez toga grana nosi i
    zastarelo stanje crne table (`tasks/`), jer je nastala u trenutku kada je
    zadatak bio u drugoj fazi, i Git odbija merge. Autorstvo komita se ne menja —
