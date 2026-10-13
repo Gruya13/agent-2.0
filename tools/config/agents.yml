@@ -27,6 +27,13 @@ worktree:
   branchPrefix: agent
 
 pipeline:
+  # Red-team faza: posle verifikacije, pre spajanja.
+  challenge: true
+  # Reprodukcione skripte red-teama izvršava kontrolni sloj u svežem klonu
+  # zamrznute revizije. Isključi samo ako ne želiš izvršavanje tuđeg koda.
+  challengeExecute: true
+  challengeTimeoutMs: 60000
+  challengeMaxScripts: 3
   maxRounds: 10
   intervalMs: 0
   agentTimeoutMs: 900000
@@ -43,6 +50,11 @@ agents:
     harness: agy
     model: null
     timeoutMs: 300000
+  red-team:
+    adapter: mock
+    harness: dsh
+    model: null
+    timeoutMs: 900000
   verifier:
     adapter: mock
     harness: dsh

@@ -76,7 +76,7 @@ Komande:
   renew <TASK-ID> --owner   obnovi zakup
   release <TASK-ID> --owner oslobodi zakup
   reclaim                   vrati zadatke sa isteklim zakupom u opticaj
-  phase <faza> <TASK-ID>    izvrši jednu fazu (research|verify|consolidate)
+  phase <faza> <TASK-ID>    izvrši jednu fazu (extract|research|verify|challenge|audit|consolidate)
   run [--rounds N]          kontrolna petlja kroz sve faze
   status [--json]           stanje sistema
   lint [--json]             proveri invarijante ugovora
@@ -238,10 +238,10 @@ const COMMANDS = {
 
   async phase({ pipeline, flags }, positional) {
     const [phase, id] = positional;
-    if (!phase || !id) throw new Error('phase zahteva: phase <extract|research|verify|audit|consolidate> <TASK-ID>');
+    if (!phase || !id) throw new Error('phase zahteva: phase <extract|research|verify|challenge|audit|consolidate> <TASK-ID>');
     const run = {
       extract: pipeline.runExtract, research: pipeline.runResearch, verify: pipeline.runVerify,
-      audit: pipeline.runAudit, consolidate: pipeline.runConsolidate,
+      challenge: pipeline.runChallenge, audit: pipeline.runAudit, consolidate: pipeline.runConsolidate,
     }[phase];
     if (!run) throw new Error(`nepoznata faza "${phase}"`);
     const result = await run(id);

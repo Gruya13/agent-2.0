@@ -35,7 +35,7 @@ export const TASK_FIELD_ORDER = [
   'id', 'title', 'status', 'created', 'updated', 'kind', 'source', 'audit_scope',
   'extract_required', 'extracted', 'priority', 'tags',
   'depends_on', 'authors', 'assignee', 'lock_owner', 'locked_at',
-  'lease_expires_at', 'artifacts', 'verification', 'blocked_reason', 'history',
+  'lease_expires_at', 'artifacts', 'verification', 'challenge', 'blocked_reason', 'history',
 ];
 
 export const REQUIRED_FIELDS = ['id', 'title', 'status', 'created', 'updated'];
@@ -248,6 +248,7 @@ export function newTaskData({
     lease_expires_at: null,
     artifacts: [],
     verification: null,
+    challenge: null,
     blocked_reason: null,
     history: [{ at: now, status: 'proposed', actor: 'operator' }],
   };

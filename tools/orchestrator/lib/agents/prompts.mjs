@@ -6,6 +6,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
 export const ROLE_ARTIFACT_ZONE = {
+  'red-team': 'tasks/challenges/',
   researcher: 'wiki/drafts/',
   verifier: 'tasks/reviews/',
   consolidator: 'wiki/',

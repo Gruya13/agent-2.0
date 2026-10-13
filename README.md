@@ -101,7 +101,7 @@ posle `maxRevisions` pokušaja zadatak ide u `blocked` (nikad u produkcioni
 
 ## Uloge (i kako su dogovorene)
 
-Pet uloga. Tri su iz prvobitne podele, dve su dodate posle **konsultacije sva tri
+Šest uloga. Tri su iz prvobitne podele, tri su dodate posle **konsultacije sva tri
 vendora** (svaki je zadržao svoje postojeće uloge i birao 0–2 nove, uz
 obrazloženje i dokaz; svi odgovori su u [KONSULTACIJA-ULOGA.md](KONSULTACIJA-ULOGA.md)):
 
@@ -110,6 +110,7 @@ obrazloženje i dokaz; svi odgovori su u [KONSULTACIJA-ULOGA.md](KONSULTACIJA-UL
 | `extractor` | `agy` | `wiki/drafts/fragments/` | verna transkripcija PDF-ova, tabela i skenova; bez tumačenja; fragment nosi `source_sha256` |
 | `researcher` | `agy` | `wiki/drafts/` | dekomponuje izvor u enciklopedijski nacrt sa Vikilinkovima |
 | `verifier` | `dsh` | `tasks/reviews/` | nezavisno obara ili potvrđuje tuđi rad, svaki nalaz sa dokazom |
+| `red-team` | `dsh` | `tasks/challenges/` | posle pečata napada artefakt na **zamrznutoj reviziji**; nalaz je skript koji kontrolni sloj sam izvrši |
 | `librarian` | `codex` | `wiki/` u opsegu + `tasks/audits/` | održava postojeću bazu: duplikati, siročići, oznake, pokvarene veze |
 | `consolidator` | `codex` | `wiki/` (bez `Index.md`) | premešta verifikovan nacrt u produkciju i uređuje strukturu |
 
@@ -258,6 +259,13 @@ proverljiva osnova nad bajtovima.
 
 Skladište koje ne nosi `.agents/AGENTS.md` (običan Obsidian vault) zadržava samo
 kapiju 1 — tako MCP server ostaje upotrebljiv i van crne table.
+
+**Red-team kapija.** Posle pečata, a pre spajanja, zadatak prolazi kroz red-team
+fazu na zamrznutoj reviziji. Nalaz blokira merge **samo ako je reproduktibilan**:
+kontrolni sloj pokrene skript red-teama u svežem klonu te revizije (`bash`/`python3`,
+ograničeno vreme i broj skripti). Skript koji ne obori tvrdnju je lažni nalaz —
+broji se u zadatku i ne blokira. Reproduktivni nalaz vraća zadatak autoru, a
+posle dozvoljenog broja pokušaja zadatak se blokira.
 
 **Kapija na merge-u.** Grana sme da menja samo zone znanja (`wiki/`,
 `tasks/reviews/`, `tasks/audits/`). Ako grana dira `raw/`, `tools/`, `tests/` ili

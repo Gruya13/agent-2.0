@@ -160,7 +160,7 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
   // 0. Grana sme da menja SAMO zone znanja. Bez ove kapije bi agent koji piše
   //    fajl-sistemom (mimo MCP-a) mogao da ubaci `raw/`, `tools/` ili `.agents/`
   //    u `main` — dokazano reprodukcionim skriptom u protnoj rundi.
-  const dozvoljeneZone = ['wiki/', 'tasks/reviews/', 'tasks/audits/'];
+  const dozvoljeneZone = ['wiki/', 'tasks/reviews/', 'tasks/audits/', 'tasks/challenges/'];
   const izmene = await branchChangedPaths(config, branch);
   const vanZone = izmene.filter((f) => !dozvoljeneZone.some((z) => f.startsWith(z)));
   if (vanZone.length) {

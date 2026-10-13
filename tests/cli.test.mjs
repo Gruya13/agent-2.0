@@ -125,6 +125,10 @@ test('CLI: phase izvršava jednu fazu i vraća 0', async () => {
   assert.equal(verify.code, 0, verify.stderr);
   assert.equal(JSON.parse(verify.stdout).verdict, 'pass');
 
+  const challenge = await runCli(vault.root, ['phase', 'challenge', 'TASK-101', '--json']);
+  assert.equal(challenge.code, 0, challenge.stderr);
+  assert.equal(JSON.parse(challenge.stdout).verdict, 'clean');
+
   const consolidate = await runCli(vault.root, ['phase', 'consolidate', 'TASK-101', '--json']);
   assert.equal(consolidate.code, 0, consolidate.stderr);
   assert.equal(JSON.parse(consolidate.stdout).ok, true);
@@ -161,7 +165,7 @@ test('CLI: doctor proverava okruženje i prijavljuje adaptere', async () => {
   assert.ok(names.some((n) => n.includes('harnes codex')));
   assert.ok(names.some((n) => n.includes('harnes agy')));
   const roles = checks.filter((c) => c.name.startsWith('uloga '));
-  assert.equal(roles.length, 5, 'extractor, researcher, verifier, librarian, consolidator');
+  assert.equal(roles.length, 6, 'extractor, researcher, verifier, red-team, librarian, consolidator');
   assert.match(roles.map((r) => r.detail).join(','), /mock/);
   await vault.cleanup();
 });

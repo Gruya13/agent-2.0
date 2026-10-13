@@ -60,6 +60,15 @@ test('E2E: izvor -> nacrt -> verifikacija -> konsolidacija u main', async () => 
   assert.equal(task.data.verification.verdict, 'pass');
   assert.equal(await vault.exists('tasks/reviews/TASK-101.md'), false, 'revizija je i dalje samo na grani');
 
+  // Faza 3b — red-team na zamrznutoj reviziji (posle pečata, pre spajanja).
+  const challenge = await pipeline.runChallenge('TASK-101');
+  assert.equal(challenge.ok, true, challenge.reason);
+  assert.equal(challenge.verdict, 'clean');
+  task = await store.get('TASK-101');
+  assert.equal(task.data.challenge.verdict, 'clean');
+  assert.equal(task.data.challenge.by, 'mock-red-team');
+  assert.match(task.data.challenge.revision, /^[0-9a-f]{40}$/);
+
   // Faza 4 — konsolidacija: produkciona beleška ulazi u main kroz merge.
   const consolidate = await pipeline.runConsolidate('TASK-101');
   assert.equal(consolidate.ok, true, consolidate.reason);
@@ -122,10 +131,11 @@ test('E2E: izvor -> nacrt -> verifikacija -> konsolidacija u main', async () => 
 test('E2E: kontrolna petlja run() dovršava zadatak bez ručnih koraka', async () => {
   const { vault, pipeline, store, config } = await setup();
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Automatski tok' });
-  const rounds = await pipeline.run({ rounds: 6 });
+  const rounds = await pipeline.run({ rounds: 8 });
   const task = await store.get('TASK-101');
   assert.equal(task.data.status, 'consolidated');
-  assert.ok(rounds.length >= 3);
+  assert.ok(rounds.length >= 4, `očekivani su research, verify, challenge i consolidate (${rounds.length} krugova)`);
+  assert.ok(rounds.flatMap((r) => r.actions).some((a) => a.phase === 'challenge' && a.ok));
   assert.ok(rounds.some((r) => r.actions.some((a) => a.phase === 'verify' && a.ok)));
   assert.equal((await lintVault(config)).errors.length, 0);
   await vault.cleanup();
@@ -164,6 +174,7 @@ test('E2E: konsolidator sa izlaznim kodom 0 ali bez beleške ne ulazi u main', a
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Prazna konsolidacija' });
   await pipeline.runResearch('TASK-101');
   await pipeline.runVerify('TASK-101');
+  await pipeline.runChallenge('TASK-101');
   assert.equal((await store.get('TASK-101')).data.status, 'verified');
 
   process.env.AGENT_2_0_MOCK_NOOP = '1';
@@ -213,6 +224,7 @@ test('E2E: netekstualni izvor ide kroz extract pre istraživanja, sa dokazom por
   // ga konsolidator može proglasiti produkcionom beleškom.
   assert.equal(research.artifacts.includes('wiki/drafts/fragments/sken.md'), false, `istraživač je prisvojio fragment: ${research.artifacts.join(', ')}`);
   assert.equal((await pipeline.runVerify('TASK-101')).verdict, 'pass');
+  assert.equal((await pipeline.runChallenge('TASK-101')).ok, true);
   assert.equal((await pipeline.runConsolidate('TASK-101')).ok, true);
 
   // Fragmenti putuju sa granom i ostaju u bazi kao trag porekla.
@@ -229,6 +241,7 @@ test('E2E: upis van zone znanja ne stiže u main (kontrola na merge-u)', async (
     const research = await pipeline.runResearch('TASK-101');
     assert.equal(research.ok, true);
     assert.equal((await pipeline.runVerify('TASK-101')).verdict, 'pass');
+    await pipeline.runChallenge('TASK-101');
     const consolidate = await pipeline.runConsolidate('TASK-101');
     assert.equal(consolidate.ok, false, 'injekcija izvan zone ne sme da se spoji');
     assert.match(consolidate.reason, /zone van dozvole/);
@@ -277,6 +290,9 @@ test('E2E: revizija baze (librarian) prolazi kroz audit -> verify -> merge', asy
   const verify = await pipeline.runVerify('TASK-101');
   assert.equal(verify.verdict, 'pass', verify.output?.slice(0, 300));
 
+  const challenge = await pipeline.runChallenge('TASK-101');
+  assert.equal(challenge.ok, true, challenge.reason);
+
   const merge = await pipeline.runConsolidate('TASK-101');
   assert.equal(merge.ok, true, merge.reason);
   assert.equal((await store.get('TASK-101')).data.status, 'consolidated');
@@ -323,6 +339,82 @@ test('E2E: revizija van opsega se zaustavlja pre grane', async () => {
     assert.equal(await vault.exists('wiki/Van_opsega.md'), false, 'izmena van opsega ne ulazi u main');
   } finally {
     delete process.env.AGENT_2_0_MOCK_OUT_OF_SCOPE;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: red-team sa reproduktivnim nalazom blokira spajanje i vraća zadatak autoru', async () => {
+  const { vault, config, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Nalaz red-teama' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'fail';
+  try {
+    const challenge = await pipeline.runChallenge('TASK-101');
+    assert.equal(challenge.ok, false);
+    assert.equal(challenge.verdict, 'reproducible');
+    assert.deepEqual(challenge.reproduced, ['tasks/challenges/TASK-101/NALAZ-1.sh']);
+
+    const task = await store.get('TASK-101');
+    assert.equal(task.data.status, 'review', 'reproduktivni nalaz vraća zadatak u review');
+    assert.equal(task.data.challenge.verdict, 'reproducible');
+    assert.deepEqual(task.data.challenge.reproduced, ['tasks/challenges/TASK-101/NALAZ-1.sh']);
+    assert.equal(task.data.challenge.executed, 'izvršeno', 'skript je izvršen u svežem klonu revizije');
+    assert.match(task.body, /reprodukovano: 1/);
+    assert.equal(await vault.exists('wiki/drafts/Nalaz_red-teama.md'), false, 'ništa nije otišlo u main');
+
+    // Konsolidacija je zabranjena dok je nalaz reproduktivan. (Zadatak je u
+    // `review`, pa se gejt proverava tako što se stanje vrati na `verified` —
+    // kao da je neko preskočio fazu.)
+    await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije u stanju verified/);
+    await store.transition('TASK-101', 'verified', { actor: 'test', note: 'preskočena faza' });
+    await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: lažni nalaz red-teama se broji i ne blokira spajanje', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Lazni nalaz' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'false-positive';
+  try {
+    const challenge = await pipeline.runChallenge('TASK-101');
+    assert.equal(challenge.ok, true, 'nalaz koji se ne reprodukuje ne blokira');
+    assert.equal(challenge.verdict, 'clean');
+    assert.equal(challenge.falsePositives, 1);
+    const task = await store.get('TASK-101');
+    assert.equal(task.data.challenge.verdict, 'clean');
+    assert.equal(task.data.challenge.falsePositives, 1);
+    assert.deepEqual(task.data.challenge.reproduced, []);
+    assert.equal((await pipeline.runConsolidate('TASK-101')).ok, true);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: red-team ne sme da menja van svoje zone', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Van zone' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+
+  process.env.AGENT_2_0_MOCK_CHALLENGE_OUTSIDE = '1';
+  try {
+    const challenge = await pipeline.runChallenge('TASK-101');
+    assert.equal(challenge.ok, false);
+    assert.match(challenge.reason, /van svoje zone/);
+    assert.deepEqual(challenge.outside, ['wiki/Podmetnuto.md']);
+    assert.equal((await store.get('TASK-101')).data.status, 'verified', 'zadatak ostaje na pečatu, ne ide napred');
+    assert.equal(await vault.exists('wiki/Podmetnuto.md'), false);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE_OUTSIDE;
     await vault.cleanup();
   }
 });

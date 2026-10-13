@@ -16,13 +16,14 @@ import { promises as fs } from 'node:fs';
 import { loadConfig } from './config.mjs';
 import { createStore } from './store.mjs';
 import { exists, sha256File } from './fsx.mjs';
-import { commitPaths, log as gitLog } from './git.mjs';
+import { commitPaths, headSha, log as gitLog } from './git.mjs';
 import {
   changedFilesInWorktree, createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
   removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
 } from './worktree.mjs';
 import { buildPrompt, identityFor, parseVerdict, runAgent } from './agents/index.mjs';
 import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
+import { isReproductionScript, runReproductionScripts } from './reproduce.mjs';
 import { matchesScope } from './scope.mjs';
 import { listNotes, normalizeConsolidatedNote, readNote, renderIndex } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
@@ -38,6 +39,7 @@ export class PipelineError extends Error {
 const ROLE_OF_PHASE = {
   extract: 'extractor',
   audit: 'librarian',
+  challenge: 'red-team',
   research: 'researcher',
   verify: 'verifier',
   consolidate: 'consolidator',
@@ -48,6 +50,9 @@ export function createPipeline(config, options = {}) {
   const logger = options.logger ?? (() => {});
   const store = options.store ?? createStore(config, { clock });
   const maxRevisions = options.maxRevisions ?? config.pipeline.maxRevisions ?? 3;
+  // Red-team faza se može isključiti po pozivu (npr. u testovima koji proveravaju
+  // samo mehaniku spajanja), bez diranja konfiguracije vault-a.
+  const challengeEnabled = options.challenge ?? (config.pipeline.challenge !== false);
   /**
    * Zakup je vezan za PROCES, ne samo za ime vendora: svaki `claim` dobija token
    * koji se pamti ovde i predaje dalje uz `release`. Bez toga bi dva procesa
@@ -596,6 +601,151 @@ export function createPipeline(config, options = {}) {
 
   // ------------------------------------------------------------- faza 4
 
+  // ------------------------------------------------------------- faza 3b
+
+  /**
+   * Faza `challenge` (red-team): posle pečata, pre spajanja.
+   *
+   * Radi na **zamrznutoj reviziji** i ne popravlja ono što napada. Ono što je
+   * čini korisnom nije mišljenje, nego reprodukcija: kontrolni sloj uzme skript
+   * koji je red-team napisao i pokrene ga u svežem klonu te iste revizije. Samo
+   * nalaz koji se tamo reprodukuje blokira merge — sve ostalo se broji kao
+   * lažni nalaz i ostaje zapisano.
+   */
+  async function runChallenge(id) {
+    const task = await store.get(id);
+    if (task.data.status !== 'verified') {
+      throw new PipelineError(`${id} nije u stanju verified (${task.data.status})`, 'NOT_VERIFIED');
+    }
+    if (task.data.challenge?.verdict === 'clean') {
+      throw new PipelineError(`${id}: red-team je već dao čist nalaz`, 'ALREADY_CLEAN');
+    }
+    const role = ROLE_OF_PHASE.challenge;
+    const owner = identityFor(config, role);
+    const izvorna = `agent/${ROLE_OF_PHASE.verify}/${id}`;
+    const claimResult = await store.claim(id, owner);
+    leaseTokens.set(id, claimResult.leaseToken);
+    const claimed = { ...(await store.get(id)), leaseToken: claimResult.leaseToken };
+    const { path: wt, config: wtConfig } = await prepareWorktree({
+      id, role, base: izvorna, fresh: true, branch: `agent/${role}/${id}`,
+    });
+    const revision = await headSha(wt);
+    await store.emit('phase.start', { task: id, phase: 'challenge', role, worktree: wt, revision });
+
+    const izvestaj = `tasks/challenges/${id}.md`;
+    const prompt = await buildPrompt(config, {
+      role,
+      task: claimed,
+      extra: {
+        worktree: wt,
+        instructions: [
+          `Zamrznuta revizija: ${revision}`,
+          `Artefakti zadatka: ${(claimed.data.artifacts ?? []).join(', ') || '(nema)'}`,
+          `Izveštaj: ${izvestaj}; skripti: ${config.vault.tasks}/challenges/${id}/NALAZ-<n>.sh`,
+          'Skript ispisuje OBORENO: <šta> i izlazi sa 0 ako je tvrdnja oborena; inače izlazi sa 1.',
+          'Ne popravljaj ništa i ne piši van tasks/challenges/.',
+        ].join('\n'),
+      },
+    });
+
+    let result;
+    try {
+      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+    } catch (error) {
+      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}`, toStatus: 'verified' });
+      throw error;
+    }
+
+    const changed = await changedFilesInWorktree(wt, izvorna);
+    const vanZone = changed.filter((rel) => !rel.startsWith('tasks/challenges/'));
+    if (vanZone.length) {
+      await failPhase(id, role, { reason: `red-team je menjao van svoje zone: ${vanZone.join(', ')}`, toStatus: 'verified' });
+      return { phase: 'challenge', task: id, ok: false, reason: `red-team je menjao van svoje zone: ${vanZone.join(', ')}`, outside: vanZone };
+    }
+
+    const scripts = changed.filter(isReproductionScript);
+    let rezultati = [];
+    let izvrsavanje = 'isključeno';
+    if (config.pipeline.challengeExecute !== false && scripts.length && result.ok) {
+      izvrsavanje = 'izvršeno';
+      rezultati = await runReproductionScripts({
+        repoRoot: config.root,
+        revision,
+        worktreeDir: wt,
+        scripts,
+        max: config.pipeline.challengeMaxScripts,
+        timeoutMs: config.pipeline.challengeTimeoutMs,
+      });
+    }
+    const reprodukovani = rezultati.filter((r) => r.reproduced === true);
+    const lažni = rezultati.filter((r) => r.reproduced === false).length;
+    const verdict = reprodukovani.length ? 'reproducible' : 'clean';
+
+    if (changed.length) {
+      await commitWorktreeSafe(config, id, role, `red-team(${id}): nalazi na ${revision.slice(0, 8)}`, owner);
+    }
+    await store.setFields(id, {
+      challenge: {
+        verdict,
+        revision,
+        scripts,
+        reproduced: reprodukovani.map((r) => r.script),
+        falsePositives: lažni,
+        executed: izvrsavanje,
+        by: owner,
+        at: now(),
+      },
+    }, { actor: owner, note: `red-team: ${verdict}` });
+    await store.updateBody(id, {
+      actor: owner,
+      append: [
+        `### Faza challenge / red-team (${now()})`,
+        '',
+        `- harnes: ${result.harness}`,
+        `- zamrznuta revizija: ${revision}`,
+        `- verdikt: ${verdict}`,
+        `- skripti: ${scripts.length}, reprodukovano: ${reprodukovani.length}, lažnih: ${lažni} (izvršavanje: ${izvrsavanje})`,
+        `- izveštaj: ${changed.includes(izvestaj) ? izvestaj : '(nije napisan)'}`,
+        '',
+        ...(rezultati.length
+          ? ['| skript | izlaz | reprodukovan |', '|---|---|---|',
+            ...rezultati.map((r) => `| ${r.script} | ${r.exitCode ?? '—'}${r.timedOut ? ' (isteklo)' : ''} | ${r.reproduced ? 'DA' : 'ne'} |`), '']
+          : []),
+        '```',
+        result.output.slice(0, 3000),
+        '```',
+      ].join('\n'),
+      note: `red-team: ${verdict}`,
+    });
+
+    if (verdict === 'clean') {
+      await store.release(id, owner, { toStatus: 'verified', token: leaseTokens.get(id), note: 'red-team nije našao reproduktivni nalaz' });
+      await commitBookkeeping(`agentctl: ${id} -> verified (red-team čist)`);
+      await store.emit('phase.done', { task: id, phase: 'challenge', role, verdict, revision, scripts: scripts.length, falsePositives: lažni });
+      logger(`challenge: ${id} -> clean (${scripts.length} skripti, ${lažni} lažnih)`);
+      return { phase: 'challenge', task: id, ok: true, verdict, revision, falsePositives: lažni };
+    }
+
+    // Reproduktivni nalaz: ne ide u produkcionu granu, vraća se autoru.
+    const attempts = (await store.get(id)).data.history.filter((h) => h.status === 'review').length;
+    if (attempts > maxRevisions) {
+      await store.transition(id, 'blocked', {
+        actor: 'agentctl',
+        note: `red-team je reprodukovao nalaz ${reprodukovani.length} put(a) (dozvoljeno ${maxRevisions}); potrebna ljudska intervencija`,
+      });
+      await commitBookkeeping(`agentctl: ${id} -> blocked (red-team)`);
+      await removeWorktree(config, id, { role });
+      await store.emit('phase.failed', { task: id, phase: 'challenge', role, reason: 'reproduktivni nalazi' });
+      return { phase: 'challenge', task: id, ok: false, verdict, blocked: true };
+    }
+    await store.release(id, owner, { toStatus: 'review', token: leaseTokens.get(id), note: `red-team oborio ${reprodukovani.length} tvrdnji; vraćeno autoru` });
+    await commitBookkeeping(`agentctl: ${id} -> review (red-team nalaz)`);
+    await removeWorktree(config, id, { role });
+    await store.emit('phase.rejected', { task: id, phase: 'challenge', role, reproduced: reprodukovani.map((r) => r.script), attempts });
+    logger(`challenge: ${id} -> reproducible (${reprodukovani.length} nalaza)`);
+    return { phase: 'challenge', task: id, ok: false, verdict, reproduced: reprodukovani.map((r) => r.script), attempts };
+  }
+
   /**
    * Revizorski zadatak nema šta da se „promoviše": izmene su već u `wiki/`, na
    * grani verifikatora. Zato ovde nema konsolidatora — kontrolni sloj samo
@@ -626,6 +776,7 @@ export function createPipeline(config, options = {}) {
     await store.setAuthors(id, [ROLE_OF_PHASE.audit, verifyRole], { actor: 'agentctl' });
     await removeWorktreesForTask(config, id);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.audit}/${id}`);
+    await deleteBranch(config, `agent/${ROLE_OF_PHASE.challenge}/${id}`);
     await deleteBranch(config, branch);
     await commitBookkeeping(`agentctl: ${id} revizija konsolidovana (${merge.sha.slice(0, 8)})`);
     await store.emit('phase.done', { task: id, phase: 'consolidate', role, kind: 'audit', merge: merge.sha });
@@ -637,6 +788,11 @@ export function createPipeline(config, options = {}) {
     const task = await store.get(id);
     if (task.data.status !== 'verified') {
       throw new PipelineError(`${id} nije u stanju verified (${task.data.status})`, 'NOT_VERIFIED');
+    }
+    // Red-team kapija: bez čistog nalaza nema spajanja. Nalaz koji se
+    // reprodukuje blokira merge; lažni nalaz se samo zabeleži.
+    if (challengeEnabled && task.data.challenge?.verdict !== 'clean') {
+      throw new PipelineError(`${id}: nije prošao red-team fazu (challenge: ${task.data.challenge?.verdict ?? 'nema'})`, 'NO_CHALLENGE');
     }
     if ((task.data.kind ?? 'ingest') === 'audit') return mergeAudit(id, task);
     const role = ROLE_OF_PHASE.consolidate;
@@ -740,6 +896,7 @@ export function createPipeline(config, options = {}) {
     await removeWorktreesForTask(config, id);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.research}/${id}`);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.verify}/${id}`);
+    await deleteBranch(config, `agent/${ROLE_OF_PHASE.challenge}/${id}`);
     await deleteBranch(config, branch);
     await commitBookkeeping(`agentctl: ${id} konsolidovan (${merge.sha.slice(0, 8)})`);
     await store.emit('phase.done', { task: id, phase: 'consolidate', role, merge: merge.sha, commit: commit.sha });
@@ -798,10 +955,11 @@ export function createPipeline(config, options = {}) {
     const tasks = await store.list();
     const pick = (status) => tasks.filter((t) => t.data.status === status).map((t) => t.data.id);
 
-    const phases = only ? [only] : ['consolidate', 'verify', 'audit', 'extract', 'research'];
+    const phases = only ? [only] : ['consolidate', 'verify', 'challenge', 'audit', 'extract', 'research'];
     for (const phase of phases) {
       const status = {
-        consolidate: 'verified', verify: 'review', audit: 'ready', extract: 'ready', research: 'ready',
+        consolidate: 'verified', verify: 'review', challenge: 'verified',
+        audit: 'ready', extract: 'ready', research: 'ready',
       }[phase];
       for (const id of pick(status)) {
         const role = ROLE_OF_PHASE[phase];
@@ -813,13 +971,16 @@ export function createPipeline(config, options = {}) {
         if (phase === 'extract' && (kind !== 'ingest' || !fresh.data.extract_required || fresh.data.extracted)) continue;
         if (phase === 'research' && (kind !== 'ingest' || (fresh.data.extract_required && !fresh.data.extracted))) continue;
         if (phase === 'verify' && fresh.data.status !== 'review') continue;
+        if (phase === 'challenge' && (fresh.data.status !== 'verified' || fresh.data.challenge?.verdict === 'clean')) continue;
         if (phase === 'consolidate' && fresh.data.status !== 'verified') continue;
+        if (phase === 'consolidate' && challengeEnabled && fresh.data.challenge?.verdict !== 'clean') continue;
         try {
           const result = phase === 'consolidate' ? await runConsolidate(id)
             : phase === 'verify' ? await runVerify(id)
-              : phase === 'audit' ? await runAudit(id)
-                : phase === 'extract' ? await runExtract(id)
-                  : await runResearch(id);
+              : phase === 'challenge' ? await runChallenge(id)
+                : phase === 'audit' ? await runAudit(id)
+                  : phase === 'extract' ? await runExtract(id)
+                    : await runResearch(id);
           actions.push(result);
         } catch (error) {
           await store.emit('phase.error', { task: id, phase, role, error: error.message });
@@ -880,7 +1041,7 @@ export function createPipeline(config, options = {}) {
 
   return {
     config, store, clock, logger,
-    ingest, audit, runAudit, runExtract, runResearch, runVerify, runConsolidate, reflect, runOnce, run, status,
+    ingest, audit, runAudit, runExtract, runResearch, runVerify, runChallenge, runConsolidate, reflect, runOnce, run, status,
     evaluateReadiness, failPhase,
   };
 }

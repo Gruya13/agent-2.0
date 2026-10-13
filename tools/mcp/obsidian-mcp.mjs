@@ -95,6 +95,7 @@ const READ_PREFIXES = ['wiki', 'raw', 'tasks', '.agents'];
 const ROLE_WRITE_ZONES = {
   extractor: ['draft'],
   librarian: ['production', 'audit'],
+  'red-team': ['challenge'],
   researcher: ['draft'],
   verifier: ['review'],
   consolidator: ['production'],
@@ -104,6 +105,7 @@ const ROLE_WRITE_ZONES = {
 const ROLE_WRITE_PREFIXES = {
   extractor: ['wiki/drafts'],
   librarian: ['wiki', 'tasks/audits'],
+  'red-team': ['tasks/challenges'],
   researcher: ['wiki/drafts'],
   verifier: ['tasks/reviews'],
   consolidator: ['wiki'],
@@ -115,6 +117,7 @@ function zoneOf(relative) {
   if (relative === 'wiki/drafts' || relative.startsWith('wiki/drafts/')) return 'draft';
   if (relative === 'tasks/reviews' || relative.startsWith('tasks/reviews/')) return 'review';
   if (relative === 'tasks/audits' || relative.startsWith('tasks/audits/')) return 'audit';
+  if (relative === 'tasks/challenges' || relative.startsWith('tasks/challenges/')) return 'challenge';
   if (relative.startsWith('wiki/')) return 'production';
   return 'other';
 }

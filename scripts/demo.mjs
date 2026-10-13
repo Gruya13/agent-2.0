@@ -107,11 +107,17 @@ async function main() {
   detalj(`verdikt: ${verify.verdict}`);
   detalj(`revizorski trag: tasks/reviews/${task.data.id}.md`);
 
-  korak(4, 'Consolidate — produkcija u wiki/, rebase na main, merge --no-ff');
+  korak(4, 'Challenge — red-team na zamrznutoj reviziji (posle pečata, pre spajanja)');
+  const challenge = await pipeline.runChallenge(task.data.id);
+  detalj(`verdikt: ${challenge.verdict} (skripti: ${(await store.get(task.data.id)).data.challenge?.scripts?.length ?? 0}, lažnih: ${challenge.falsePositives ?? 0})`);
+  detalj(`zamrznuta revizija: ${String(challenge.revision).slice(0, 8)}`);
+  detalj(`bez čistog nalaza spajanje je zabranjeno (kapija u runConsolidate)`);
+
+  korak(5, 'Consolidate — produkcija u wiki/, rebase na main, merge --no-ff');
   const consolidate = await pipeline.runConsolidate(task.data.id);
   detalj(`merge: ${consolidate.merge ? consolidate.merge.slice(0, 8) : '(nije prošao)'}`);
 
-  korak(5, 'Reflect — izvedeni indeks i manifest izvora');
+  korak(6, 'Reflect — izvedeni indeks i manifest izvora');
   const reflect = await pipeline.reflect();
   detalj(`belešaka u indeksu: ${reflect.notes}`);
 

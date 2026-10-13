@@ -438,9 +438,84 @@ async function librarian(config, { task, cwd, now }) {
   };
 }
 
+/**
+ * Red-team: pokušaj da obori tvrdnje zadatka. Mock radi deterministički ono što
+ * se može izmeriti — proverava da artefakti postoje, da im je zaglavlje ispravno
+ * i da fragmenti imaju tačan heš izvora — i po potrebi ispisuje namerni nalaz
+ * (testni režim `AGENT_2_0_MOCK_CHALLENGE`).
+ */
+async function redTeam(config, { task, cwd, now }) {
+  const id = task.data.id;
+  const dir = `tasks/challenges/${id}`;
+  const problemi = [];
+  for (const rel of task.data.artifacts ?? []) {
+    try {
+      const n = await readNote(cwd, rel);
+      for (const p of noteFrontmatterProblems(n.frontmatter)) problemi.push(`- ${rel}: ${p}`);
+    } catch {
+      problemi.push(`- ${rel}: ne može da se pročita u zamrznutoj reviziji`);
+    }
+  }
+
+  // Testni režim: red-team piše van svoje zone (ne sme da prođe).
+  if (process.env.AGENT_2_0_MOCK_CHALLENGE_OUTSIDE === '1') {
+    await writeNote(cwd, 'wiki/Podmetnuto.md', {
+      frontmatter: { title: 'Podmetnuto', created: now, updated: now, authors: ['red-team'], status: 'consolidated', tags: [] },
+      body: '# Podmetnuto\n',
+    });
+  }
+
+  const rezim = process.env.AGENT_2_0_MOCK_CHALLENGE;
+  const skripti = [];
+  if (rezim === 'fail' || rezim === 'false-positive') {
+    const reprodukuje = rezim === 'fail';
+    const rel = `${dir}/NALAZ-1.sh`;
+    await writeFileAtomic(path.join(cwd, rel), [
+      '#!/usr/bin/env bash',
+      '# Reprodukcioni skript red-teama (mock): 0 = tvrdnja oborena, 1 = nije.',
+      reprodukuje ? 'echo "OBORENO: mock nalaz se reprodukuje"' : 'echo "nije oboreno (mock lazni nalaz)"',
+      `exit ${reprodukuje ? 0 : 1}`,
+      '',
+    ].join('\n'));
+    skripti.push(rel);
+    problemi.push(`- ${reprodukuje ? 'OBORENO' : 'sumnja'}: mock nalaz (${rel})`);
+  }
+
+  const izvestaj = `tasks/challenges/${id}.md`;
+  await writeNote(cwd, izvestaj, {
+    frontmatter: {
+      title: `Red-team nalaz ${id}`,
+      created: now, updated: now,
+      authors: ['red-team'], status: 'review', tags: ['red-team', id],
+    },
+    body: [
+      `# Red-team nalaz ${id}`, '',
+      `- artefakti pod napadom: ${(task.data.artifacts ?? []).join(', ') || '(nema)'}`,
+      `- skripti: ${skripti.length}`,
+      '',
+      '## Nalazi', '',
+      ...(problemi.length ? problemi : ['- nijedna tvrdnja nije oborena u ovom prolazu']),
+      '',
+      '## Sumnje', '',
+      '- mock ne izmišlja nove vektore; sumnje ostaju za pravi harnes', '',
+    ].join('\n'),
+  });
+
+  return {
+    ok: true,
+    output: [
+      `MOCK red-team: ${problemi.length} nalaza, ${skripti.length} skripti.`,
+      ...problemi,
+      `NALAZI: ${rezim === 'fail' ? 1 : 0}`,
+      `LAZNI: ${rezim === 'false-positive' ? 1 : 0}`,
+    ].join('\n'),
+    artifacts: [...skripti, izvestaj],
+  };
+}
+
 export async function runMock(config, { role, task, cwd, now = new Date().toISOString() }) {
   const started = Date.now();
-  const handlers = { extractor, researcher, verifier, librarian, consolidator };
+  const handlers = { extractor, researcher, verifier, 'red-team': redTeam, librarian, consolidator };
   const handler = handlers[role];
   if (!handler) throw new Error(`mock adapter ne poznaje ulogu "${role}"`);
 

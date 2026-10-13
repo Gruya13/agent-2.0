@@ -24,6 +24,7 @@ fajlova u ovom repozitorijumu.
 | `tasks/completed/` | arhivirani zadaci | `agentctl` |
 | `tasks/reviews/` | revizorski tragovi i primedbe | `verifier` (DeepSeek) |
 | `tasks/audits/` | izveštaji o održavanju baze | `librarian` (Codex) |
+| `tasks/challenges/` | red-team nalazi i reprodukcioni skripti | `red-team` (DeepSeek) |
 | `.agents/raw-manifest.json` | otisci izvora (nepromenljivost) | `agentctl` |
 | `tasks/events.jsonl` | append-only tok događaja kontrolnog sloja | `agentctl` |
 
@@ -109,6 +110,15 @@ i u `agentctl` kontrolnom sloju (Git sloj).
     tada zabranjeni, a verifikacioni pečat dolazi **posle** izmene a **pre**
     merge-a (automat stanja to garantuje). Izmene van opsega obaraju fazu.
 
+20. **Red-team kapija.** Posle verifikacionog pečata, a pre spajanja, zadatak
+    prolazi kroz `red-team` na **zamrznutoj reviziji**. Nalaz blokira merge
+    **samo ako je reproduktibilan**: kontrolni sloj pokrene skript koji je
+    red-team napisao u svežem klonu te iste revizije. Skript koji ne obori
+    tvrdnju je lažni nalaz — broji se i ne blokira. Red-team ne popravlja ono što
+    napada i ne piše van `tasks/challenges/`. Izvršavanje skripti se može
+    isključiti (`pipeline.challengeExecute: false`), ali tada nalaz ne blokira
+    spajanje. Faza se može isključiti po pozivu (`pipeline.challenge: false`).
+
 ## 3. Životni ciklus zadatka
 
 ```
@@ -168,6 +178,7 @@ međusobnog isključivanja; istekao zakup se automatski opoziva.
 | `extractor` | agy (Antigravity / Gemini) | `wiki/drafts/fragments/` | tumačenje i sažimanje; sve ostalo |
 | `researcher` | agy (Antigravity / Gemini) | `wiki/drafts/` | `wiki/` produkcija, merge |
 | `verifier` | dsh (DeepSeek headless) | `tasks/reviews/` | izmena nacrta, kod |
+| `red-team` | dsh (DeepSeek) | `tasks/challenges/` | popravljanje onoga što napada; sve ostalo |
 | `librarian` | codex (codex-rs) | `wiki/` u opsegu + `tasks/audits/` | novi članci, prepisivanje sadržaja, izlazak iz opsega |
 | `consolidator` | codex (codex-rs) | `wiki/` (bez `Index.md`) | izmišljanje sadržaja, merge |
 
