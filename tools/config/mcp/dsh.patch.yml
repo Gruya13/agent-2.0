@@ -1,0 +1,27 @@
+# MCP server beleški za DeepSeek Harness (dsh).
+#
+# Ovaj fragment se dodaje u cordis.patch.yml profila (npr. headless) ili
+# prosleđuje kao `dsh --patch ./tools/config/mcp/dsh.patch.yml`.
+#
+# VAŽNO: `cwd` se ne sme koristiti za lociranje vault-a. DSH host zadržava svoj
+# radni direktorijum (onaj iz koga je `dsh` pokrenut), koji NIJE radni prostor
+# sesije, pa bi relativna putanja tiho pokazala na pogrešno mesto. Zato je
+# OBSIDIAN_VAULT obavezan i mora biti apsolutna putanja.
+#
+# Zameni __VAULT__ apsolutnom putanjom (skripta register.sh to radi automatski).
+- insert:
+    - id: obsidian-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: stdio
+        serverName: obsidian
+        command: node
+        args:
+          - __VAULT__/tools/mcp/obsidian-mcp.mjs
+        env:
+          OBSIDIAN_VAULT: __VAULT__
+          OBSIDIAN_AGENT: dsh
+          # DeepSeek je u ovom sistemu logički arbitar: čita sve, piše samo revizije.
+          OBSIDIAN_ROLE: verifier
+        toolCallTimeoutMs: 15000
+        failOnStartupError: true

@@ -13,11 +13,11 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { loadConfig } from '../config.mjs';
-import { exists, writeFileAtomic } from '../fsx.mjs';
+import { exists } from '../fsx.mjs';
 import { lintVault } from '../lint.mjs';
 import {
   extractWikilinks, listNotes, noteFrontmatterProblems, noteName, noteSlug,
-  normalizeName, readNote, renderIndex, writeNote,
+  normalizeName, readNote, writeNote,
 } from '../vault.mjs';
 import { parseVerdict } from './harness.mjs';
 
@@ -205,16 +205,16 @@ async function consolidator(config, { task, cwd, now }) {
   await writeNote(cwd, productionRel, { frontmatter, body });
   await fs.rm(path.resolve(cwd, draftRel), { force: true });
 
-  const { text: indexText, entries } = await renderIndex(cwd, { dirs: ['wiki'], generatedAt: now });
-  await writeFileAtomic(path.join(cwd, 'wiki', 'Index.md'), indexText);
-
+  // `wiki/Index.md` se NE piše ovde: to je izveden artefakt koji kontrolni sloj
+  // regeneriše u `main` posle merge-a (faza 5). Da ga svaka grana nosi, svaki
+  // bi paralelni merge pukao na njemu.
   const worktreeConfig = await loadConfig(cwd);
   const lint = await lintVault(worktreeConfig);
 
   const output = [
     `MOCK consolidator: ${draftRel} -> ${productionRel}`,
     `- uklonjenih neispravnih linkova: ${removed.length}${removed.length ? ` (${removed.join(', ')})` : ''}`,
-    `- Indeks.md: ${entries.length} belešaka`,
+    `- Indeks.md: regeneriše kontrolni sloj posle merge-a`,
     `- lint: ${lint.errors.length} grešaka, ${lint.warnings.length} upozorenja`,
     `VERDICT: ${lint.errors.length ? 'fail' : 'pass'}`,
   ].join('\n');
@@ -222,7 +222,7 @@ async function consolidator(config, { task, cwd, now }) {
   return {
     ok: true,
     output,
-    artifacts: [productionRel, 'wiki/Index.md'],
+    artifacts: [productionRel],
     lintErrors: lint.errors.length,
   };
 }

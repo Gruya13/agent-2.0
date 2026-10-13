@@ -146,7 +146,7 @@ export async function commitWorktree(config, id, message, { actor, role = null }
  * iz agentskog, i nikad sa prljavim stanjem — kontrolni sloj prvo komituje svoje
  * knjigovodstvo.
  */
-export async function mergeIntoMain(config, { branch, message, actor = 'agentctl' } = {}) {
+export async function mergeIntoMain(config, { branch, message, actor = 'agentctl', worktreeDir = null, generatedPaths = [] } = {}) {
   const worktrees = await listWorktrees(config);
   const primary = worktrees.find((w) => path.resolve(w.path) === path.resolve(config.root));
   const current = await currentBranch(config.root);
@@ -157,9 +157,9 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
     return { merged: false, reason: 'glavni repozitorijum nije registrovan kao radno stablo' };
   }
 
+  // 1. Knjigovodstvo crne table u main mora biti komitovano pre spajanja.
   const dirty = await statusPorcelain(config.root);
   if (dirty.length) {
-    // Knjigovodstvo crne table se komituje pre merge-a; ostale izmene se ne diraju.
     await commitPaths(config.root, ['tasks', 'wiki', '.agents/raw-manifest.json'], `agentctl: knjigovodstvo pre merge-a ${branch}`, { actor: 'agentctl' });
     const stillDirty = await statusPorcelain(config.root);
     if (stillDirty.length) {
@@ -173,6 +173,19 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
     }
   }
 
+  // 2. Grana se poravnava sa aktuelnim main-om (bez ovoga nosi zastarelo stanje
+  //    crne table i Git odbija merge).
+  if (worktreeDir) {
+    // Izvedeni artefakti se neutrališu PRE rebase-a (inace rebase pukne na
+    // konfliktu tipa add/add), pa tek onda ide rebase na aktuelni main.
+    if (generatedPaths.length) await alignGeneratedPaths(config, worktreeDir, generatedPaths);
+    const rebase = await rebaseBranchOntoMain(config, { branch, worktreeDir });
+    if (!rebase.rebased) {
+      return { merged: false, conflict: Boolean(rebase.conflict), branch, files: rebase.files ?? [], reason: rebase.reason };
+    }
+  }
+
+  // 3. Eksplicitan merge commit: konsolidacija mora biti vidljiva u istoriji.
   const result = await git(config.root, ['merge', '--no-ff', '--no-edit', '-m', message, branch], {
     actor,
     allowFailure: true,
@@ -187,12 +200,13 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
   await git(config.root, ['merge', '--abort'], { actor: 'agentctl', allowFailure: true });
   return {
     merged: false,
-    conflict: true,
+    conflict: conflicted.length > 0,
     branch,
     files: conflicted,
     reason: conflicted.length
       ? `tekstualni konflikt u: ${conflicted.join(', ')}`
-      : result.stderr.split('\n')[0] || 'merge nije uspeo',
+      : result.stderr.split('\n').filter(Boolean).slice(0, 3).join(' ') || 'merge nije uspeo',
+    detail: result.stderr,
   };
 }
 
@@ -206,18 +220,64 @@ export async function branchChangedPaths(config, branch, base = MAIN_BRANCH) {
 }
 
 /**
+ * Rebase agentske grane na `main` pre spajanja.
+ *
+ * Bez ovoga grana nosi i zastarelo stanje crne table (`tasks/`), jer je
+ * nastala u trenutku kada je zadatak bio u drugoj fazi. Pri merge-u bi Git
+ * pokušao da vrati stari raspored zadataka i oborio merge ("local changes
+ * would be overwritten"). Rebase zadržava autorstvo komita, a kontrolnom sloju
+ * daje aktuelno stanje kao osnovu.
+ */
+export async function rebaseBranchOntoMain(config, { branch, worktreeDir, base = MAIN_BRANCH } = {}) {
+  if (!worktreeDir || !(await exists(worktreeDir))) {
+    return { rebased: false, reason: `radno stablo za granu ${branch} ne postoji` };
+  }
+  const dirty = await statusPorcelain(worktreeDir);
+  if (dirty.length) {
+    return { rebased: false, reason: `radno stablo grane ${branch} je prljavo: ${dirty.slice(0, 3).join(', ')}` };
+  }
+  const result = await git(worktreeDir, ['rebase', base], { actor: 'agentctl', allowFailure: true });
+  if (result.code === 0) return { rebased: true, branch };
+
+  const conflicted = (await git(worktreeDir, ['diff', '--name-only', '--diff-filter=U'], { allowFailure: true })).stdout
+    .split('\n').filter(Boolean);
+  await git(worktreeDir, ['rebase', '--abort'], { actor: 'agentctl', allowFailure: true });
+  return {
+    rebased: false,
+    conflict: true,
+    files: conflicted,
+    reason: `rebase na ${base} nije prošao${conflicted.length ? `: ${conflicted.join(', ')}` : ''}`,
+  };
+}
+
+/**
  * Izvedeni artefakti (npr. `wiki/Index.md`) se ne merge-uju kao sadržaj: svaka
- * grana ih menja na svoj način, pa bi svaki paralelni rad pravio tekstualni
- * konflikt. Zato se pre merge-a u radnom stablu poravnaju sa `main`, a
- * kontrolni sloj ih posle merge-a regeneriše iz stanja vault-a.
+ * grana ih menja na svoj način, pa svaki paralelni rad pravi konflikt — ili,
+ * još gore, konflikt tipa "dodato na obe strane" kada `main` već ima generisan
+ * indeks, a grana ga tek dodaje.
+ *
+ * Zato se u radnom stablu pre rebase-a svedu na tačno ono što `main` ima:
+ * preuzmu se ako postoje, a uklone ako ih `main` nema. Kontrolni sloj ih posle
+ * merge-a regeneriše iz stanja vault-a (faza 5).
  */
 export async function alignGeneratedPaths(config, worktreeDir, paths, { base = MAIN_BRANCH, actor = 'agentctl' } = {}) {
-  if (!paths.length) return { aligned: [] };
-  const before = await git(worktreeDir, ['diff', '--name-only', base, '--', ...paths], { allowFailure: true });
-  if (!before.stdout) return { aligned: [] };
-  await git(worktreeDir, ['checkout', base, '--', ...paths], { actor, allowFailure: true });
-  const commit = await commitPaths(worktreeDir, paths, `agentctl: izvedeni artefakti poravnati sa ${base} pre merge-a`, { actor });
-  return { aligned: before.stdout.split('\n').filter(Boolean), commit };
+  if (!paths.length || !(await exists(worktreeDir))) return { aligned: [] };
+  const changed = (await git(worktreeDir, ['diff', '--name-only', '--no-renames', base, '--', ...paths], { allowFailure: true })).stdout
+    .split('\n').filter(Boolean);
+  if (!changed.length) return { aligned: [] };
+
+  for (const rel of paths) {
+    const inBase = await git(config.root, ['cat-file', '-e', `${base}:${rel}`], { allowFailure: true });
+    if (inBase.code === 0) {
+      await git(worktreeDir, ['checkout', base, '--', rel], { actor, allowFailure: true });
+    } else {
+      // `main` ga nema: grana ga ne sme doneti kroz merge.
+      await git(worktreeDir, ['rm', '-f', '--ignore-unmatch', '--', rel], { actor, allowFailure: true });
+      await fs.rm(path.join(worktreeDir, rel), { force: true });
+    }
+  }
+  const commit = await commitPaths(worktreeDir, paths, `agentctl: izvedeni artefakti poravnati sa ${base}`, { actor });
+  return { aligned: changed, commit };
 }
 
 export async function pruneWorktrees(config) {

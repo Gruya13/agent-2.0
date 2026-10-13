@@ -1,0 +1,181 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { makeVault, gitExec } from './helpers/vault.mjs';
+import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
+import { formatFindings, lintVault, updateRawManifest } from '../tools/orchestrator/lib/lint.mjs';
+import { writeNote } from '../tools/orchestrator/lib/vault.mjs';
+
+const NOW = '2025-01-01T00:00:00.000Z';
+
+function find(findings, code) {
+  return findings.filter((f) => f.code === code);
+}
+
+test('lint: izmenjen izvor u raw/ je greška i linter to vidi', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
+  assert.deepEqual(find(await lintVault(config).then((r) => r.findings), 'raw.modified'), []);
+
+  await vault.write('raw/dokument.md', 'sadrzaj je promenjen');
+  const result = await lintVault(config);
+  const modified = find(result.findings, 'raw.modified');
+  assert.equal(modified.length, 1);
+  assert.equal(modified[0].level, 'error');
+  assert.equal(result.ok, false);
+  await vault.cleanup();
+});
+
+test('lint: novo u raw/ je dozvoljeno (append-only)', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
+  await vault.write('raw/novi-izvor.md', 'novi sadrzaj');
+  const result = await lintVault(config);
+  assert.deepEqual(find(result.findings, 'raw.modified'), []);
+  assert.deepEqual(find(result.findings, 'raw.deleted'), []);
+  await vault.cleanup();
+});
+
+test('lint: uklonjen izvor je greška', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
+  await gitExec(vault.root, ['rm', '-q', 'raw/dokument.md']);
+  const result = await lintVault(config);
+  assert.equal(find(result.findings, 'raw.deleted').length, 1);
+  await vault.cleanup();
+});
+
+test('lint: git izmena u raw/ je nezavisna greška', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
+  await vault.write('raw/dokument.md', 'promenjeno bez manifesta');
+  const result = await lintVault(config);
+  assert.ok(find(result.findings, 'raw.git-diff').length >= 1);
+  await vault.cleanup();
+});
+
+test('lint: produkciona beleška bez zaglavlja je greška, nacrt je upozorenje', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await vault.write('wiki/Losa.md', '# Losa\n\nbez zaglavlja\n');
+  await vault.write('wiki/drafts/Nacrt.md', '# Nacrt\n\nbez zaglavlja\n');
+  const result = await lintVault(config);
+  const frontmatterFindings = find(result.findings, 'note.frontmatter');
+  assert.equal(frontmatterFindings.find((f) => f.target === 'wiki/Losa.md').level, 'error');
+  assert.equal(frontmatterFindings.find((f) => f.target === 'wiki/drafts/Nacrt.md').level, 'warning');
+  await vault.cleanup();
+});
+
+test('lint: prekinut Vikilink je greška u produkciji, upozorenje u nacrtu', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await writeNote(vault.root, 'wiki/A.md', {
+    frontmatter: { title: 'A', created: NOW, updated: NOW, authors: ['r'], status: 'consolidated', tags: [] },
+    body: '# A\n\n[[Ne postoji]]\n',
+  });
+  await writeNote(vault.root, 'wiki/drafts/B.md', {
+    frontmatter: { title: 'B', created: NOW, updated: NOW, authors: ['r'], status: 'draft', tags: [] },
+    body: '# B\n\n[[Takodje ne postoji]]\n',
+  });
+  const result = await lintVault(config);
+  const broken = find(result.findings, 'note.broken-link');
+  assert.equal(broken.find((f) => f.target === 'wiki/A.md').level, 'error');
+  assert.equal(broken.find((f) => f.target === 'wiki/drafts/B.md').level, 'warning');
+  await vault.cleanup();
+});
+
+test('lint: status draft u produkciji je greška', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await writeNote(vault.root, 'wiki/Prevaren.md', {
+    frontmatter: { title: 'P', created: NOW, updated: NOW, authors: ['r'], status: 'draft', tags: [] },
+    body: '# P\n',
+  });
+  const result = await lintVault(config);
+  assert.equal(find(result.findings, 'note.draft-in-production').length, 1);
+  await vault.cleanup();
+});
+
+test('lint: zadatak u pogrešnoj fazi i neispravna istorija prelaza se prijavljuju', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  // Zadaci su u inbox/, a status je in_progress -> pogrešna faza + nema zakupa.
+  await vault.write('tasks/inbox/TASK-001.md', [
+    '---',
+    'id: TASK-001',
+    'title: Test',
+    'status: in_progress',
+    'created: 2025-01-01T00:00:00.000Z',
+    'updated: 2025-01-01T00:00:00.000Z',
+    'lock_owner: researcher',
+    'locked_at: 2025-01-01T00:00:00.000Z',
+    'lease_expires_at: 2035-01-01T00:00:00.000Z',
+    'history:',
+    '  - at: 2025-01-01T00:00:00.000Z',
+    '    status: proposed',
+    '    actor: operator',
+    '  - at: 2025-01-01T00:00:00.000Z',
+    '    status: consolidated',
+    '    actor: agentctl',
+    '---',
+    '',
+    '# Test',
+    '',
+  ].join('\n'));
+  const result = await lintVault(config);
+  const codes = result.findings.map((f) => f.code);
+  assert.ok(codes.includes('task.wrong-phase'), codes.join(','));
+  assert.ok(codes.includes('task.history'), codes.join(','));
+  assert.equal(result.ok, false);
+  await vault.cleanup();
+});
+
+test('lint: istekao zakup je upozorenje, ne greška', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await vault.write('tasks/active/TASK-002.md', [
+    '---',
+    'id: TASK-002',
+    'title: Test',
+    'status: in_progress',
+    'created: 2020-01-01T00:00:00.000Z',
+    'updated: 2020-01-01T00:00:00.000Z',
+    'lock_owner: researcher',
+    'locked_at: 2020-01-01T00:00:00.000Z',
+    'lease_expires_at: 2020-01-01T00:10:00.000Z',
+    'history:',
+    '  - at: 2020-01-01T00:00:00.000Z',
+    '    status: ready',
+    '    actor: agentctl',
+    '  - at: 2020-01-01T00:00:00.000Z',
+    '    status: in_progress',
+    '    actor: researcher',
+    '---',
+    '',
+    '# Test',
+    '',
+  ].join('\n'));
+  const result = await lintVault(config);
+  const expired = find(result.findings, 'task.lease-expired');
+  assert.equal(expired.length, 1);
+  assert.equal(expired[0].level, 'warning');
+  assert.equal(result.ok, true, formatFindings(result));
+  await vault.cleanup();
+});
+
+test('lint: čist vault daje nula nalaza (osim upozorenja o manifestu)', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
+  await writeNote(vault.root, 'wiki/Index.md', {
+    frontmatter: { title: 'Index', created: NOW, updated: NOW, authors: ['agentctl'], status: 'consolidated', tags: ['index'] },
+    body: '# Index\n\n| Beleška |\n|---|\n',
+  });
+  const result = await lintVault(config);
+  assert.equal(result.errors.length, 0, formatFindings(result));
+  await vault.cleanup();
+});

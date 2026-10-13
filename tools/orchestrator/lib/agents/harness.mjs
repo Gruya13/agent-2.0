@@ -37,8 +37,11 @@ export const HARNESS_COMMANDS = {
     note: 'OpenAI Codex, neinteraktivno izvršavanje sa izolacijom radnog prostora.',
   },
   agy: {
+    // `--print` je flag SA VREDNOŠĆU (prompt se lepi uz njega). Ako bi prompt
+    // išao kao zaseban argument, agy bi pojeo sledeći flag kao svoj prompt —
+    // zato je oblik `--print=<prompt>` obavezan.
     bin: 'agy',
-    build: (prompt, cwd) => ['--print', '--dangerously-skip-permissions', '--add-dir', cwd, prompt],
+    build: (prompt, cwd) => ['--dangerously-skip-permissions', '--add-dir', cwd, `--print=${prompt}`],
     note: 'Google Antigravity (Gemini), print režim; nikad se ne poziva u paraleli.',
     serialized: true,
   },
@@ -51,6 +54,10 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
       cwd,
       env: { ...process.env, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Sopstvena procesna grupa: harnes često pokreće podprocese, a na isteku
+      // vremena mora da se prekine celo stablo — inače `sleep`/pod-model drži
+      // cevi otvorenim i proces se "ne zatvara" do svog prirodnog kraja.
+      detached: process.platform !== 'win32',
     });
     let stdout = '';
     let stderr = '';
@@ -59,11 +66,27 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
 
     if (typeof onSpawn === 'function') onSpawn(child);
 
+    const killTree = (signal) => {
+      try {
+        if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch {
+        try { child.kill(signal); } catch { /* već mrtav */ }
+      }
+    };
+
+    let forceTimer = null;
     const timer = timeoutMs > 0
       ? setTimeout(() => {
         timedOut = true;
-        child.kill('SIGTERM');
-        setTimeout(() => child.kill('SIGKILL'), 5_000).unref();
+        killTree('SIGTERM');
+        forceTimer = setTimeout(() => {
+          killTree('SIGKILL');
+          // Ne čekaj zauvek na `close`: ako je podproces preživeo, rezultat je
+          // ionako "isteklo vreme".
+          finish(null, null);
+        }, 3_000);
+        forceTimer.unref?.();
       }, timeoutMs)
       : null;
 
@@ -74,6 +97,7 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      if (forceTimer) clearTimeout(forceTimer);
       resolve({
         exitCode: code,
         stdout,

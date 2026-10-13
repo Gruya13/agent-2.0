@@ -16,12 +16,13 @@ fajlova u ovom repozitorijumu.
 | `raw/` | nepromenljivi izvori (append-only) | **niko** — samo dodavanje novih fajlova od strane operatera |
 | `wiki/` | produkciona, verifikovana enciklopedija | isključivo `consolidator` (Codex) |
 | `wiki/drafts/` | preliminarni nacrti | `researcher` (Gemini/agy) |
-| `wiki/Index.md` | centralni indeks | isključivo `consolidator` |
+| `wiki/Index.md` | izveden centralni indeks | isključivo `agentctl` (faza 5) |
 | `tasks/inbox/` | predloženi i spremni zadaci | operater i `agentctl` |
 | `tasks/active/` | zadaci pod zakupom | vlasnik zakupa kroz `agentctl` |
 | `tasks/review/` | zadaci na verifikaciji | `agentctl` |
 | `tasks/completed/` | arhivirani zadaci | `agentctl` |
 | `tasks/reviews/` | revizorski tragovi i primedbe | `verifier` (DeepSeek) |
+| `.agents/raw-manifest.json` | otisci izvora (nepromenljivost) | `agentctl` |
 | `tasks/events.jsonl` | append-only tok događaja kontrolnog sloja | `agentctl` |
 
 Zone su **ortogonalne**: nijedan agent ne piše van svoje zone, čak i ako ima
@@ -55,6 +56,13 @@ i u `agentctl` kontrolnom sloju (Git sloj).
    ga potvrđuje ili obara. Nalaz bez dokaza se označava kao `unproven`.
 9. **`raw/` → `wiki/` je jednosmeran tok.** Nijedan sadržaj ne ulazi u `wiki/`
    bez `id` zadatka u `tasks/completed/` i revizorskog traga.
+10. **`wiki/Index.md` je izveden artefakt.** Generiše ga isključivo kontrolni
+    sloj (`agentctl index`) u `main`, posle merge-a. Nijedna agentska grana ga
+    ne nosi — inače svako paralelno spajanje pravi konflikt „dodato na obe
+    strane". Isto važi za `.agents/raw-manifest.json`.
+11. **Granа agenta se pre spajanja rebase-uje na `main`.** Tako grana ne nosi
+    zastarelo stanje crne table (`tasks/`), a merge u `main` ostaje sekvencijalan
+    i eksplicitan (`--no-ff`), sa autorstvom svakog doprinosa u Git dnevniku.
 
 ## 3. Životni ciklus zadatka
 
@@ -66,6 +74,10 @@ proposed ──▶ ready ──▶ in_progress ──▶ review ──▶ verifi
                   (odbijen nalaz / istekao zakup)        │
                           blocked ◀──────────────────────┘
 ```
+
+Konsolidator drži zakup (`in_progress`) dok ne spoji granu, pa iz tog stanja
+prelazi direktno u `consolidated`. Prelaze izvodi isključivo kontrolni sloj
+(`agentctl`); agent nikad ne menja status zadatka.
 
 - `proposed` — zadatak je u `tasks/inbox/`, čeka evaluaciju.
 - `ready` — zavisnosti su zadovoljene, posao je dostupan za preuzimanje.
@@ -110,7 +122,7 @@ međusobnog isključivanja; istekao zakup se automatski opoziva.
 |---|---|---|---|
 | `researcher` | agy (Antigravity / Gemini) | `wiki/drafts/` | `wiki/` produkcija, merge |
 | `verifier` | dsh (DeepSeek headless) | `tasks/reviews/` | izmena nacrta, kod |
-| `consolidator` | codex (codex-rs) | `wiki/`, `wiki/Index.md` | izmišljanje sadržaja |
+| `consolidator` | codex (codex-rs) | `wiki/` (bez `Index.md`) | izmišljanje sadržaja, merge |
 
 Kognitivna podela rada: Gemini sintetiše, DeepSeek arbitrira, Codex integriše.
 Homogeni agenti se ne koriste za dve uzastopne faze istog zadatka.

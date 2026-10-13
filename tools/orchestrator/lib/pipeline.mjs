@@ -18,7 +18,7 @@ import { createStore } from './store.mjs';
 import { exists } from './fsx.mjs';
 import { commitPaths, log as gitLog } from './git.mjs';
 import {
-  alignGeneratedPaths, createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
+  createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
   removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
 } from './worktree.mjs';
 import { buildPrompt, parseVerdict, runAgent } from './agents/index.mjs';
@@ -277,7 +277,7 @@ export function createPipeline(config, options = {}) {
     if (attempts > maxRevisions) {
       await store.transition(id, 'blocked', {
         actor: 'agentctl',
-        note: `nacrt je odbijen ${attempts} puta; potrebna ljudska intervencija`,
+        note: `nacrt je odbijen ${attempts} puta (dozvoljeno ${maxRevisions}); potrebna ljudska intervencija`,
       });
       await commitBookkeeping(`agentctl: ${id} -> blocked (previse revizija)`);
       await removeWorktree(config, id, { role });
@@ -341,14 +341,19 @@ export function createPipeline(config, options = {}) {
       return { phase: 'consolidate', task: id, ok: false, reason: 'harnes' };
     }
 
+    // Nacrt više ne postoji: artefakti zadatka od sada pokazuju na produkciju.
+    const produced = await detectArtifacts(wtConfig, { role });
+    if (produced.length) await store.setArtifacts(id, produced, { actor: role, note: `konsolidovano: ${produced.join(', ')}` });
+
     const branch = `agent/${role}/${id}`;
     const commit = await commitWorktreeSafe(config, id, role, `consolidator(${id}): konsolidacija u wiki/`, role);
-    // Indeks je izveden artefakt: poravnaj ga sa main pre merge-a, pa ga
-    // kontrolni sloj regeneriše posle spajanja (faza 5).
-    await alignGeneratedPaths(config, worktreePath(config, id, role), [config.vault.index]);
+    // Grana se rebase-uje na aktuelni main, izvedeni artefakti (Index.md) se
+    // poravnavaju, pa tek onda sledi eksplicitan merge commit.
     const merge = await mergeIntoMain(config, {
       branch,
       message: `agentctl(${id}): konsolidacija (researcher+verifier+consolidator)`,
+      worktreeDir: worktreePath(config, id, role),
+      generatedPaths: [config.vault.index],
     });
 
     if (!merge.merged) {

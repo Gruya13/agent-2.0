@@ -83,7 +83,14 @@ function unquote(text) {
 export function parseScalar(raw, line) {
   const text = stripComment(String(raw)).trim();
   if (text === '') return null;
-  if (text.startsWith('"') || text.startsWith("'")) return unquote(text);
+  if (text.startsWith('"') || text.startsWith("'")) {
+    const quote = text[0];
+    if (text.length < 2 || !text.endsWith(quote)) throw new YamlError(`nezatvoren navodnik: ${text}`, line);
+    return unquote(text);
+  }
+  // Nezatvorene flow kolekcije su greška, ne string: YAML ih takođe odbija.
+  if (text.startsWith('[') && !text.endsWith(']')) throw new YamlError(`nezatvorena inline lista: ${text}`, line);
+  if (text.startsWith('{') && !text.endsWith('}')) throw new YamlError(`nezatvoreno inline mapiranje: ${text}`, line);
   if (NULL_TOKENS.has(text)) return null;
   if (TRUE_TOKENS.has(text)) return true;
   if (FALSE_TOKENS.has(text)) return false;
@@ -438,8 +445,13 @@ export function parseFrontmatter(text) {
   return { data: data ?? {}, body: text.slice(match[0].length), present: true };
 }
 
+/**
+ * Serijalizuj frontmatter + telo u kanonskom obliku: tačno jedan prazan red
+ * između zaglavlja i tela. Kanonizacija čini `parse(format(x))` idempotentnim,
+ * pa diff-ovi zadataka i belešaka ne sadrže prazan šum.
+ */
 export function stringifyFrontmatter(data, body, options = {}) {
   const yaml = stringifyYaml(data, options);
-  const separator = body === '' ? '' : body.startsWith('\n') ? '' : '\n';
-  return `---\n${yaml}---\n${separator}${body}`;
+  const normalized = body === '' ? '' : `\n${body.replace(/^\n+/, '')}`;
+  return `---\n${yaml}---\n${normalized}`;
 }

@@ -30,6 +30,7 @@
  */
 import { createInterface } from 'node:readline';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promises as fs } from 'node:fs';
 import { writeFileAtomic, resolveInside, walkFiles } from '../orchestrator/lib/fsx.mjs';
 import { parseFrontmatter, stringifyFrontmatter } from '../orchestrator/lib/yaml.mjs';
@@ -195,7 +196,9 @@ async function opSearch({ query, tag = null, dir = null, limit = 20, context = 0
 
 async function opBacklinks({ path: rel, dir = 'wiki' } = {}) {
   if (!rel) throw new Error('`path` je obavezan');
-  assertReadable(rel);
+  // Prihvata se i putanja (wiki/Crna_tabla.md) i samo ime beleške (Crna tabla),
+  // da bi se grafom moglo hodati direktno iz teksta Vikilinka.
+  if (rel.includes('/')) assertReadable(rel);
   const hits = await findBacklinks(VAULT, rel, { dirs: [dir] });
   if (!hits.length) return `${rel}: nema backlinkova`;
   const lines = [`${rel}: ${hits.length} backlinkova`, ''];
@@ -521,7 +524,7 @@ async function cliMain(argv) {
   }
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMain) {
   const argv = process.argv.slice(2);
   if (argv.length) {

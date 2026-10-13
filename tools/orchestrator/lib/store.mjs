@@ -160,6 +160,14 @@ export function createStore(config, options = {}) {
 
     /** Oslobodi zakup i vrati zadatak u zadato stanje (podrazumevano `ready`). */
     async release(id, owner, { toStatus = 'ready', note = null, actor = owner } = {}) {
+      // `in_progress` bez zakupa je nevalidno stanje; otpuštanje zakupa mora da
+      // ostavi zadatak u stanju koje čeka sledeću fazu.
+      if (toStatus === 'in_progress') {
+        throw new TaskError(
+          `oslobađanje zakupa ne može da ostavi ${id} u stanju "in_progress" (to stanje zahteva zakup); koristi "review", "verified" ili "ready"`,
+          'BAD_RELEASE_TARGET',
+        );
+      }
       return mutate(id, actor, (current) => {
         if (current.data.lock_owner && current.data.lock_owner !== owner) {
           throw new TaskError(`zadatak ${id} drži "${current.data.lock_owner}", ne "${owner}"`, 'NOT_OWNER');
@@ -201,6 +209,16 @@ export function createStore(config, options = {}) {
           data: appendHistory({ ...current.data, artifacts: [...merged] }, { status: current.data.status, actor, note, now: nowIso() }),
         };
       });
+    },
+
+    /** Zameni listu artefakata (npr. nacrt -> produkciona beleška posle konsolidacije). */
+    async setArtifacts(id, artifacts, { actor = 'agentctl', note = null } = {}) {
+      return mutate(id, actor, (current) => ({
+        data: appendHistory(
+          { ...current.data, artifacts: [...artifacts] },
+          { status: current.data.status, actor, note, now: nowIso() },
+        ),
+      }));
     },
 
     async setVerification(id, verification, { actor = 'verifier' } = {}) {
