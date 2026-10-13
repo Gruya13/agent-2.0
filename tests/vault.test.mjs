@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeVault } from './helpers/vault.mjs';
 import {
-  buildNameIndex, extractWikilinks, findBacklinks, listNotes, noteFrontmatterProblems,
+  buildNameIndex, extractWikilinks, findBacklinks, listNotes, normalizeConsolidatedNote, noteFrontmatterProblems,
   noteName, noteSlug, normalizeName, readNote, renderIndex, uniqueLinkTargets, writeNote,
 } from '../tools/orchestrator/lib/vault.mjs';
 
@@ -93,5 +93,26 @@ test('writeNote odbija izlazak iz vault-a', async () => {
   const vault = await makeVault();
   await assert.rejects(() => writeNote(vault.root, '../izvan.md', { body: 'x' }), /izlazi iz korena/);
   await assert.rejects(() => writeNote(vault.root, '/etc/passwd', { body: 'x' }), /apsolutna putanja/);
+  await vault.cleanup();
+});
+
+test('normalizeConsolidatedNote: status i autori su izvedeni iz evidencije zadatka', async () => {
+  const vault = await makeVault();
+  const now = '2025-06-01T00:00:00.000Z';
+  await writeNote(vault.root, 'wiki/Beleska.md', {
+    frontmatter: { title: 'Beleška', created: now, updated: now, authors: ['researcher'], status: 'draft', tags: ['x'] },
+    body: '# Beleška\n\ntelo\n',
+  });
+  const result = await normalizeConsolidatedNote(vault.root, 'wiki/Beleska.md', {
+    authors: ['researcher', 'verifier', 'consolidator'], now,
+  });
+  assert.deepEqual(result.authors, ['researcher', 'verifier', 'consolidator']);
+  const note = await readNote(vault.root, 'wiki/Beleska.md');
+  assert.equal(note.frontmatter.status, 'consolidated');
+  assert.deepEqual(note.frontmatter.authors, ['researcher', 'verifier', 'consolidator']);
+  assert.equal(note.frontmatter.created, now, 'datum kreiranja se ne menja');
+  assert.equal(note.frontmatter.updated, now);
+  assert.deepEqual(note.frontmatter.tags, ['x']);
+  assert.match(note.body, /telo/);
   await vault.cleanup();
 });

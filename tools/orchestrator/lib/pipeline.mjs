@@ -23,7 +23,7 @@ import {
 } from './worktree.mjs';
 import { buildPrompt, parseVerdict, runAgent } from './agents/index.mjs';
 import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
-import { listNotes, renderIndex } from './vault.mjs';
+import { listNotes, normalizeConsolidatedNote, renderIndex } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
 
 export class PipelineError extends Error {
@@ -405,6 +405,12 @@ export function createPipeline(config, options = {}) {
       });
       await failPhase(id, role, { reason: 'nema produkcione beleške u radnom stablu', toStatus: 'review' });
       return { phase: 'consolidate', task: id, ok: false, reason: 'nema produkcione beleške' };
+    }
+    // Zaglavlje produkcionih belešaka je knjigovodstvo, ne prepisivanje sadržaja:
+    // status i spisak autora su izvedeni iz evidencije zadatka.
+    const contributors = [...new Set([...(claimed.data.authors ?? []), 'researcher', 'verifier', 'consolidator'])];
+    for (const rel of produced) {
+      await normalizeConsolidatedNote(wt, rel, { authors: contributors, now: now() });
     }
     await store.setArtifacts(id, produced, { actor: role, note: `konsolidovano: ${produced.join(', ')}` });
 

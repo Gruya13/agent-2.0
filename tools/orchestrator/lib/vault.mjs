@@ -140,6 +140,31 @@ export async function findBacklinks(vaultRoot, target, { dirs = ['wiki'] } = {})
 }
 
 /**
+ * Normalizuj zaglavlje konsolidovane beleške: `status: consolidated` i lista
+ * autora koja sadrži sve koji su doprineli.
+ *
+ * Ovo je knjigovodstvo kontrolnog sloja, ne autorstvo: spisak autora je izveden
+ * iz evidencije zadatka i ne sme da zavisi od toga da li se model setio da ga
+ * upiše. Bez toga baza znanja tvrdi da je belešku napisao samo istraživač, iako
+ * ju je verifikovao i konsolidovao neko drugi.
+ */
+export async function normalizeConsolidatedNote(vaultRoot, rel, { authors = [], now = new Date().toISOString() } = {}) {
+  const note = await readNote(vaultRoot, rel);
+  const merged = [...new Set([...(note.frontmatter?.authors ?? []).map(String), ...authors.map(String)])];
+  const frontmatter = {
+    ...(note.frontmatter ?? {}),
+    title: note.frontmatter?.title ?? noteName(rel),
+    created: note.frontmatter?.created ?? now,
+    updated: now,
+    authors: merged,
+    status: 'consolidated',
+    tags: note.frontmatter?.tags ?? [],
+  };
+  await writeNote(vaultRoot, rel, { frontmatter, body: note.body, order: NOTE_REQUIRED_FIELDS });
+  return { rel, authors: merged };
+}
+
+/**
  * Generiši `wiki/Index.md` iz stanja vault-a. Indeks je izveden artefakt: nikad
  * se ne uređuje ručno.
  */
