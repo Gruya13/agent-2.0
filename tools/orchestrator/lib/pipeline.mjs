@@ -139,12 +139,26 @@ export function createPipeline(config, options = {}) {
     return { ready: blocking.length === 0, blocking };
   }
 
+  /**
+   * Svaki POKUŠAJ faze počinje od svežeg radnog stabla na aktuelnom `main`.
+   *
+   * Ponovni pokušaj nad zaleđenim radnim stablom nosi i zaleđene izvore: nacrt
+   * odbijen u prvom prolazu vraća zadatak u `ready`, a izvor je u međuvremenu
+   * mogao biti dopunjen ili komitovan. Bez ovoga bi istraživač radio nad starim
+   * `raw/`, a verifikator bi ga s pravom odbio — isti nalaz iznova.
+   */
+  async function resetWorktree(id, role, branch) {
+    await removeWorktree(config, id, { role });
+    if (branch) await deleteBranch(config, branch);
+  }
+
   /** Pripremi worktree za fazu; vrati putanju i granu. */
-  async function prepareWorktree({ id, role, base = MAIN_BRANCH }) {
+  async function prepareWorktree({ id, role, base = MAIN_BRANCH, fresh = false, branch = null }) {
     await ensureMainBranch(config);
+    if (fresh) await resetWorktree(id, role, branch);
     const worktree = await createWorktree(config, { id, role, base });
-    const fresh = await loadConfig(worktree.path);
-    return { ...worktree, config: fresh };
+    const freshConfig = await loadConfig(worktree.path);
+    return { ...worktree, config: freshConfig };
   }
 
   /** Zajednički epilog neuspeha: oslobodi zakup, skloni radno stablo, zabeleži. */
@@ -179,7 +193,9 @@ export function createPipeline(config, options = {}) {
     const owner = ownerFor(config, role);
     await store.claim(id, owner);
     const claimed = await store.get(id);
-    const { path: wt, branch, config: wtConfig } = await prepareWorktree({ id, role });
+    const { path: wt, branch, config: wtConfig } = await prepareWorktree({
+      id, role, fresh: true, branch: `agent/${role}/${id}`,
+    });
     await store.emit('phase.start', { task: id, phase: 'research', role, worktree: wt, branch });
 
     const prompt = await buildPrompt(config, {
@@ -243,7 +259,9 @@ export function createPipeline(config, options = {}) {
     const researcherBranch = `agent/${ROLE_OF_PHASE.research}/${id}`;
     await store.claim(id, owner);
     const claimed = await store.get(id);
-    const { path: wt, branch: _branch, config: wtConfig } = await prepareWorktree({ id, role, base: researcherBranch });
+    const { path: wt, config: wtConfig } = await prepareWorktree({
+      id, role, base: researcherBranch, fresh: true, branch: `agent/${role}/${id}`,
+    });
     await store.emit('phase.start', { task: id, phase: 'verify', role, worktree: wt });
 
     const prompt = await buildPrompt(config, {
@@ -335,7 +353,9 @@ export function createPipeline(config, options = {}) {
     const verifierBranch = `agent/${ROLE_OF_PHASE.verify}/${id}`;
     await store.claim(id, owner);
     const claimed = await store.get(id);
-    const { path: wt, config: wtConfig } = await prepareWorktree({ id, role, base: verifierBranch });
+    const { path: wt, config: wtConfig } = await prepareWorktree({
+      id, role, base: verifierBranch, fresh: true, branch: `agent/${role}/${id}`,
+    });
     await store.emit('phase.start', { task: id, phase: 'consolidate', role, worktree: wt });
 
     const prompt = await buildPrompt(config, {

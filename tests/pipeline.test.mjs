@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { makeVault, gitExec } from './helpers/vault.mjs';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
@@ -177,6 +178,31 @@ test('E2E: konsolidator sa izlaznim kodom 0 ali bez beleške ne ulazi u main', a
     delete process.env.AGENT_2_0_MOCK_NOOP;
     await vault.cleanup();
   }
+});
+
+test('E2E: ponovni pokušaj istraživanja kreće od svežeg stabla sa aktuelnim izvorima', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Zaleđeni izvor' });
+  await pipeline.runResearch('TASK-101');
+
+  // Posle prvog pokušaja izvor se dopuni (kao u pravom nalazu N1) i komituje.
+  await vault.write('raw/dodatni-izvor.md', 'Novi izvor koji prvi pokušaj nije video.');
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'add', '-A']);
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'commit', '-q', '-m', 'dopunjen izvor']);
+
+  process.env.AGENT_2_0_MOCK_VERDICT = 'fail';
+  try {
+    await pipeline.runVerify('TASK-101'); // odbija nacrt -> zadatak nazad u ready
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_VERDICT;
+  }
+  assert.equal((await store.get('TASK-101')).data.status, 'ready');
+
+  await pipeline.runResearch('TASK-101');
+  const wt = path.join(vault.root, '.worktrees', 'TASK-101-researcher');
+  const files = await fs.readdir(path.join(wt, 'raw'));
+  assert.ok(files.includes('dodatni-izvor.md'), `radno stablo mora imati aktuelne izvore (vidi ${files.join(', ')})`);
+  await vault.cleanup();
 });
 
 test('E2E: run() sam troši dozvoljene pokušaje i blokira zadatak posle njih', async () => {
