@@ -482,6 +482,62 @@ test('E2E: korelacioni rizik se beleži kada verifikator i red-team dele vendor'
   await vault.cleanup();
 });
 
+test('E2E: tuđi upis u kontrolnom korenu se ne komituje kroz knjigovodstvo', async () => {
+  const { vault, config, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Tuđi upis' });
+
+  // Fajl upisan DIREKTNO u kontrolni koren, mimo ijednog radnog stabla.
+  await vault.write('wiki/Ubaceno_u_main.md', '# ubaceno mimo kapija\n');
+  await vault.write('tasks/inbox/DIVLJI.md', '# nije zadatak\n');
+  await pipeline.reflect();
+
+  // Ne sme da završi u Git istoriji kroz knjigovodstveni commit.
+  const { stdout } = await gitExec(vault.root, ['ls-tree', '-r', '--name-only', 'HEAD']);
+  assert.doesNotMatch(stdout, /wiki\/Ubaceno_u_main\.md/, 'tuđi produkcioni upis ne ulazi u main');
+  assert.doesNotMatch(stdout, /tasks\/inbox\/DIVLJI\.md/, 'tuđi fajl u tasks/ ne ulazi u main');
+
+  // Prijava postoji u toku događaja.
+  const { readJsonl } = await import('../tools/orchestrator/lib/fsx.mjs');
+  const dogadjaji = await readJsonl(config.paths.events);
+  assert.ok(dogadjaji.some((e) => e.kind === 'bookkeeping.foreign-change'), 'tuđa izmena je prijavljena');
+  // Zakonski knjigovodstveni fajlovi i dalje prolaze.
+  assert.match(stdout, /tasks\/inbox\/TASK-101\.md/);
+  await vault.cleanup();
+});
+
+test('E2E: override je svesna, zabeležena odluka čoveka', async () => {
+  const { vault, config, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Preglasavanje' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'fail';
+  const challenge = await pipeline.runChallenge('TASK-101');
+  assert.equal(challenge.verdict, 'reproducible');
+  assert.equal((await store.get('TASK-101')).data.status, 'review');
+  delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+
+  // Bez override-a kapija stoji.
+  await store.transition('TASK-101', 'verified', { actor: 'test', note: 'vraćeno na pečat' });
+  await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
+
+  // Svesno preglasavanje sa razlogom.
+  const { out: _ignored } = { out: null };
+  const task = await store.get('TASK-101');
+  await store.setFields('TASK-101', {
+    challenge: { ...task.data.challenge, verdict: 'clean', overriddenBy: 'operator', overrideReason: 'nalaz se odnosi na drugi zadatak' },
+  }, { actor: 'operator', note: 'override' });
+  await store.emit('challenge.overridden', { task: 'TASK-101', actor: 'operator', reason: 'nalaz se odnosi na drugi zadatak' });
+
+  const merge = await pipeline.runConsolidate('TASK-101');
+  assert.equal(merge.ok, true, merge.reason);
+  const posle = await store.get('TASK-101');
+  assert.equal(posle.data.challenge.overriddenBy, 'operator');
+  assert.equal(posle.data.challenge.overrideReason, 'nalaz se odnosi na drugi zadatak');
+  const { readJsonl } = await import('../tools/orchestrator/lib/fsx.mjs');
+  assert.ok((await readJsonl(config.paths.events)).some((e) => e.kind === 'challenge.overridden'));
+  await vault.cleanup();
+});
+
 test('E2E: tekstualni izvor preskače ekstrakciju', async () => {
   const { vault, pipeline, store } = await setup();
   const task = await pipeline.ingest({ source: 'raw/dokument.md', title: 'Običan tekst' });

@@ -76,6 +76,7 @@ Komande:
   renew <TASK-ID> --owner   obnovi zakup
   release <TASK-ID> --owner oslobodi zakup
   reclaim                   vrati zadatke sa isteklim zakupom u opticaj
+  override <TASK-ID> --reason <tekst>   svesno preglаsaj red-team nalaz (zapisuje se)
   phase <faza> <TASK-ID>    izvrši jednu fazu (extract|research|verify|challenge|audit|consolidate)
   run [--rounds N]          kontrolna petlja kroz sve faze
   status [--json]           stanje sistema
@@ -95,6 +96,7 @@ Globalne opcije:
   --depends TASK-001,...    zavisnosti
   --owner <ime>             vlasnik zakupa
   --token <token>           token zakupa (izlaz komande claim)
+  --reason <tekst>          razlog za override red-team nalaza
   --ttl <ms>                trajanje zakupa
   --rounds <n>              broj krugova kontrolne petlje
   --only <faza>             ograniči run na jednu fazu
@@ -215,6 +217,32 @@ const COMMANDS = {
       token: typeof flags.token === 'string' ? flags.token : null,
     });
     out(`zakup obnovljen: ${task.data.id} do ${task.data.lease_expires_at}`);
+    return 0;
+  },
+
+  /**
+   * Svesno preglasavanje red-team nalaza. Kapija se ne ukida — preskače se za
+   * JEDAN zadatak, uz obavezan razlog, i to ostaje u zadatku i u toku događaja.
+   */
+  async override({ store, flags }, positional) {
+    const id = positional[0];
+    const reason = typeof flags.reason === 'string' ? flags.reason : null;
+    if (!id) throw new Error('override zahteva TASK-ID');
+    if (!reason) throw new Error('override zahteva --reason "<zašto>" (prekoračenje kapije mora biti obrazloženo)');
+    const task = await store.get(id);
+    const sada = new Date().toISOString();
+    await store.setFields(id, {
+      challenge: {
+        ...(task.data.challenge ?? {}),
+        verdict: 'clean',
+        overriddenBy: 'operator',
+        overrideReason: reason,
+        overriddenAt: sada,
+      },
+    }, { actor: 'operator', note: `red-team nalaz preglasаn: ${reason}` });
+    await store.emit('challenge.overridden', { task: id, actor: 'operator', reason, at: sada });
+    out(`red-team nalaz nad ${id} je preglasаn (razlog: ${reason})`);
+    out('kapija je otvorena za ovaj zadatak; odluka je zabeležena u zadatku i u tasks/events.jsonl');
     return 0;
   },
 

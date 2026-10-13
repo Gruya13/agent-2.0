@@ -16,7 +16,7 @@ import { promises as fs } from 'node:fs';
 import { loadConfig } from './config.mjs';
 import { createStore } from './store.mjs';
 import { exists, sha256File } from './fsx.mjs';
-import { commitPaths, headSha, log as gitLog } from './git.mjs';
+import { commitPaths, headSha, log as gitLog, statusPorcelain } from './git.mjs';
 import {
   changedFilesInWorktree, createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
   removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
@@ -74,17 +74,73 @@ export function createPipeline(config, options = {}) {
    */
   const BOOKKEEPING_PATHS = ['tasks', 'wiki', '.agents/raw-manifest.json', 'raw'];
 
+  /**
+   * Sta grana ovog zadatka sme da menja. Grubi prefiks (`wiki/`) ne razlikuje
+   * nacrt od produkcije, pa bi `researcher` mogao da upise produkcionu belesku —
+   * dokazano skriptom NALAZ-2 drugog red-team prolaza.
+   */
+  function zonePolicyFor(task) {
+    const data = task.data ?? task;
+    if ((data.kind ?? 'ingest') === 'audit') {
+      return { scope: data.audit_scope ?? [] };
+    }
+    // Artefakt moze biti nacrt (`wiki/drafts/X.md` -> `wiki/X.md`) ili vec
+    // produkciona beleska (kada je konsolidator upise pre merge-a).
+    const production = (data.artifacts ?? [])
+      .filter((rel) => rel.startsWith('wiki/') && !rel.startsWith('wiki/drafts/fragments/'))
+      .map((rel) => (rel.startsWith('wiki/drafts/') ? 'wiki/' + path.basename(rel) : rel));
+    return { production };
+  }
+
+  /**
+   * Knjigovodstvo komituje TACNO poznate fajlove, ne sve sto je prljavo.
+   *
+   * Ranije se komitovalo sve pod `tasks/` i `wiki/`, pa je fajl upisan direktno u
+   * kontrolni koren zavrsavao u `main` bez ijednog merge-a, pecata ili kapije
+   * (dokazano skriptom NALAZ-3). Sve sto nije na spisku se prijavljuje kao tuda
+   * izmena i ne komituje.
+   */
+  const BOOKKEEPING_ALLOW = [
+    /^tasks\/(inbox|active|review|completed)\/TASK-\d+\.md$/,
+    /^tasks\/events\.jsonl$/,
+    /^wiki\/Index\.md$/,
+    /^\.agents\/raw-manifest\.json$/,
+  ];
+
+  async function bookkeepingTargets() {
+    const { stdout } = await statusPorcelain(config.root, { raw: true, untracked: 'all' });
+    const dozvoljeni = [];
+    const tudji = [];
+    for (const line of String(stdout ?? '').split('\n')) {
+      if (!line.trim()) continue;
+      let rel = line.slice(3).trim();
+      if (rel.includes(' -> ')) rel = rel.split(' -> ').pop();
+      rel = rel.replace(/^"|"$/g, '');
+      const noviIzvor = rel.startsWith('raw/') && line.trimStart().startsWith('??');
+      if (BOOKKEEPING_ALLOW.some((rx) => rx.test(rel)) || noviIzvor) dozvoljeni.push(rel);
+      else if (rel.startsWith('wiki/') || rel.startsWith('tasks/') || rel.startsWith('.agents/')) tudji.push(rel);
+    }
+    return { dozvoljeni, tudji };
+  }
+
   async function commitBookkeeping(message, actor = 'agentctl') {
-    let paths = BOOKKEEPING_PATHS;
+    const { dozvoljeni, tudji } = await bookkeepingTargets();
+    if (tudji.length) {
+      await store.emit('bookkeeping.foreign-change', {
+        task: null, actor, files: tudji,
+        note: 'izmena u zoni crne table koja nije knjigovodstvena; nije komitovana',
+      });
+      logger(`ne komitujem tude izmene: ${tudji.join(', ')}`);
+    }
     const rawProblems = (await lintRawImmutability(config))
       .filter((f) => f.level === 'error' && ['raw.modified', 'raw.deleted', 'raw.legacy-unknown', 'raw.no-manifest', 'raw.symlink'].includes(f.code));
+    let paths = dozvoljeni;
     if (rawProblems.length) {
-      paths = BOOKKEEPING_PATHS.filter((p) => p !== 'raw');
+      paths = dozvoljeni.filter((rel) => !rel.startsWith('raw/'));
       await store.emit('raw.violation', {
-        task: null,
-        actor,
+        task: null, actor,
         findings: rawProblems.map((f) => ({ code: f.code, target: f.target, message: f.message })),
-        note: 'raw/ nije komitovan; prekršaj mora da reši čovek',
+        note: 'raw/ nije komitovan; prekrsaj mora da resi covek',
       });
       logger(`raw/ nije komitovan: ${rawProblems.map((f) => f.code).join(', ')}`);
     }
@@ -693,11 +749,13 @@ export function createPipeline(config, options = {}) {
       });
     }
     const reprodukovani = rezultati.filter((r) => r.reproduced === true);
-    const lažni = rezultati.filter((r) => r.reproduced === false).length;
-    // Verdikt: reproduktivni nalaz blokira; neizvršeni skripti se NE smeju tiho
-    // odbaciti (dokazano skriptom NALAZ-5), pa je i to nalaz.
+    const istekli = rezultati.filter((r) => r.timedOut === true).length;
+    const lažni = rezultati.filter((r) => r.reproduced === false && r.timedOut !== true).length;
+    // Verdikt: reproduktivni nalaz blokira; neizvršeni i ISTEKLI skripti se ne
+    // smeju tumačiti kao „nema nalaza" (dokazano skriptom NALAZ-5 i sumnjom 2),
+    // pa su i oni nalaz.
     const verdict = reprodukovani.length ? 'reproducible'
-      : neizvrseni.length ? 'unexecuted'
+      : (neizvrseni.length || istekli) ? 'unexecuted'
         : 'clean';
     // Kada verifikator i red-team dele identitet, njihove slepe tačke su
     // korelisane — to se u zadatku beleži, a ne prećutkuje.
@@ -716,6 +774,7 @@ export function createPipeline(config, options = {}) {
         scripts,
         reproduced: reprodukovani.map((r) => r.script),
         falsePositives: lažni,
+        timedOut: istekli,
         unexecuted: neizvrseni,
         executed: izvrsavanje,
         correlationRisk,
@@ -769,7 +828,14 @@ export function createPipeline(config, options = {}) {
     await store.release(id, owner, { toStatus: 'review', token: leaseTokens.get(id), note: `red-team oborio ${reprodukovani.length} tvrdnji; vraćeno autoru` });
     await commitBookkeeping(`agentctl: ${id} -> review (red-team nalaz)`);
     await removeWorktree(config, id, { role });
-    await store.emit('phase.rejected', { task: id, phase: 'challenge', role, reproduced: reprodukovani.map((r) => r.script), attempts });
+    await store.emit('phase.rejected', {
+      task: id, phase: 'challenge', role,
+      reproduced: reprodukovani.map((r) => r.script),
+      falsePositives: lažni,
+      timedOut: istekli,
+      unexecuted: neizvrseni,
+      attempts,
+    });
     logger(`challenge: ${id} -> reproducible (${reprodukovani.length} nalaza)`);
     return { phase: 'challenge', task: id, ok: false, verdict, reproduced: reprodukovani.map((r) => r.script), attempts };
   }
@@ -790,6 +856,7 @@ export function createPipeline(config, options = {}) {
     const merge = await mergeIntoMain(config, {
       branch,
       message: `agentctl(${id}): revizija baze (librarian+verifier)`,
+      zonePolicy: zonePolicyFor(task),
       worktreeDir: worktreePath(config, id, verifyRole),
       generatedPaths: [config.vault.index],
     });
@@ -897,6 +964,7 @@ export function createPipeline(config, options = {}) {
     const merge = await mergeIntoMain(config, {
       branch,
       message: `agentctl(${id}): konsolidacija (researcher+verifier+consolidator)`,
+      zonePolicy: zonePolicyFor(task),
       worktreeDir: worktreePath(config, id, role),
       generatedPaths: [config.vault.index],
     });

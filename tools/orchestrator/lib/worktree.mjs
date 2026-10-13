@@ -146,7 +146,9 @@ export async function commitWorktree(config, id, message, { actor, role = null }
  * iz agentskog, i nikad sa prljavim stanjem — kontrolni sloj prvo komituje svoje
  * knjigovodstvo.
  */
-export async function mergeIntoMain(config, { branch, message, actor = 'agentctl', worktreeDir = null, generatedPaths = [] } = {}) {
+export async function mergeIntoMain(config, {
+  branch, message, actor = 'agentctl', worktreeDir = null, generatedPaths = [], zonePolicy = null,
+} = {}) {
   const worktrees = await listWorktrees(config);
   const primary = worktrees.find((w) => path.resolve(w.path) === path.resolve(config.root));
   const current = await currentBranch(config.root);
@@ -157,12 +159,32 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
     return { merged: false, reason: 'glavni repozitorijum nije registrovan kao radno stablo' };
   }
 
-  // 0. Grana sme da menja SAMO zone znanja. Bez ove kapije bi agent koji piše
-  //    fajl-sistemom (mimo MCP-a) mogao da ubaci `raw/`, `tools/` ili `.agents/`
-  //    u `main` — dokazano reprodukcionim skriptom u protnoj rundi.
-  const dozvoljeneZone = ['wiki/', 'tasks/reviews/', 'tasks/audits/', 'tasks/challenges/'];
+  // 0. Grana sme da menja SAMO zone koje joj politika zadatka dozvoljava.
+  //    Grubi prefiks (`wiki/`) nije dovoljan: `researcher` bi tada mogao da upiše
+  //    produkcionu belešku. Politika razdvaja nacrte, produkciju (samo artefakt
+  //    zadatka), revizije, nalaze i opseg revizije baze.
   const izmene = await branchChangedPaths(config, branch);
-  const vanZone = izmene.filter((f) => !dozvoljeneZone.some((z) => f.startsWith(z)));
+  const politika = zonePolicy ?? {};
+  const dozvoljeniPrefiksi = politika.allowedPrefixes
+    ?? ['wiki/drafts/', 'tasks/reviews/', 'tasks/audits/', 'tasks/challenges/'];
+  const dozvoljenaProdukcija = new Set(politika.production ?? []);
+  const opseg = politika.scope ?? [];
+  // Izvedeni artefakti su vlasnistvo kontrolnog sloja, ma ko ih poslao.
+  const izvedeni = new Set([...(generatedPaths ?? []), config.vault.index, '.agents/raw-manifest.json']);
+  const uOpsegu = (f) => opseg.some((scope) => {
+    const rx = new RegExp(`^${String(scope).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*\\\*/g, '.*').replace(/\\\*/g, '[^/]*')}$`);
+    return rx.test(f);
+  });
+  const vanZone = izmene.filter((f) => {
+    if (dozvoljeniPrefiksi.some((z) => f.startsWith(z))) return false;
+    if (dozvoljenaProdukcija.has(f)) return false;
+    // Izvedeni artefakti (npr. `wiki/Index.md`) pripadaju kontrolnom sloju: pre
+    // rebase-a se poravnavaju sa `main`, pa njihovo prisustvo u grani nije upis
+    // agenta i ne sme da obori kapiju.
+    if (izvedeni.has(f)) return false;
+    if (opseg.length && uOpsegu(f)) return false;
+    return true;
+  });
   if (vanZone.length) {
     return {
       merged: false,

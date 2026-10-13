@@ -62,8 +62,12 @@ export async function hasCommits(dir) {
   return result.code === 0;
 }
 
-export async function statusPorcelain(dir) {
-  const { stdout } = await git(dir, ['status', '--porcelain']);
+/** Sirov `git status --porcelain` (string) ili lista linija uz `{lines: true}`. */
+export async function statusPorcelain(dir, { raw = false, untracked = 'all' } = {}) {
+  const args = ['status', '--porcelain', '--no-renames'];
+  if (untracked === 'all') args.push('--untracked-files=all');
+  const { stdout } = await git(dir, args);
+  if (raw) return { stdout };
   return stdout ? stdout.split('\n').filter(Boolean) : [];
 }
 

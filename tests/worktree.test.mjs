@@ -62,7 +62,12 @@ test('worktree: sekvencijalni merge u main i čišćenje', async () => {
     await vault.write(`.worktrees/${id}-consolidator/${file}`, `# ${id}\n`);
     await gitExec(worktreePath(config, id, 'consolidator'), ['-c', 'user.name=codex', '-c', 'user.email=codex@local', 'add', '-A']);
     await gitExec(worktreePath(config, id, 'consolidator'), ['-c', 'user.name=codex', '-c', 'user.email=codex@local', 'commit', '-q', '-m', `consolidator: ${id}`]);
-    const merge = await mergeIntoMain(config, { branch: `agent/consolidator/${id}`, message: `agentctl: ${id}` });
+    const merge = await mergeIntoMain(config, {
+      branch: `agent/consolidator/${id}`,
+      message: `agentctl: ${id}`,
+      // Kapija zona je stroga po defaultu: produkcija mora biti deklarisana.
+      zonePolicy: { production: [file] },
+    });
     assert.equal(merge.merged, true, merge.reason);
     await removeWorktreesForTask(config, id);
     await deleteBranch(config, `agent/consolidator/${id}`);
@@ -125,6 +130,30 @@ test('worktree: rename iz zabranjene zone ne zaobilazi kapiju', async () => {
   await vault.cleanup();
 });
 
+test('worktree: kapija razlikuje podzone — istraživač ne ulazi u produkciju', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await ensureMainBranch(config);
+  await createWorktree(config, { id: 'TASK-072', role: 'researcher' });
+  const wt = worktreePath(config, 'TASK-072', 'researcher');
+
+  // Istraživač, fajl-sistemom, upiše produkcionu belešku (nije njegova podzona).
+  await vault.write('.worktrees/TASK-072-researcher/wiki/Produkcija.md', '# podmetnuto\n');
+  await gitExec(wt, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'add', '-A']);
+  await gitExec(wt, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'commit', '-q', '-m', 'u produkciju']);
+
+  const bezPolitike = await mergeIntoMain(config, { branch: 'agent/researcher/TASK-072', message: 'probe' });
+  assert.equal(bezPolitike.merged, false, 'stroga politika po defaultu ne dozvoljava produkciju');
+  assert.deepEqual(bezPolitike.outOfZone, ['wiki/Produkcija.md']);
+
+  // Ista grana prolazi kada je ta beleška deklarisani artefakt zadatka.
+  const saPolitikom = await mergeIntoMain(config, {
+    branch: 'agent/researcher/TASK-072', message: 'probe', zonePolicy: { production: ['wiki/Produkcija.md'] },
+  });
+  assert.equal(saPolitikom.merged, true, saPolitikom.reason);
+  await vault.cleanup();
+});
+
 test('worktree: konflikt se detektuje i main se vraća u pređašnje stanje', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);
@@ -146,7 +175,9 @@ test('worktree: konflikt se detektuje i main se vraća u pređašnje stanje', as
   await gitExec(config.root, ['-c', 'user.name=main', '-c', 'user.email=main@local', 'add', '-A']);
   await gitExec(config.root, ['-c', 'user.name=main', '-c', 'user.email=main@local', 'commit', '-q', '-m', 'main']);
 
-  const merge = await mergeIntoMain(config, { branch: 'agent/consolidator/TASK-020', message: 'agentctl' });
+  const merge = await mergeIntoMain(config, {
+    branch: 'agent/consolidator/TASK-020', message: 'agentctl', zonePolicy: { production: ['wiki/Zajednicki.md'] },
+  });
   assert.equal(merge.merged, false);
   assert.equal(merge.conflict, true);
   assert.deepEqual(merge.files, ['wiki/Zajednicki.md']);
@@ -180,7 +211,9 @@ test('worktree: izvedeni artefakti se poravnavaju pre merge-a (nema konflikta na
   const aligned = await alignGeneratedPaths(config, wt, [config.vault.index]);
   assert.deepEqual(aligned.aligned, ['wiki/Index.md']);
 
-  const merge = await mergeIntoMain(config, { branch: 'agent/consolidator/TASK-030', message: 'agentctl' });
+  const merge = await mergeIntoMain(config, {
+    branch: 'agent/consolidator/TASK-030', message: 'agentctl', zonePolicy: { production: ['wiki/Nova.md'] },
+  });
   assert.equal(merge.merged, true, merge.reason);
   assert.ok(await vault.exists('wiki/Nova.md'));
   await vault.cleanup();
