@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: ready
+status: review
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T23:12:13.111Z
+updated: 2026-10-13T23:15:54.927Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -159,6 +159,21 @@ history:
     status: ready
     actor: dsh
     note: odbijen nacrt (pokušaj 3); vraćeno istraživaču
+  - at: 2026-10-13T23:12:13.195Z
+    status: in_progress
+    actor: agy
+  - at: 2026-10-13T23:15:54.922Z
+    status: in_progress
+    actor: agy
+    note: "nacrt: wiki/drafts/Sest_uloga_i_dve_kapije.md"
+  - at: 2026-10-13T23:15:54.925Z
+    status: in_progress
+    actor: agy
+    note: faza research završena
+  - at: 2026-10-13T23:15:54.927Z
+    status: review
+    actor: agy
+    note: "nacrt spreman: wiki/drafts/Sest_uloga_i_dve_kapije.md"
 lock_token: null
 ---
 
@@ -364,4 +379,35 @@ Oba nalaza su mehanički ispravljiva bez prepisivanja sadržaja, ali po pravilu 
 
 VERDICT: fail
 REASONS: 2
+```
+
+### Faza research (2026-10-13T23:15:54.924Z)
+
+- harnes: agy
+- trajanje: 221654 ms
+- grana: agent/researcher/TASK-102 @ 7d31616e0f49e0ddcfef1328c204e01508e78296
+
+```
+### Izveštaj istraživača (`researcher`) za zadatak TASK-102
+
+- **Putanja nacrta**: [`wiki/drafts/Sest_uloga_i_dve_kapije.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/wiki/drafts/Sest_uloga_i_dve_kapije.md)
+- **Broj ključnih tvrdnji**: 6
+  1. *Struktura od šest uloga i zonska dokazivost autorstva* — Sistem ima šest uloga (četiri pišu, jedna održava, jedna napada); ortogonalne zone upisa obezbeđuju tačno jednog autora po izmeni i dokazivost odgovornosti (`raw/sest-uloga-i-dve-kapije.md`, redovi 3–5).
+  2. *Ulazna obrada izvora kroz istraživača i ekstraktora* — `researcher` sintetiše izvor u nacrt vezujući svaku tvrdnju za izvor; `extractor` doslovno prenosi tekst, tabele i skenove bez interpretacije uz SHA-256 heš bajtova izvora (`raw/sest-uloga-i-dve-kapije.md`, redovi 7–10).
+  3. *Nezavisna verifikacija zasnovana na dokazima* — `verifier` je drugi vendor i ocenjuje isključivo tačnost, pri čemu svaki nalaz mora nositi proverljiv dokaz ili se odbacuje (`raw/sest-uloga-i-dve-kapije.md`, redovi 12–14).
+  4. *Adversarijalno ispitivanje kroz izvršive red-team skripte* — Nakon pečata a pre spajanja, `red-team` pokreće skript u svežem klonu zamrznute revizije; obaranje tvrdnje obustavlja spajanje, dok se neoborene tvrdnje evidentiraju kao lažni nalazi bez blokiranja (`raw/sest-uloga-i-dve-kapije.md`, redovi 16–19).
+  5. *Produkciona konsolidacija i selektivno održavanje bibliotekara* — `consolidator` integriše odobren nacrt u `wiki/`; `librarian` održava postojeće produkcione beleške isključivo unutar dodeljenog opsega (`raw/sest-uloga-i-dve-kapije.md`, redovi 21–23).
+  6. *Dve kapije zaštite od tihe degradacije agenata* — Prva kapija proverava dozvoljene zone znanja na spajanju; Druga kapija blokira spajanje u odsustvu čistog red-team nalaza (`raw/sest-uloga-i-dve-kapije.md`, redovi 25–27).
+- **Spisak novih Vikilinkova**:
+  - `[[Operativni_vodic_asinhronog_sistema]]` (referenca na postojeću konsolidovanu belešku [`wiki/Operativni_vodic_asinhronog_sistema.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/wiki/Operativni_vodic_asinhronog_sistema.md))
+  - `[[Index]]` (referenca na centralni indeks [`wiki/Index.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/wiki/Index.md))
+- **Spisak otvorenih pitanja**:
+  1. *Definicija i obuhvat „zona znanja” za Prvu kapiju* — Izvor ne navodi taksativnu listu dozvoljenih i zabranjenih putanja (`nepotvrđeno u izvoru`; ugovoreno u [`.agents/AGENTS.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/.agents/AGENTS.md), invarijanta 16, redovi 96–99 i [`tools/orchestrator/lib/worktree.mjs`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/tools/orchestrator/lib/worktree.mjs#L163-L165)).
+  2. *Kriterijum akumulacije i prag lažnih nalaza red-team-a* — Izvor navodi da se lažni nalazi broje ali ne blokiraju, bez navođenja numeričkog praga tolerancije (`nepotvrđeno u izvoru`; kontrolni sloj beleži `falsePositives` u [`tools/orchestrator/lib/pipeline.mjs`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/tools/orchestrator/lib/pipeline.mjs#L696)).
+  3. *Specifikacija harnesa i modela po ulogama* — Izvor zahteva drugog vendora za verifikaciju bez raspodele konkretnih modela (`nepotvrđeno u izvoru`; definisano u [`.agents/AGENTS.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/.agents/AGENTS.md), sekcija 5 i [`KONSULTACIJA-ULOGA.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/KONSULTACIJA-ULOGA.md#L103)).
+  4. *Ograničenja resursa i konfiguracija pri izvršavanju red-team skripti* — Izvor ne navodi timeout, sandbox i ograničenja broja skripti (`nepotvrđeno u izvoru`; primenjuju se `challengeTimeoutMs: 60000` i `challengeMaxScripts: 3` u [`tools/config/agents.yml`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-102-researcher/tools/config/agents.yml#L35-L36)).
+
+### Provera ispravnosti i usaglašenosti
+
+Validacija invarija
 ```
