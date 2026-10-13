@@ -1,0 +1,8 @@
+{"ts":"2026-10-13T20:43:31.076Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"rawManifestAdded":0,"rawManifestTotal":1,"commit":"6cd575349b86d2d06b8ad02c1006c08cfc67f036"}
+{"ts":"2026-10-13T20:43:39.206Z","kind":"task.ingested","task":"TASK-101","source":"raw/arhitektura-asinhronog-multi-agentskog-sistema.md","actor":"operator"}
+{"ts":"2026-10-13T20:43:39.210Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T20:43:41.992Z","kind":"task.ingested","task":"TASK-102","source":"raw/arhitektura-asinhronog-multi-agentskog-sistema.md","actor":"operator"}
+{"ts":"2026-10-13T20:43:41.995Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T20:43:47.093Z","kind":"task.ingested","task":"TASK-103","source":"raw/arhitektura-asinhronog-multi-agentskog-sistema.md","actor":"operator"}
+{"ts":"2026-10-13T20:43:47.096Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T20:43:47.098Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}

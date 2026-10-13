@@ -94,7 +94,7 @@ async function buildContext(flags) {
     store,
     logger: (message) => process.stderr.write(`[agentctl] ${message}\n`),
   });
-  return { config, store, pipeline };
+  return { config, store, pipeline, flags };
 }
 
 const COMMANDS = {

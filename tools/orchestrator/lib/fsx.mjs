@@ -137,8 +137,8 @@ export async function withFileLock(lockFile, fn, options = {}) {
   const deadline = Date.now() + timeoutMs;
   await fs.mkdir(path.dirname(lockFile), { recursive: true });
 
+  let handle;
   for (;;) {
-    let handle;
     try {
       handle = await fs.open(lockFile, 'wx');
       await handle.writeFile(JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), 'utf8');
