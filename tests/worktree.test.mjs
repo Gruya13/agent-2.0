@@ -101,6 +101,30 @@ test('worktree: grana koja menja zone van dozvole se ne spaja', async () => {
   await vault.cleanup();
 });
 
+test('worktree: rename iz zabranjene zone ne zaobilazi kapiju', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await ensureMainBranch(config);
+  await createWorktree(config, { id: 'TASK-071', role: 'researcher' });
+  const wt = worktreePath(config, 'TASK-071', 'researcher');
+
+  // `git mv tools/x wiki/x` — bez `--no-renames` kapija bi videla samo odredište.
+  // `wiki/` je u fixture-u prazan (git ne prati prazne direktorijume), pa ga
+  // stvorimo u radnom stablu.
+  await vault.write('.worktrees/TASK-071-researcher/wiki/.keep', '');
+  await gitExec(wt, ['mv', 'tools/orchestrator/cli.mjs', 'wiki/podmetnuti-cli.mjs']);
+  await gitExec(wt, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'add', '-A']);
+  await gitExec(wt, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'commit', '-q', '-m', 'rename iz zabranjene zone']);
+
+  const putanje = await branchChangedPaths(config, 'agent/researcher/TASK-071');
+  assert.ok(putanje.includes('tools/orchestrator/cli.mjs'), `kapija mora da vidi obe strane rename-a (${putanje.join(', ')})`);
+  const merge = await mergeIntoMain(config, { branch: 'agent/researcher/TASK-071', message: 'probe' });
+  assert.equal(merge.merged, false);
+  assert.match(merge.reason, /zone van dozvole/);
+  assert.equal(await vault.exists('tools/orchestrator/cli.mjs'), true, 'infrastruktura je netaknuta u main-u');
+  await vault.cleanup();
+});
+
 test('worktree: konflikt se detektuje i main se vraća u pređašnje stanje', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);

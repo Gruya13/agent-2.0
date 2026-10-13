@@ -313,6 +313,25 @@ test('MCP: istraživač ne piše u produkciju ni u revizije', async (t) => {
   await vault.cleanup();
 });
 
+test('MCP: zone fragment i draft su razdvojene (tačno jedan autor po izmeni)', async (t) => {
+  const vault = await seededVault();
+  await makeTask(vault, { id: 'TASK-901', owner: 'agy', status: 'in_progress', artifacts: ['wiki/drafts/Produkcija.md'], verdict: null });
+  const istrazivac = await connect(vault.root, 'researcher', 'agy', t, { OBSIDIAN_TASK: 'TASK-901' });
+  const fragment = await istrazivac.callTool('obsidian_write_note', { path: 'wiki/drafts/fragments/Podmetnuto.md', content: '# x\n' });
+  assert.equal(fragment.isError, true, 'istraživač ne sme u zonu fragmenata');
+  assert.match(fragment.content[0].text, /zonu "fragment"/);
+  istrazivac.close();
+
+  const ekstraktor = await connect(vault.root, 'extractor', 'agy', t, { OBSIDIAN_TASK: 'TASK-901' });
+  const nacrt = await ekstraktor.callTool('obsidian_write_note', { path: 'wiki/drafts/Nacrt.md', content: '# x\n' });
+  assert.equal(nacrt.isError, true, 'ekstraktor ne sme u zonu nacrta');
+  assert.match(nacrt.content[0].text, /zonu "draft"/);
+  const svojFragment = await ekstraktor.callTool('obsidian_write_note', { path: 'wiki/drafts/fragments/Svoj.md', content: '# x\n' });
+  assert.equal(svojFragment.isError, false, svojFragment.content[0].text);
+  ekstraktor.close();
+  await vault.cleanup();
+});
+
 test('MCP: izvedeni artefakti kontrolnog sloja su zaštićeni', async (t) => {
   const vault = await seededVault();
   await makeTask(vault, { id: 'TASK-301', owner: 'codex', status: 'verified', artifacts: ['wiki/Index.md', 'wiki/drafts/Index.md'] });

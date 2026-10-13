@@ -467,6 +467,16 @@ async function redTeam(config, { task, cwd, now }) {
 
   const rezim = process.env.AGENT_2_0_MOCK_CHALLENGE;
   const skripti = [];
+  // Testni režim: četiri skripta, gde je reproduktivni TAČNO iza granice limita.
+  if (rezim === 'four') {
+    for (const n of [1, 2, 3]) {
+      await writeFileAtomic(path.join(cwd, `${dir}/NALAZ-${n}.sh`), `#!/usr/bin/env bash\necho "nije oboreno"\nexit 1\n`);
+      skripti.push(`${dir}/NALAZ-${n}.sh`);
+    }
+    await writeFileAtomic(path.join(cwd, `${dir}/NALAZ-4.sh`), '#!/usr/bin/env bash\necho "OBORENO: nalaz iza granice limita"\nexit 0\n');
+    skripti.push(`${dir}/NALAZ-4.sh`);
+    problemi.push(`- OBORENO: nalaz iza granice limita (${dir}/NALAZ-4.sh)`);
+  }
   if (rezim === 'fail' || rezim === 'false-positive') {
     const reprodukuje = rezim === 'fail';
     const rel = `${dir}/NALAZ-1.sh`;
@@ -501,10 +511,12 @@ async function redTeam(config, { task, cwd, now }) {
     ].join('\n'),
   });
 
+  const pao = process.env.AGENT_2_0_MOCK_CHALLENGE_CRASH === '1';
   return {
-    ok: true,
+    ok: !pao,
+    exitCode: pao ? 1 : 0,
     output: [
-      `MOCK red-team: ${problemi.length} nalaza, ${skripti.length} skripti.`,
+      `MOCK red-team: ${problemi.length} nalaza, ${skripti.length} skripti.${pao ? ' (harnes se srušio posle pisanja)' : ''}`,
       ...problemi,
       `NALAZI: ${rezim === 'fail' ? 1 : 0}`,
       `LAZNI: ${rezim === 'false-positive' ? 1 : 0}`,

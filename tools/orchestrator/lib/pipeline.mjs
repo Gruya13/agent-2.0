@@ -701,7 +701,10 @@ export function createPipeline(config, options = {}) {
         : 'clean';
     // Kada verifikator i red-team dele identitet, njihove slepe tačke su
     // korelisane — to se u zadatku beleži, a ne prećutkuje.
-    const correlationRisk = identityFor(config, ROLE_OF_PHASE.verify) === owner;
+    // Korelacija je svojstvo MODELA, ne adaptera: i u mock režimu je par
+    // verifikator/red-team isti vendor ako je tako konfigurisan.
+    const vendor = (r) => config.agents?.[r]?.harness ?? r;
+    const correlationRisk = vendor(ROLE_OF_PHASE.verify) === vendor(role);
 
     if (changed.length) {
       await commitWorktreeSafe(config, id, role, `red-team(${id}): nalazi na ${revision.slice(0, 8)}`, owner);

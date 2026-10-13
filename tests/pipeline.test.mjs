@@ -419,6 +419,69 @@ test('E2E: red-team ne sme da menja van svoje zone', async () => {
   }
 });
 
+test('E2E: pad red-team harnesa nije „čist nalaz" (kapija ostaje zatvorena)', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Pad red-teama' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'fail';
+  process.env.AGENT_2_0_MOCK_CHALLENGE_CRASH = '1';
+  try {
+    const challenge = await pipeline.runChallenge('TASK-101');
+    assert.equal(challenge.ok, false);
+    assert.equal(challenge.verdict, 'error', 'pad harnesa ne sme da se upiše kao clean');
+    const task = await store.get('TASK-101');
+    assert.equal(task.data.challenge.verdict, 'error');
+    assert.match(task.data.challenge.reason, /pao/);
+    // Kapija ostaje zatvorena: nema spajanja.
+    await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
+    assert.equal(await vault.exists('wiki/drafts/Pad_red-teama.md'), false);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE_CRASH;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: nalaz iza granice challengeMaxScripts se ne odbacuje tiho', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Nalaz iza limita' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'four';
+  try {
+    const challenge = await pipeline.runChallenge('TASK-101');
+    assert.equal(challenge.ok, false, 'neizvršeni skripti ne smeju da daju clean');
+    assert.equal(challenge.verdict, 'unexecuted');
+    const task = await store.get('TASK-101');
+    assert.equal(task.data.challenge.verdict, 'unexecuted');
+    assert.deepEqual(task.data.challenge.unexecuted, ['tasks/challenges/TASK-101/NALAZ-4.sh']);
+    assert.equal(task.data.status, 'review', 'nalaz iza limita se ne prihvata kao clean');
+    await store.transition('TASK-101', 'verified', { actor: 'test', note: 'preskočena faza' });
+    await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: korelacioni rizik se beleži kada verifikator i red-team dele vendor', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Korelacioni rizik' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  const challenge = await pipeline.runChallenge('TASK-101');
+  assert.equal(challenge.ok, true);
+  // U podrazumevanoj konfiguraciji i verifikator i red-team su `dsh`.
+  assert.equal(challenge.correlationRisk, true, 'isti vendor u dve faze mora biti zabeležen');
+  const task = await store.get('TASK-101');
+  assert.equal(task.data.challenge.correlationRisk, true);
+  assert.match(task.body, /korelacioni rizik.*DA/);
+  await vault.cleanup();
+});
+
 test('E2E: tekstualni izvor preskače ekstrakciju', async () => {
   const { vault, pipeline, store } = await setup();
   const task = await pipeline.ingest({ source: 'raw/dokument.md', title: 'Običan tekst' });
