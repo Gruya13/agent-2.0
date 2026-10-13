@@ -115,3 +115,7 @@
 {"ts":"2026-10-13T22:02:14.201Z","kind":"task.write","task":"TASK-101","actor":"verifier","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T22:02:14.203Z","kind":"task.write","task":"TASK-101","actor":"dsh","status":"verified","phase":"review","moved":"active->review"}
 {"ts":"2026-10-13T22:02:14.232Z","kind":"phase.done","task":"TASK-101","phase":"verify","role":"verifier","verdict":"pass"}
+{"ts":"2026-10-13T22:02:14.266Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":2,"commit":"af2b9d1f78703e9677f7be289c585ea3dd4cfc43"}
+{"ts":"2026-10-13T22:02:14.270Z","kind":"task.write","task":"TASK-101","actor":"codex","status":"in_progress","phase":"active","moved":"review->active"}
+{"ts":"2026-10-13T22:02:14.301Z","kind":"phase.start","task":"TASK-101","phase":"consolidate","role":"consolidator","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-101-consolidator"}
+{"ts":"2026-10-13T22:02:55.859Z","kind":"task.write","task":"TASK-101","actor":"consolidator","status":"in_progress","phase":"active","moved":null}
