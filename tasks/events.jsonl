@@ -102,3 +102,8 @@
 {"ts":"2026-10-13T21:55:22.969Z","kind":"task.write","task":"TASK-101","actor":"dsh","status":"ready","phase":"inbox","moved":"active->inbox"}
 {"ts":"2026-10-13T21:55:23.003Z","kind":"phase.rejected","task":"TASK-101","role":"verifier","attempts":1}
 {"ts":"2026-10-13T21:55:23.035Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":2,"commit":"1af5da67c79ca9144c8a7209ee797eb1c109bd9a"}
+{"ts":"2026-10-13T21:56:48.178Z","kind":"task.write","task":"TASK-101","actor":"agy","status":"in_progress","phase":"active","moved":"inbox->active"}
+{"ts":"2026-10-13T21:56:48.216Z","kind":"phase.start","task":"TASK-101","phase":"research","role":"researcher","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-101-researcher","branch":"agent/researcher/TASK-101"}
+{"ts":"2026-10-13T21:59:46.091Z","kind":"task.write","task":"TASK-101","actor":"researcher","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T21:59:46.094Z","kind":"task.write","task":"TASK-101","actor":"researcher","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T21:59:46.096Z","kind":"task.write","task":"TASK-101","actor":"agy","status":"review","phase":"review","moved":"active->review"}

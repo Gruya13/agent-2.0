@@ -1,9 +1,9 @@
 ---
 id: TASK-101
 title: Operativni vodic asinhronog sistema
-status: ready
+status: review
 created: 2026-10-13T21:44:35.592Z
-updated: 2026-10-13T21:55:22.969Z
+updated: 2026-10-13T21:59:46.095Z
 source: raw/operativni-vodic.md
 priority: normal
 tags:
@@ -76,6 +76,21 @@ history:
     status: ready
     actor: dsh
     note: odbijen nacrt (pokušaj 1); vraćeno istraživaču
+  - at: 2026-10-13T21:56:48.175Z
+    status: in_progress
+    actor: agy
+  - at: 2026-10-13T21:59:46.090Z
+    status: in_progress
+    actor: researcher
+    note: "nacrt: wiki/drafts/Operativni_vodic_asinhronog_sistema.md"
+  - at: 2026-10-13T21:59:46.093Z
+    status: in_progress
+    actor: researcher
+    note: faza research završena
+  - at: 2026-10-13T21:59:46.095Z
+    status: review
+    actor: agy
+    note: "nacrt spreman: wiki/drafts/Operativni_vodic_asinhronog_sistema.md"
 ---
 
 # Operativni vodic asinhronog sistema
@@ -137,4 +152,29 @@ Zapažanje N4 (nije razlog za fail): otvorena pitanja 1–3 su odgovoriva iz `to
 
 VERDICT: fail
 REASONS: 3
+```
+
+### Faza research (2026-10-13T21:59:46.092Z)
+
+- harnes: agy
+- trajanje: 177850 ms
+- grana: agent/researcher/TASK-101 @ af6655fc59f16b0aad9715c5b8f7c778718f1555
+
+```
+### Izveštaj istraživača (`researcher`) za zadatak TASK-101
+
+- **Putanja nacrta**: [`wiki/drafts/Operativni_vodic_asinhronog_sistema.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/wiki/drafts/Operativni_vodic_asinhronog_sistema.md)
+- **Broj ključnih tvrdnji**: 6
+  1. *Zonska ortogonalnost upisa* (`researcher` piše u `wiki/drafts/`, `verifier` u `tasks/reviews/`, `consolidator` u `wiki/`, `raw/` je nepromenljiv / append-only). Referenca: [`raw/operativni-vodic.md#L3-L5`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L3-L5).
+  2. *Upravljanje vremenskim zakupom (Lease)* (`lock_owner`, `locked_at`, `lease_expires_at` i automatski oporavak zadatka i radnog stabla pri prekidu rada). Referenca: [`raw/operativni-vodic.md#L7-L9`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L7-L9).
+  3. *Fizička izolacija kroz Git radna stabla* (zasebni `git worktree` direktorijumi po ulogama i sekvencijalni merge u `main` nakon rebase-a). Referenca: [`raw/operativni-vodic.md#L11-L14`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L11-L14).
+  4. *Nezavisna verifikacija i arbitraža* (verifikaciju sprovodi zaseban model uz binarni verdikt `pass`/`fail` i eskalaciju u `blocked` nakon prekoračenja limita pokušaja). Referenca: [`raw/operativni-vodic.md#L16-L18`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L16-L18).
+  5. *Izvedeni centralni indeks i prevencija konflikata* (generisanje indeksa u `main` posle svakog spajanja; sprečavanje konflikata tipa „dodato na obe strane” kroz usklađivanje izvedenih artefakata pre rebase-a procedurom `alignGeneratedPaths`). Referenca: [`raw/operativni-vodic.md#L20-L22`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L20-L22), [`.agents/AGENTS.md#L63-L68`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/.agents/AGENTS.md#L63-L68) i [[Index]].
+  6. *Programska kontrola pristupa kroz MCP server* (provera aktivnog zakupa nad zadatkom za operacije upisa i verifikacionog pečata `verification.verdict: pass` za produkciju `wiki/`). Referenca: [`raw/operativni-vodic.md#L24-L26`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L24-L26).
+- **Spisak novih Vikilinkova**:
+  - `[[Index]]` (referenca na postojeću konsolidovanu belešku [`wiki/Index.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/wiki/Index.md); u skladu sa ugovorom, nisu izmišljane hipotetičke veze ka nepostojećim beleškama).
+- **Spisak otvorenih pitanja**:
+  1. *Maksimalan broj pokušaja revizije pre blokiranja*: Izvor [`raw/operativni-vodic.md#L17-L18`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L17-L18) navodi prelazak u stanje `blocked` „posle dozvoljenog broja pokušaja“, ali tačan numerički prag nije definisan u tekstu (`nepotvrđeno u izvoru`; u sistemskoj konfiguraciji [`tools/config/agents.yml`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/tools/config/agents.yml) definisano je `maxRevisions: 3`).
+  2. *Dužina trajanja zakupa (Lease TTL)*: Izvor [`raw/operativni-vodic.md#L7-L9`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L7-L9) definiše polje `lease_expires_at`, ali ne navodi vremenski interval trajanja zakupa pre isteka (`nepotvrđeno u izvoru`; u konfiguraciji [`tools/config/agents.yml`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/tools/config/agents.yml) definisano je `lease.ttlMs: 600000`).
+  3. *Specifikacija harnesa i modela po ulogama*: Izvor [`raw/operativni-vodic.md#L16`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-101-researcher/raw/operativni-vodic.md#L16) navodi da verifikaciju vrši „drugi model, ne autor nacrta“, ali ne navodi konkretnu raspodelu ha
 ```
