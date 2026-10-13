@@ -81,6 +81,28 @@ export async function commitAll(dir, message, { actor = 'agentctl' } = {}) {
   return { committed: true, sha: stdout, files: before };
 }
 
+/**
+ * Komituj SAMO navedene putanje. Kontrolni sloj sme da komituje svoje
+ * knjigovodstvo (`tasks/`, `wiki/`, manifest), ali ne i tuđe izmene u radnom
+ * stablu — `git add -A` bez pathspec-a bi pojeo sve što se nađe.
+ */
+export async function commitPaths(dir, paths, message, { actor = 'agentctl' } = {}) {
+  if (!paths.length) return { committed: false, sha: null, files: [] };
+  await git(dir, ['add', '-A', '--', ...paths], { actor });
+  const staged = await git(dir, ['diff', '--cached', '--name-only', '--', ...paths], { allowFailure: true });
+  const files = staged.stdout ? staged.stdout.split('\n').filter(Boolean) : [];
+  if (!files.length) return { committed: false, sha: null, files: [] };
+  const commit = await git(dir, ['commit', '-m', message, '--', ...paths], { actor, allowFailure: true });
+  if (commit.code !== 0) {
+    if (/nothing to commit|no changes added/i.test(`${commit.stdout}\n${commit.stderr}`)) {
+      return { committed: false, sha: null, files };
+    }
+    throw new GitError(`git commit nije uspeo: ${commit.stderr || commit.stdout}`, commit);
+  }
+  const { stdout } = await git(dir, ['rev-parse', 'HEAD']);
+  return { committed: true, sha: stdout, files };
+}
+
 export async function headSha(dir, ref = 'HEAD') {
   const { stdout } = await git(dir, ['rev-parse', ref]);
   return stdout;

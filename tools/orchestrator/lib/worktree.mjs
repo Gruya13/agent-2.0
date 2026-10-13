@@ -5,7 +5,7 @@
  */
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import { branchExists, commitAll, currentBranch, git, hasCommits, headSha, statusPorcelain } from './git.mjs';
+import { branchExists, commitAll, commitPaths, currentBranch, git, hasCommits, headSha, statusPorcelain } from './git.mjs';
 import { exists } from './fsx.mjs';
 
 export const MAIN_BRANCH = 'main';
@@ -148,7 +148,18 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
 
   const dirty = await statusPorcelain(config.root);
   if (dirty.length) {
-    await commitAll(config.root, `agentctl: knjigovodstvo pre merge-a ${branch}`, { actor: 'agentctl' });
+    // Knjigovodstvo crne table se komituje pre merge-a; ostale izmene se ne diraju.
+    await commitPaths(config.root, ['tasks', 'wiki', '.agents/raw-manifest.json'], `agentctl: knjigovodstvo pre merge-a ${branch}`, { actor: 'agentctl' });
+    const stillDirty = await statusPorcelain(config.root);
+    if (stillDirty.length) {
+      const changed = await branchChangedPaths(config, branch);
+      const overlap = stillDirty
+        .map((line) => line.slice(3).trim())
+        .filter((file) => changed.includes(file));
+      if (overlap.length) {
+        return { merged: false, reason: `radno stablo je prljavo u fajlovima koje grana menja: ${overlap.join(', ')}` };
+      }
+    }
   }
 
   const result = await git(config.root, ['merge', '--no-ff', '--no-edit', '-m', message, branch], {

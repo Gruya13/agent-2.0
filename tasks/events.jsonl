@@ -13,3 +13,4 @@
 {"ts":"2026-10-13T20:44:07.253Z","kind":"task.write","task":"TASK-103","actor":"researcher","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T20:44:07.256Z","kind":"task.write","task":"TASK-103","actor":"researcher","status":"ready","phase":"inbox","moved":"active->inbox"}
 {"ts":"2026-10-13T20:44:07.264Z","kind":"phase.failed","task":"TASK-103","role":"researcher","reason":"nema artefakta (exit 0)"}
+{"ts":"2026-10-13T20:44:07.292Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"rawManifestAdded":0,"rawManifestTotal":1,"commit":"fea5963a2255af3325978cd39311b300a559e353"}

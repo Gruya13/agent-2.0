@@ -149,7 +149,7 @@ export async function withFileLock(lockFile, fn, options = {}) {
       try {
         const info = JSON.parse(await fs.readFile(lockFile, 'utf8'));
         const age = Date.now() - Date.parse(info.at ?? 0);
-        stale = Number.isFinite(age) && age > staleMs;
+        stale = (Number.isFinite(age) && age > staleMs) || !isProcessAlive(info.pid);
       } catch {
         stale = true;
       }
@@ -174,4 +174,18 @@ export async function withFileLock(lockFile, fn, options = {}) {
 
 export function toPosix(p) {
   return p.split(path.sep).join('/');
+}
+
+/**
+ * Da li proces još postoji? Zaglavljen lock mrtvog procesa ne sme da blokira
+ * sistem do isteka `staleMs`.
+ */
+export function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
 }

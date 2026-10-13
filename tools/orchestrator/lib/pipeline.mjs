@@ -16,7 +16,7 @@ import { promises as fs } from 'node:fs';
 import { loadConfig } from './config.mjs';
 import { createStore } from './store.mjs';
 import { exists } from './fsx.mjs';
-import { commitAll, log as gitLog } from './git.mjs';
+import { commitPaths, log as gitLog } from './git.mjs';
 import {
   createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
   removeWorktree, removeWorktreesForTask, MAIN_BRANCH,
@@ -48,8 +48,14 @@ export function createPipeline(config, options = {}) {
 
   const now = () => clock().toISOString();
 
+  /**
+   * Knjigovodstvo kontrolnog sloja: komituju se isključivo zone crne table.
+   * Izmene u kodu ili tuđim zonama se ne diraju.
+   */
+  const BOOKKEEPING_PATHS = ['tasks', 'wiki', '.agents/raw-manifest.json'];
+
   async function commitBookkeeping(message, actor = 'agentctl') {
-    return commitAll(config.root, message, { actor });
+    return commitPaths(config.root, BOOKKEEPING_PATHS, message, { actor });
   }
 
   /**
@@ -477,9 +483,9 @@ export function createPipeline(config, options = {}) {
 /** Detektuj artefakte koje je faza proizvela u radnom stablu. */
 async function detectArtifacts(worktreeConfig, { role, before = [] }) {
   const zone = {
-    researcher: [worktreeConfig.vault.drafts],
-    verifier: [path.join(worktreeConfig.vault.tasks, 'reviews')],
-    consolidator: [worktreeConfig.vault.production],
+    researcher: [worktreeConfig.paths.drafts],
+    verifier: [worktreeConfig.paths.reviews],
+    consolidator: [worktreeConfig.paths.production],
   }[role] ?? [];
   const found = [];
   for (const dir of zone) {
