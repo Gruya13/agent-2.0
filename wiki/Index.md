@@ -1,7 +1,7 @@
 ---
 title: Index
-created: 2026-10-13T20:46:03.816Z
-updated: 2026-10-13T20:46:03.816Z
+created: 2026-10-13T20:46:03.750Z
+updated: 2026-10-13T20:46:03.750Z
 authors: [agentctl]
 status: consolidated
 tags: [index]
@@ -9,15 +9,14 @@ tags: [index]
 
 # Index — centralni indeks baze znanja
 
-_Generisano: 2026-10-13T20:46:03.816Z. Ne uređivati ručno; pokreni `agentctl index`._
+_Generisano: 2026-10-13T20:46:03.750Z. Ne uređivati ručno; pokreni `agentctl index`._
 
-## Beleške (1)
+## Beleške (0)
 
 | Beleška | Status | Oznake | Veze |
 |---|---|---|---|
-| [[Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja]] | consolidated | #arhitektura #agenti | 1 |
+| _nema belešaka_ | — | — | — |
 
 ## Oznake
 
-- #agenti (1)
-- #arhitektura (1)
+- _nema oznaka_
