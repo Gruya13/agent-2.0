@@ -168,3 +168,4 @@
 {"ts":"2026-10-13T23:12:13.107Z","kind":"task.write","task":"TASK-102","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T23:12:13.109Z","kind":"task.write","task":"TASK-102","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T23:12:13.112Z","kind":"task.write","task":"TASK-102","actor":"dsh","status":"ready","phase":"inbox","moved":"active->inbox"}
+{"ts":"2026-10-13T23:12:13.153Z","kind":"phase.rejected","task":"TASK-102","role":"verifier","attempts":3}
