@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: verified
+status: review
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T23:00:55.597Z
+updated: 2026-10-13T23:10:31.644Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -42,21 +42,21 @@ verification:
   by: dsh
 challenge:
   verdict: reproducible
-  revision: d8318d6ab7d87fe5534dd9c5a3e69cea569df5be
+  revision: db590fbd2add9ab79fc9b1ec2bcbe88718e21e9d
   scripts:
     - tasks/challenges/TASK-102/NALAZ-1.sh
     - tasks/challenges/TASK-102/NALAZ-2.sh
     - tasks/challenges/TASK-102/NALAZ-3.sh
-    - tasks/challenges/TASK-102/NALAZ-4.sh
-    - tasks/challenges/TASK-102/NALAZ-5.sh
   reproduced:
     - tasks/challenges/TASK-102/NALAZ-1.sh
     - tasks/challenges/TASK-102/NALAZ-2.sh
     - tasks/challenges/TASK-102/NALAZ-3.sh
   falsePositives: 0
+  unexecuted: []
   executed: izvršeno
+  correlationRisk: true
   by: dsh
-  at: 2026-10-13T22:55:24.659Z
+  at: 2026-10-13T23:10:31.638Z
 blocked_reason: null
 history:
   - at: 2026-10-13T22:42:31.949Z
@@ -129,6 +129,21 @@ history:
     status: verified
     actor: dsh
     note: verifikator dao pečat
+  - at: 2026-10-13T23:00:55.672Z
+    status: in_progress
+    actor: dsh
+  - at: 2026-10-13T23:10:31.639Z
+    status: in_progress
+    actor: dsh
+    note: "red-team: reproducible"
+  - at: 2026-10-13T23:10:31.641Z
+    status: in_progress
+    actor: dsh
+    note: "red-team: reproducible"
+  - at: 2026-10-13T23:10:31.644Z
+    status: review
+    actor: dsh
+    note: red-team oborio 3 tvrdnji; vraćeno autoru
 lock_token: null
 ---
 
@@ -266,4 +281,43 @@ Tri informativna zapažanja (npr. citiranje merge-kapije upućuje na sekciju 1 u
 Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (poslednja linija `VERDICT: pass`). Commit nije moguć iz ovog worktree-a: Git indeks je na read-only delu (`.git/worktrees/…/index.lock`), pa fajl ostaje nekomitovan za kontrolni sloj.
 
 VERDICT: pass
+```
+
+### Faza challenge / red-team (2026-10-13T23:10:31.640Z)
+
+- harnes: dsh
+- zamrznuta revizija: db590fbd2add9ab79fc9b1ec2bcbe88718e21e9d
+- verdikt: reproducible
+- skripti: 3, reprodukovano: 3, lažnih: 0, neizvršenih: 0 (izvršavanje: izvršeno)
+- korelacioni rizik (isti vendor kao verifikator): DA
+- izveštaj: tasks/challenges/TASK-102.md
+
+| skript | izlaz | reprodukovan |
+|---|---|---|
+| tasks/challenges/TASK-102/NALAZ-1.sh | 0 | DA |
+| tasks/challenges/TASK-102/NALAZ-2.sh | 0 | DA |
+| tasks/challenges/TASK-102/NALAZ-3.sh | 0 | DA |
+
+```
+Sve tri nalaza su reprodukovana na svežem klonu zamrznute revizije `db590fbd2add9ab79fc9b1ec2bcbe88718e21e9d`; nijedna izmena nije izašla iz `tasks/challenges/`.
+
+## Šta je urađeno
+
+**NALAZ-1.sh — zone `researcher`/`extractor` se preklapaju.** Kroz pravi MCP protokol, uz živ zakup, `researcher` uspešno upisuje `wiki/drafts/fragments/Podmetnut.md`, a `extractor` `wiki/drafts/Preuzeto.md`. Uzrok: `ROLE_WRITE_ZONES` obe uloge svodi na zonu `draft` (`tools/mcp/obsidian-mcp.mjs:95-114`), a `zoneOf` svaki `wiki/drafts/…` vodi kao `draft`. Nacrt (klj. tvrdnja 1) tvrdi suprotno.
+
+**NALAZ-2.sh — `librarian` i `consolidator` dele `production`.** `librarian` iz običnog verifikovanog zadatka stvara novu produkcionu belešku, a `consolidator` menja postojeću belešku iz `audit_scope`. Granica visi samo o `task.kind`, ne o ulozi (`requireTaskContext`, redovi 216–293). Nacrt (klj. tvrdnja 5) razdvaja te dve uloge.
+
+**NALAZ-3.sh — reproducibilan nalaz van `challengeMaxScripts` se tiho gubi.** Fixture sa 4 skripte (četvrta je jedina koja obara tvrdnju) kroz `runReproductionScripts` daje samo 3 rezultata, bez ijednog `reproduced`: `scripts.slice(0, max)` (`reproduce.mjs:74`, `max=3` iz `agents.yml:36`) odbacuje nalaz bez traga. Nacrt (klj. tvrdnja 4) tvrdi da oboren nalaz zaustavlja spajanje.
+
+Negativno (nije oboreno, navedeno u izveštaju): svih 14 citata iz izvora, otisak izvora, kod-citati, prva kapija za `raw/`/`tools/`. Test set je 119/119 uz očišćene nasleđene `OBSIDIAN_*`/`WIKI_*` — prvobitnih 6 padova je bio artefakt moje sesije, **ne** nalaz.
+
+Sumnje (8, bez skripta, ne blokiraju): `wiki/Index.md` prolazi prvu kapiju; kapija se isključuje preko `pipeline.challenge`/`challengeExecute`; pogrešna atribucija sekcije 1 vs invarijanta 16; `Index.md` nazvan produkcionom beleškom; mrtav `ROLE_WRITE_PREFIXES`; podrazumevani `mock` adapter; heš fragmenta se ne sprovodi na sloju upisa; `phase.rejected` ne nosi `falsePositives`.
+
+Izveštaj: `tasks/challenges/TASK-102.md`; skripte: `tasks/challenges/TASK-102/NALAZ-1..3.sh` (sve exit 0 na svežem klonu).
+
+```
+NALAZI: 3
+LAZNI: 0
+SUM NJE: 8
+```
 ```
