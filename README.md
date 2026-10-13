@@ -118,6 +118,41 @@ node tools/orchestrator/cli.mjs run --rounds 4 \
 `adapter: harness` (`agy` → `dsh` → `codex`). Izlazni kod harnesa nije dokaz
 uspeha: faza se priznaje samo ako je artefakt stvarno nastao u njenoj zoni.
 
+### Pravi tok je izvršen (TASK-101)
+
+Mali izvor `raw/operativni-vodic.md` (26 redova) prošao je kroz sva tri modela:
+
+| Faza | Harnes | Ishod |
+|---|---|---|
+| research | `agy` (Gemini) | nacrt `wiki/drafts/Operativni_vodic_asinhronog_sistema.md`, 74 reda, frontmatter po ugovoru |
+| verify (1) | `dsh` (DeepSeek) | **fail, 3 dokazana nalaza** → zadatak vraćen istraživaču |
+| research (2) | `agy` | prerađen nacrt na svežem radnom stablu |
+| verify (2) | `dsh` | **pass, 0 nalaza**, eksplicitno potvrđeno da su N1–N3 otklonjeni |
+| consolidate | `codex` | produkciona beleška u `wiki/`, merge u `main` (`a186fc8c`) |
+
+Prvi verdikt je oborio **tri stvarne stvari**, dokazima iz repozitorijuma:
+
+- **N1 (naš propust):** novi izvor je ušao u manifest, ali ne i u Git, pa ga sveže
+  radno stablo verifikatora nije videlo (`raw.deleted`), a citati iz nacrta nisu
+  bili reproduktivni. Ispravka: `raw/` je deo knjigovodstva, ali se izmenjen ili
+  obrisan izvor **nikad** ne komituje — prekršaj se ne sme sakriti u istoriji.
+- **N2 (netačna premisa u nacrtu):** tvrdnja da „nijedna grana ne nosi indeks"
+  nije tačna; dokazano `git ls-tree` nad granom. Pravi mehanizam je poravnavanje
+  izvedenih artefakata pre rebase-a — ispravljeno i u nacrtu i u našoj
+  dokumentaciji, koja je istu stvar tvrdila preširoko.
+- **N3:** `wiki/Index.md` je nazvan „verifikovana" beleška, a `status` mu je
+  `consolidated`.
+
+Živi tok je otkrio i dva propusta koja mock **nije mogao** da pokaže:
+
+1. **Zaleđeno radno stablo pri ponovnom pokušaju.** Ponovni `research` je
+   nastavljao u starom worktree-u, bez izvora koji su u međuvremenu komitovani.
+   Sada svaki pokušaj faze kreće od sveže grane na aktuelnom `main`.
+2. **Odbijen verdikt nije bio „napredak" za petlju**, pa se `run()` zaustavljao
+   posle prvog `fail` i dozvoljeni broj pokušaja se nikad nije potrošio.
+
+Oba su pokrivena regresionim testovima (`tests/pipeline.test.mjs`).
+
 Harnesi se pozivaju neinteraktivno, sa `cwd` postavljenim na njihovo izolovano
 radno stablo i sa `OBSIDIAN_ROLE`/`OBSIDIAN_VAULT` u okruženju, pa im MCP server
 automatski daje tačno onu zonu upisa koja im pripada:
