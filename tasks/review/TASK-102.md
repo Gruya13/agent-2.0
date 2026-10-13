@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: verified
+status: review
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T22:48:19.627Z
+updated: 2026-10-13T22:55:24.665Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -41,7 +41,23 @@ verification:
     Nacrt nije menjan; predlozi su dati tekstom u revizorskom tragu.
     VERDICT: pass
   by: dsh
-challenge: null
+challenge:
+  verdict: reproducible
+  revision: d8318d6ab7d87fe5534dd9c5a3e69cea569df5be
+  scripts:
+    - tasks/challenges/TASK-102/NALAZ-1.sh
+    - tasks/challenges/TASK-102/NALAZ-2.sh
+    - tasks/challenges/TASK-102/NALAZ-3.sh
+    - tasks/challenges/TASK-102/NALAZ-4.sh
+    - tasks/challenges/TASK-102/NALAZ-5.sh
+  reproduced:
+    - tasks/challenges/TASK-102/NALAZ-1.sh
+    - tasks/challenges/TASK-102/NALAZ-2.sh
+    - tasks/challenges/TASK-102/NALAZ-3.sh
+  falsePositives: 0
+  executed: izvršeno
+  by: dsh
+  at: 2026-10-13T22:55:24.659Z
 blocked_reason: null
 history:
   - at: 2026-10-13T22:42:31.949Z
@@ -84,6 +100,21 @@ history:
     status: verified
     actor: dsh
     note: verifikator dao pečat
+  - at: 2026-10-13T22:48:19.700Z
+    status: in_progress
+    actor: dsh
+  - at: 2026-10-13T22:55:24.660Z
+    status: in_progress
+    actor: dsh
+    note: "red-team: reproducible"
+  - at: 2026-10-13T22:55:24.662Z
+    status: in_progress
+    actor: dsh
+    note: "red-team: reproducible"
+  - at: 2026-10-13T22:55:24.665Z
+    status: review
+    actor: dsh
+    note: red-team oborio 3 tvrdnji; vraćeno autoru
 lock_token: null
 ---
 
@@ -152,4 +183,47 @@ Verifikacija TASK-102 je završena. Revizorski trag je upisan u `tasks/reviews/T
 Nacrt nije menjan; predlozi su dati tekstom u revizorskom tragu.
 
 VERDICT: pass
+```
+
+### Faza challenge / red-team (2026-10-13T22:55:24.662Z)
+
+- harnes: dsh
+- zamrznuta revizija: d8318d6ab7d87fe5534dd9c5a3e69cea569df5be
+- verdikt: reproducible
+- skripti: 5, reprodukovano: 3, lažnih: 0 (izvršavanje: izvršeno)
+- izveštaj: tasks/challenges/TASK-102.md
+
+| skript | izlaz | reprodukovan |
+|---|---|---|
+| tasks/challenges/TASK-102/NALAZ-1.sh | 0 | DA |
+| tasks/challenges/TASK-102/NALAZ-2.sh | 0 | DA |
+| tasks/challenges/TASK-102/NALAZ-3.sh | 0 | DA |
+
+```
+Red-team faza za **TASK-102** je završena. Radio sam na zamrznutoj reviziji `d8318d6` i napadao nacrt `wiki/drafts/Sest_uloga_i_dve_kapije.md`. Ništa nisam popravljao; sve što sam napisao je u `tasks/challenges/`.
+
+## Nalazi (svih 5 reprodukovano u svežem klonu, exit 0)
+
+| # | Oborena tvrdnja | Dokaz |
+|---|---|---|
+| **NALAZ-1** | Prva kapija ne propušta izmene `tools/`, `raw/`, `.agents/` (claim 6, OQ1) | `git mv tools/infra.mjs wiki/infra.mjs` → kapija vidi samo `wiki/infra.mjs`, `mergeIntoMain` vraća `merged:true`, a `tools/infra.mjs` nestaje iz `main`. Uzrok: `git diff --name-only` bez `--no-renames`. |
+| **NALAZ-2** | „Nijedna uloga ne piše u tuđu zonu" (claim 1) | `ROLE_WRITE_ZONES` daje i `extractor` i `researcher` zonu `['draft']`; kroz MCP `researcher` upisuje u `wiki/drafts/fragments/`, a `extractor` u `wiki/drafts/`. `ROLE_WRITE_PREFIXES` koji bi ih razdvojio je mrtav kod. |
+| **NALAZ-3** | Raspodela harnesa je usaglašena sa `.agents/AGENTS.md`, sekcija 5 (OQ3) | Sekcija 5 zabranjuje isti harnes u dve uzastopne faze, a `extract→research` vozi `agy`, `verify→challenge` vozi `dsh`. |
+| **NALAZ-4** | „Ako se tvrdnja obori, spajanje se zaustavlja" / „bez čistog nalaza nema spajanja" (claim 4, 6) | Red-team harnes padne (`exit 1`) ostavivši `NALAZ-1.sh`; `runChallenge` vraća `clean` (`executed:"isključeno"`), a `runConsolidate` spaja granu u `main`. Uslov `… && result.ok` preskače izvršavanje. |
+| **NALAZ-5** | Isto (claim 4, OQ4) | Četiri skripte, `challengeMaxScripts:3`; `NALAZ-4.sh` (koji obara tvrdnju) se ne izvršava, `verdict:"clean"`, `falsePositives:3`, merge prolazi. |
+
+Svih 5 skripti je pokrenuto i samostalno i kroz simulaciju tačnog kontrolnog toka (svež `git clone --no-local` + `checkout d8318d6` + kopija skripta u koren klona + `bash NALAZ-n.sh`) — svaki ispisuje `OBORENO:` i izlazi sa 0.
+
+## Sumnje (bez skripta, ne blokiraju)
+1. `challengeExecute: false` / `pipeline.challenge: false` isključuju drugu kapiju (ugovor, invarijanta 20, to priznaje; nacrt pominje parametre ali ne i prekidač).
+2. Nema sandbox-a pri izvršavanju skripti red-teama — kod se pokreće sa `cwd` u klonu, ali može da piše van njega.
+3. `isReproductionScript` nije usidren (`/NALAZ-.*\.(sh|py)$/i`), a `reproduced` se svodi na izlazni kod 0 bez provere `OBORENO` — skript koji greškom izađe sa 0 blokira merge kao „reproduktivan".
+
+Isporuke: `tasks/challenges/TASK-102.md`, `tasks/challenges/TASK-102/NALAZ-1.sh` … `NALAZ-5.sh`. `git status` pokazuje samo `tasks/challenges/`; `agentctl lint` je čist (0 grešaka). Ništa van moje zone nije dirano.
+
+```
+NALAZI: 5
+LAZNI: 0
+SUM NJE: 3
+```
 ```
