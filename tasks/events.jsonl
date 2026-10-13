@@ -93,3 +93,4 @@
 {"ts":"2026-10-13T21:51:44.327Z","kind":"task.write","task":"TASK-101","actor":"researcher","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T21:51:44.329Z","kind":"task.write","task":"TASK-101","actor":"researcher","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T21:51:44.331Z","kind":"task.write","task":"TASK-101","actor":"agy","status":"review","phase":"review","moved":"active->review"}
+{"ts":"2026-10-13T21:51:44.355Z","kind":"phase.done","task":"TASK-101","phase":"research","role":"researcher","artifacts":["wiki/drafts/Operativni_vodic_asinhronog_sistema.md"],"commit":"05e872c5cb8a2db1839f03d725f674d9c898692d"}
