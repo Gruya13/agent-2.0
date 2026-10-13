@@ -94,8 +94,11 @@ test('E2E: izvor -> nacrt -> verifikacija -> konsolidacija u main', async () => 
 
   // Revizorski trag: svaki doprinos nosi ime svog agenta.
   const history = await gitLog(config.root, { limit: 30, format: '%an|%s' });
+  // Autor komita je IDENTITET koji je radio: vendor za prave harnese, a
+  // `mock-<uloga>` za deterministički zamenik. Tako revizorski trag kaže koji je
+  // model doprineo, a ne samo koja uloga.
   const authors = new Set(history.map((l) => l.split('|')[0]));
-  for (const expected of ['researcher', 'verifier', 'consolidator', 'agentctl']) {
+  for (const expected of ['mock-researcher', 'mock-verifier', 'mock-consolidator', 'agentctl']) {
     assert.ok(authors.has(expected), `git istorija mora da sadrži autora "${expected}" (${[...authors].join(',')})`);
   }
   assert.ok(history.some((l) => l.includes('researcher(TASK-101)')));

@@ -34,6 +34,21 @@ export function agentEnv({ role, harness, cwd, task, config = null }) {
 export const TASK_CONTEXT_FILE = '.runtime/task-context.json';
 
 /**
+ * Identitet koji se upisuje kao vlasnik zakupa i kao autor Git komita.
+ *
+ * Za prave harnese to je IME VENDORA (`agy`, `dsh`, `codex`), pa revizorski trag
+ * kaže koji je model stvarno doprineo — ne samo koja uloga. Isti identitet mora
+ * da vidi i MCP server (`OBSIDIAN_AGENT`), inače bi legitimni upis bio odbijen.
+ * Deterministički zamenik se predstavlja kao `mock-<uloga>`, da se nikad ne
+ * pomeša sa pravim modelom.
+ */
+export function identityFor(config, role) {
+  const spec = config?.agents?.[role];
+  if (!spec) return role;
+  return spec.adapter === 'mock' ? `mock-${role}` : (spec.harness ?? role);
+}
+
+/**
  * Upiši kontekst zadatka u radno stablo pre poziva harnesa.
  *
  * MCP server beleški čita ovaj fajl kada `OBSIDIAN_TASK` nije u okruženju (vidi

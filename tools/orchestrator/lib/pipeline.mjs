@@ -21,7 +21,7 @@ import {
   createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
   removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
 } from './worktree.mjs';
-import { buildPrompt, parseVerdict, runAgent } from './agents/index.mjs';
+import { buildPrompt, identityFor, parseVerdict, runAgent } from './agents/index.mjs';
 import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
 import { listNotes, normalizeConsolidatedNote, renderIndex } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
@@ -39,15 +39,6 @@ const ROLE_OF_PHASE = {
   verify: 'verifier',
   consolidate: 'consolidator',
 };
-
-/**
- * Vlasnik zakupa je IDENTITET HARNESA (npr. `agy`, `dsh`, `codex`), a ne ime
- * uloge: MCP sloj vezuje zakup za `OBSIDIAN_AGENT`, pa bi dva procesa iste
- * uloge inače mogla da pišu pod istim zakupom.
- */
-function ownerFor(config, role) {
-  return config.agents?.[role]?.harness ?? role;
-}
 
 export function createPipeline(config, options = {}) {
   const clock = options.clock ?? (() => new Date());
@@ -163,7 +154,7 @@ export function createPipeline(config, options = {}) {
 
   /** Zajednički epilog neuspeha: oslobodi zakup, skloni radno stablo, zabeleži. */
   async function failPhase(id, role, { reason, toStatus = 'ready' }) {
-    const owner = ownerFor(config, role);
+    const owner = identityFor(config, role);
     const task = await store.tryGet(id);
     if (task && task.data.lock_owner === owner) {
       try {
@@ -190,7 +181,7 @@ export function createPipeline(config, options = {}) {
     }
 
     const role = ROLE_OF_PHASE.research;
-    const owner = ownerFor(config, role);
+    const owner = identityFor(config, role);
     await store.claim(id, owner);
     const claimed = await store.get(id);
     const { path: wt, branch, config: wtConfig } = await prepareWorktree({
@@ -215,7 +206,7 @@ export function createPipeline(config, options = {}) {
     const produced = await detectArtifacts(wtConfig, { role, before: [] });
     if (!result.ok || produced.length === 0) {
       await store.updateBody(id, {
-        actor: role,
+        actor: owner,
         append: `### Neuspešna faza research (${now()})\n\n\`\`\`\n${result.output.slice(0, 2000)}\n\`\`\``,
         note: 'neuspešna faza research',
       });
@@ -223,10 +214,10 @@ export function createPipeline(config, options = {}) {
       return { phase: 'research', task: id, ok: false, reason: 'nema artefakta', output: result.output };
     }
 
-    const commit = await commitWorktreeSafe(config, id, role, `researcher(${id}): nacrt iz ${claimed.data.source}`, role);
-    await store.attachArtifacts(id, produced, { actor: role, note: `nacrt: ${produced.join(', ')}` });
+    const commit = await commitWorktreeSafe(config, id, role, `researcher(${id}): nacrt iz ${claimed.data.source}`, owner);
+    await store.attachArtifacts(id, produced, { actor: owner, note: `nacrt: ${produced.join(', ')}` });
     await store.updateBody(id, {
-      actor: role,
+      actor: owner,
       append: [
         `### Faza research (${now()})`,
         '',
@@ -255,7 +246,7 @@ export function createPipeline(config, options = {}) {
       throw new PipelineError(`${id} nije u stanju review (${task.data.status})`, 'NOT_REVIEW');
     }
     const role = ROLE_OF_PHASE.verify;
-    const owner = ownerFor(config, role);
+    const owner = identityFor(config, role);
     const researcherBranch = `agent/${ROLE_OF_PHASE.research}/${id}`;
     await store.claim(id, owner);
     const claimed = await store.get(id);
@@ -288,16 +279,16 @@ export function createPipeline(config, options = {}) {
       return { phase: 'verify', task: id, ok: false, reason: 'nema verdikta', output: result.output };
     }
 
-    const commit = await commitWorktreeSafe(config, id, role, `verifier(${id}): revizija -> ${verdict}`, role);
+    const commit = await commitWorktreeSafe(config, id, role, `verifier(${id}): revizija -> ${verdict}`, owner);
     await store.setVerification(id, {
       verdict,
       harness: result.harness,
       at: now(),
       commit: commit.sha,
       summary: result.output.slice(-2000),
-    }, { actor: role });
+    }, { actor: owner });
     await store.updateBody(id, {
-      actor: role,
+      actor: owner,
       append: [
         `### Faza verify (${now()})`,
         '',
@@ -349,7 +340,7 @@ export function createPipeline(config, options = {}) {
       throw new PipelineError(`${id} nije u stanju verified (${task.data.status})`, 'NOT_VERIFIED');
     }
     const role = ROLE_OF_PHASE.consolidate;
-    const owner = ownerFor(config, role);
+    const owner = identityFor(config, role);
     const verifierBranch = `agent/${ROLE_OF_PHASE.verify}/${id}`;
     await store.claim(id, owner);
     const claimed = await store.get(id);
@@ -380,7 +371,7 @@ export function createPipeline(config, options = {}) {
     const lintWorktree = await lintVault(wtConfig);
     if (lintWorktree.errors.length) {
       await store.updateBody(id, {
-        actor: role,
+        actor: owner,
         append: `### Konsolidacija odbijena (${now()})\n\nLinter u radnom stablu prijavljuje greške:\n\n\`\`\`\n${lintWorktree.errors.map((e) => `${e.code} ${e.target}: ${e.message}`).join('\n')}\n\`\`\``,
         note: 'konsolidacija odbijena od lintera',
       });
@@ -399,7 +390,7 @@ export function createPipeline(config, options = {}) {
       // Izlazni kod 0 nije dokaz: bez produkcione beleške u radnom stablu nema
       // šta da se spoji u `main`.
       await store.updateBody(id, {
-        actor: role,
+        actor: owner,
         append: `### Konsolidacija bez artefakta (${now()})\n\nHarnes je izašao sa kodom ${result.exitCode}, ali u \`${config.vault.production}/\` nema ni jedne produkcione beleške.\n\n\`\`\`\n${result.output.slice(0, 2000)}\n\`\`\``,
         note: 'konsolidacija bez produkcione beleške',
       });
@@ -412,10 +403,10 @@ export function createPipeline(config, options = {}) {
     for (const rel of produced) {
       await normalizeConsolidatedNote(wt, rel, { authors: contributors, now: now() });
     }
-    await store.setArtifacts(id, produced, { actor: role, note: `konsolidovano: ${produced.join(', ')}` });
+    await store.setArtifacts(id, produced, { actor: owner, note: `konsolidovano: ${produced.join(', ')}` });
 
     const branch = `agent/${role}/${id}`;
-    const commit = await commitWorktreeSafe(config, id, role, `consolidator(${id}): konsolidacija u wiki/`, role);
+    const commit = await commitWorktreeSafe(config, id, role, `consolidator(${id}): konsolidacija u wiki/`, owner);
     // Grana se rebase-uje na aktuelni main, izvedeni artefakti (Index.md) se
     // poravnavaju, pa tek onda sledi eksplicitan merge commit.
     const merge = await mergeIntoMain(config, {
