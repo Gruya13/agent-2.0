@@ -175,3 +175,4 @@
 {"ts":"2026-10-13T23:15:54.923Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T23:15:54.926Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T23:15:54.927Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"review","phase":"review","moved":"active->review"}
+{"ts":"2026-10-13T23:15:54.958Z","kind":"phase.done","task":"TASK-102","phase":"research","role":"researcher","artifacts":["wiki/drafts/Sest_uloga_i_dve_kapije.md"],"commit":"7d31616e0f49e0ddcfef1328c204e01508e78296"}
