@@ -40,6 +40,15 @@ const ROLE_OF_PHASE = {
   consolidate: 'consolidator',
 };
 
+/**
+ * Vlasnik zakupa je IDENTITET HARNESA (npr. `agy`, `dsh`, `codex`), a ne ime
+ * uloge: MCP sloj vezuje zakup za `OBSIDIAN_AGENT`, pa bi dva procesa iste
+ * uloge inače mogla da pišu pod istim zakupom.
+ */
+function ownerFor(config, role) {
+  return config.agents?.[role]?.harness ?? role;
+}
+
 export function createPipeline(config, options = {}) {
   const clock = options.clock ?? (() => new Date());
   const logger = options.logger ?? (() => {});
@@ -121,10 +130,11 @@ export function createPipeline(config, options = {}) {
 
   /** Zajednički epilog neuspeha: oslobodi zakup, skloni radno stablo, zabeleži. */
   async function failPhase(id, role, { reason, toStatus = 'ready' }) {
+    const owner = ownerFor(config, role);
     const task = await store.tryGet(id);
-    if (task && task.data.lock_owner === role) {
+    if (task && task.data.lock_owner === owner) {
       try {
-        await store.release(id, role, { toStatus, note: `neuspeh: ${reason}` });
+        await store.release(id, owner, { toStatus, note: `neuspeh: ${reason}` });
       } catch (error) {
         logger(`release nije uspeo za ${id}: ${error.message}`);
       }
@@ -147,7 +157,8 @@ export function createPipeline(config, options = {}) {
     }
 
     const role = ROLE_OF_PHASE.research;
-    await store.claim(id, role);
+    const owner = ownerFor(config, role);
+    await store.claim(id, owner);
     const claimed = await store.get(id);
     const { path: wt, branch, config: wtConfig } = await prepareWorktree({ id, role });
     await store.emit('phase.start', { task: id, phase: 'research', role, worktree: wt, branch });
@@ -194,7 +205,7 @@ export function createPipeline(config, options = {}) {
       ].join('\n'),
       note: 'faza research završena',
     });
-    await store.release(id, role, { toStatus: 'review', note: `nacrt spreman: ${produced.join(', ')}` });
+    await store.release(id, owner, { toStatus: 'review', note: `nacrt spreman: ${produced.join(', ')}` });
     await commitBookkeeping(`agentctl: ${id} -> review (nacrt: ${produced.join(', ')})`);
     await store.emit('phase.done', { task: id, phase: 'research', role, artifacts: produced, commit: commit.sha });
     logger(`research: ${id} -> ${produced.join(', ')} (${result.harness})`);
@@ -209,8 +220,9 @@ export function createPipeline(config, options = {}) {
       throw new PipelineError(`${id} nije u stanju review (${task.data.status})`, 'NOT_REVIEW');
     }
     const role = ROLE_OF_PHASE.verify;
+    const owner = ownerFor(config, role);
     const researcherBranch = `agent/${ROLE_OF_PHASE.research}/${id}`;
-    await store.claim(id, role);
+    await store.claim(id, owner);
     const claimed = await store.get(id);
     const { path: wt, branch: _branch, config: wtConfig } = await prepareWorktree({ id, role, base: researcherBranch });
     await store.emit('phase.start', { task: id, phase: 'verify', role, worktree: wt });
@@ -265,7 +277,7 @@ export function createPipeline(config, options = {}) {
     });
 
     if (verdict === 'pass') {
-      await store.release(id, role, { toStatus: 'verified', note: 'verifikator dao pečat' });
+      await store.release(id, owner, { toStatus: 'verified', note: 'verifikator dao pečat' });
       await commitBookkeeping(`agentctl: ${id} -> verified (${result.harness})`);
       await store.emit('phase.done', { task: id, phase: 'verify', role, verdict });
       logger(`verify: ${id} -> pass`);
@@ -284,7 +296,7 @@ export function createPipeline(config, options = {}) {
       await store.emit('phase.failed', { task: id, role, reason: 'previse revizija' });
       return { phase: 'verify', task: id, ok: false, verdict: 'fail', blocked: true };
     }
-    await store.release(id, role, { toStatus: 'ready', note: `odbijen nacrt (pokušaj ${attempts}); vraćeno istraživaču` });
+    await store.release(id, owner, { toStatus: 'ready', note: `odbijen nacrt (pokušaj ${attempts}); vraćeno istraživaču` });
     await commitBookkeeping(`agentctl: ${id} -> ready (nacrt odbijen, pokušaj ${attempts})`);
     await removeWorktree(config, id, { role });
     await store.emit('phase.rejected', { task: id, role, attempts });
@@ -300,8 +312,9 @@ export function createPipeline(config, options = {}) {
       throw new PipelineError(`${id} nije u stanju verified (${task.data.status})`, 'NOT_VERIFIED');
     }
     const role = ROLE_OF_PHASE.consolidate;
+    const owner = ownerFor(config, role);
     const verifierBranch = `agent/${ROLE_OF_PHASE.verify}/${id}`;
-    await store.claim(id, role);
+    await store.claim(id, owner);
     const claimed = await store.get(id);
     const { path: wt, config: wtConfig } = await prepareWorktree({ id, role, base: verifierBranch });
     await store.emit('phase.start', { task: id, phase: 'consolidate', role, worktree: wt });

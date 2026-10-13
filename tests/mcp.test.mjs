@@ -160,11 +160,12 @@ test('MCP: pretraga, čitanje zaglavlja, backlinkovi', async (t) => {
 
 test('MCP: zone upisa se sprovode po ulozi, uz važeći zakup', async (t) => {
   const vault = await seededVault();
+  // Zakup je vezan za identitet harnesa (`agy`/`dsh`/`codex`), ne za ime uloge.
   const cases = [
-    { role: 'researcher', owner: 'researcher', status: 'in_progress', allowed: ['wiki/drafts/Produkcija.md'], denied: ['wiki/Produkcija.md', 'raw/x.md', 'tasks/reviews/R.md'] },
-    { role: 'verifier', owner: 'verifier', status: 'in_progress', allowed: ['tasks/reviews/TASK-101.md'], denied: ['wiki/Produkcija.md', 'wiki/drafts/Produkcija.md', 'raw/x.md'] },
-    { role: 'consolidator', owner: 'consolidator', status: 'verified', allowed: ['wiki/Produkcija.md'], denied: ['raw/x.md', 'tasks/inbox/TASK-101.md', 'wiki/Druga.md'] },
-    { role: 'readonly', owner: 'consolidator', status: 'verified', allowed: [], denied: ['wiki/Produkcija.md', 'wiki/drafts/Produkcija.md', 'tasks/reviews/R.md'] },
+    { role: 'researcher', agent: 'agy', owner: 'agy', status: 'in_progress', allowed: ['wiki/drafts/Produkcija.md'], denied: ['wiki/Produkcija.md', 'raw/x.md', 'tasks/reviews/R.md'] },
+    { role: 'verifier', agent: 'dsh', owner: 'dsh', status: 'in_progress', allowed: ['tasks/reviews/TASK-101.md'], denied: ['wiki/Produkcija.md', 'wiki/drafts/Produkcija.md', 'raw/x.md'] },
+    { role: 'consolidator', agent: 'codex', owner: 'codex', status: 'verified', allowed: ['wiki/Produkcija.md'], denied: ['raw/x.md', 'tasks/inbox/TASK-101.md', 'wiki/Druga.md'] },
+    { role: 'readonly', agent: 'codex', owner: 'codex', status: 'verified', allowed: [], denied: ['wiki/Produkcija.md', 'wiki/drafts/Produkcija.md', 'tasks/reviews/R.md'] },
   ];
 
   for (const [index, entry] of cases.entries()) {
@@ -174,7 +175,7 @@ test('MCP: zone upisa se sprovode po ulozi, uz važeći zakup', async (t) => {
       status: entry.status,
       artifacts: ['wiki/drafts/Produkcija.md'],
     });
-    const c = await connect(vault.root, entry.role, entry.role, t, { OBSIDIAN_TASK: id });
+    const c = await connect(vault.root, entry.role, entry.agent, t, { OBSIDIAN_TASK: id });
     for (const allowed of entry.allowed) {
       const result = await c.callTool('obsidian_write_note', { path: allowed, content: '# proba\n' });
       assert.equal(result.isError, false, `${entry.role} mora moći da piše u ${allowed}: ${result.content[0].text}`);
@@ -202,7 +203,7 @@ test('MCP: upis bez zadatka, sa isteklim zakupom ili pogrešnim stanjem je odbij
   bezZadatka.close();
 
   // 2. Zadatak postoji, ali zakup je istekao.
-  await makeTask(vault, { id: 'TASK-201', owner: 'consolidator', status: 'verified', leaseExpires: PROSLOST });
+  await makeTask(vault, { id: 'TASK-201', owner: 'codex', status: 'verified', leaseExpires: PROSLOST });
   const istekao = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-201' });
   const expired = await istekao.callTool('obsidian_write_note', { path: 'wiki/Produkcija.md', content: '# x\n' });
   assert.equal(expired.isError, true);
@@ -210,7 +211,7 @@ test('MCP: upis bez zadatka, sa isteklim zakupom ili pogrešnim stanjem je odbij
   istekao.close();
 
   // 3. Zadatak nije verifikovan (nema pečata) — produkcioni upis je prekršaj.
-  await makeTask(vault, { id: 'TASK-202', owner: 'consolidator', status: 'in_progress' });
+  await makeTask(vault, { id: 'TASK-202', owner: 'codex', status: 'in_progress' });
   const bezPecata = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-202' });
   const unverified = await bezPecata.callTool('obsidian_write_note', { path: 'wiki/Produkcija.md', content: '# x\n' });
   assert.equal(unverified.isError, true, 'produkcija bez verifikacije mora biti odbijena');
@@ -218,7 +219,7 @@ test('MCP: upis bez zadatka, sa isteklim zakupom ili pogrešnim stanjem je odbij
   bezPecata.close();
 
   // 4. Zakup drži druga uloga.
-  await makeTask(vault, { id: 'TASK-203', owner: 'researcher', status: 'verified' });
+  await makeTask(vault, { id: 'TASK-203', owner: 'agy', status: 'verified' });
   const tudjiZakup = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-203' });
   const stolen = await tudjiZakup.callTool('obsidian_write_note', { path: 'wiki/Produkcija.md', content: '# x\n' });
   assert.equal(stolen.isError, true);
@@ -226,7 +227,7 @@ test('MCP: upis bez zadatka, sa isteklim zakupom ili pogrešnim stanjem je odbij
   tudjiZakup.close();
 
   // 5. Beleška nije artefakt zadatka.
-  await makeTask(vault, { id: 'TASK-204', owner: 'consolidator', status: 'verified', artifacts: ['wiki/drafts/Produkcija.md'] });
+  await makeTask(vault, { id: 'TASK-204', owner: 'codex', status: 'verified', artifacts: ['wiki/drafts/Produkcija.md'] });
   const tudjaBeleska = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-204' });
   const wrongArtifact = await tudjaBeleska.callTool('obsidian_write_note', { path: 'wiki/Nesto_drugo.md', content: '# x\n' });
   assert.equal(wrongArtifact.isError, true);
@@ -234,12 +235,20 @@ test('MCP: upis bez zadatka, sa isteklim zakupom ili pogrešnim stanjem je odbij
   tudjaBeleska.close();
 
   // 6. Zadatak bez artefakata ne otvara produkciju ("sme bilo šta").
-  await makeTask(vault, { id: 'TASK-205', owner: 'consolidator', status: 'verified', artifacts: [] });
+  await makeTask(vault, { id: 'TASK-205', owner: 'codex', status: 'verified', artifacts: [] });
   const bezArtefakata = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-205' });
   const noArtifact = await bezArtefakata.callTool('obsidian_write_note', { path: 'wiki/Bilo_sta.md', content: '# x\n' });
   assert.equal(noArtifact.isError, true, 'zadatak bez artefakata ne sme da otvori produkciju');
   assert.match(noArtifact.content[0].text, /nema artefakte/);
   bezArtefakata.close();
+
+  // 7. Isti zadatak, ista uloga, ali DRUGI identitet agenta — zakup je lični.
+  await makeTask(vault, { id: 'TASK-206', owner: 'codex', status: 'verified' });
+  const uljez = await connect(vault.root, 'consolidator', 'uljez', t, { OBSIDIAN_TASK: 'TASK-206' });
+  const intruder = await uljez.callTool('obsidian_write_note', { path: 'wiki/Produkcija.md', content: '# x\n' });
+  assert.equal(intruder.isError, true, 'zakup je vezan za identitet agenta, ne za ulogu');
+  assert.match(intruder.content[0].text, /ne drži "uljez"/);
+  uljez.close();
 
   assert.equal(await vault.exists('wiki/Neproverena.md'), false, 'odbijeni upis nije nastao');
   assert.equal(await vault.exists('wiki/Bilo_sta.md'), false);
@@ -271,7 +280,7 @@ test('MCP: kontrolni koren se ne može zaobići praznim direktorijumom', async (
 test('MCP: zone su ortogonalne — konsolidator ne piše u zonu nacrta', async (t) => {
   const vault = await seededVault();
   await makeTask(vault, {
-    id: 'TASK-601', owner: 'consolidator', status: 'verified',
+    id: 'TASK-601', owner: 'codex', status: 'verified',
     artifacts: ['wiki/drafts/Produkcija.md'],
   });
   const client = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-601' });
@@ -294,7 +303,7 @@ test('MCP: zone su ortogonalne — konsolidator ne piše u zonu nacrta', async (
 
 test('MCP: istraživač ne piše u produkciju ni u revizije', async (t) => {
   const vault = await seededVault();
-  await makeTask(vault, { id: 'TASK-602', owner: 'researcher', status: 'in_progress', artifacts: ['wiki/drafts/Produkcija.md'] });
+  await makeTask(vault, { id: 'TASK-602', owner: 'agy', status: 'in_progress', artifacts: ['wiki/drafts/Produkcija.md'] });
   const client = await connect(vault.root, 'researcher', 'agy', t, { OBSIDIAN_TASK: 'TASK-602' });
   for (const [target, zone] of [['wiki/Produkcija.md', 'production'], ['tasks/reviews/R.md', 'review']]) {
     const result = await client.callTool('obsidian_write_note', { path: target, content: '# x\n' });
@@ -306,7 +315,7 @@ test('MCP: istraživač ne piše u produkciju ni u revizije', async (t) => {
 
 test('MCP: izvedeni artefakti kontrolnog sloja su zaštićeni', async (t) => {
   const vault = await seededVault();
-  await makeTask(vault, { id: 'TASK-301', owner: 'consolidator', status: 'verified', artifacts: ['wiki/Index.md', 'wiki/drafts/Index.md'] });
+  await makeTask(vault, { id: 'TASK-301', owner: 'codex', status: 'verified', artifacts: ['wiki/Index.md', 'wiki/drafts/Index.md'] });
   const client = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-301' });
   for (const target of ['wiki/Index.md', '.agents/raw-manifest.json', 'tasks/events.jsonl']) {
     const write = await client.callTool('obsidian_write_note', { path: target, content: '# x\n' });
@@ -320,7 +329,7 @@ test('MCP: izvedeni artefakti kontrolnog sloja su zaštićeni', async (t) => {
 test('MCP: simbolički link ne može da izvede upis ili čitanje iz zone', async (t) => {
   const vault = await seededVault();
   await symlink(vault, '../../raw', 'wiki/drafts/raw-link');
-  await makeTask(vault, { id: 'TASK-401', owner: 'researcher', status: 'in_progress' });
+  await makeTask(vault, { id: 'TASK-401', owner: 'agy', status: 'in_progress' });
 
   const client = await connect(vault.root, 'researcher', 'agy', t, { OBSIDIAN_TASK: 'TASK-401' });
   const write = await client.callTool('obsidian_write_note', { path: 'wiki/drafts/raw-link/BYPASS.md', content: '# proba\n' });
@@ -357,7 +366,7 @@ test('MCP: skladište bez ugovora zadržava samo zonska pravila', async (t) => {
 
 test('MCP: patch menja samo zadati odeljak', async (t) => {
   const vault = await seededVault();
-  await makeTask(vault, { id: 'TASK-501', owner: 'consolidator', status: 'verified', artifacts: ['wiki/Crna_tabla.md'] });
+  await makeTask(vault, { id: 'TASK-501', owner: 'codex', status: 'verified', artifacts: ['wiki/Crna_tabla.md'] });
   const client = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-501' });
   const original = await vault.read('wiki/Crna_tabla.md');
 
@@ -379,7 +388,7 @@ test('MCP: patch menja samo zadati odeljak', async (t) => {
 
 test('MCP: patch sa create=false odbija nepostojeći odeljak', async (t) => {
   const vault = await seededVault();
-  await makeTask(vault, { id: 'TASK-502', owner: 'consolidator', status: 'verified', artifacts: ['wiki/Crna_tabla.md'] });
+  await makeTask(vault, { id: 'TASK-502', owner: 'codex', status: 'verified', artifacts: ['wiki/Crna_tabla.md'] });
   const client = await connect(vault.root, 'consolidator', 'codex', t, { OBSIDIAN_TASK: 'TASK-502' });
   const result = await client.callTool('obsidian_patch_note', { path: 'wiki/Crna_tabla.md', section: 'Ne postoji', content: 'x', create: false });
   assert.equal(result.isError, true);

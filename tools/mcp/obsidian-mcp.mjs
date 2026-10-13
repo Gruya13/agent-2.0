@@ -213,9 +213,11 @@ async function requireTaskContext(relative) {
       `zadatak ${TASK_ID} je u stanju "${task.data.status}"; upis u "${relative}" zahteva stanje in_progress`,
     );
   }
-  const owners = [AGENT, ROLE];
-  if (!owners.includes(task.data.lock_owner)) {
-    throw new AccessError(`zadatak ${TASK_ID} ne drži "${AGENT}/${ROLE}" (drži "${task.data.lock_owner}")`);
+  // Zakup je vezan za IDENTITET agenta (ime harnesa), ne za ulogu: sam `ROLE` ne
+  // razlikuje dva procesa iste uloge, pa bi svaki od njih mogao da piše pod
+  // tuđim zakupom.
+  if (task.data.lock_owner !== AGENT) {
+    throw new AccessError(`zadatak ${TASK_ID} ne drži "${AGENT}" (drži "${task.data.lock_owner}")`);
   }
   const expires = Date.parse(task.data.lease_expires_at ?? '');
   if (!Number.isFinite(expires) || expires <= Date.now()) {
