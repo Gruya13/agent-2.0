@@ -119,6 +119,32 @@ i u `agentctl` kontrolnom sloju (Git sloj).
     isključiti (`pipeline.challengeExecute: false`), ali tada nalaz ne blokira
     spajanje. Faza se može isključiti po pozivu (`pipeline.challenge: false`).
 
+21. **Kapija zona razlikuje podzone i vrstu zadatka.** Grana sme da menja
+    `wiki/drafts/` (nacrti i fragmenti), `wiki/<Slug>.md` **samo ako je to
+    deklarisani artefakt zadatka**, `tasks/reviews/`, `tasks/audits/`,
+    `tasks/challenges/`, izvedene artefakte koje održava kontrolni sloj, i — za
+    revizorske zadatke — postojeće beleške iz `audit_scope`. Sve ostalo obara
+    merge. Rename se broji sa **obe** strane (`--no-renames`), inače `git mv` iz
+    zabranjene zone prolazi neopaženo.
+22. **Konsolidacija ne prepisuje postojeću belešku.** `consolidator` radi samo na
+    izvornim zadacima (`kind: ingest`) i samo stvara novu belešku; izmene
+    postojećih idu kroz revizorski zadatak (`librarian`, `kind: audit`). Time se
+    zone `librarian`-a i `consolidator`-a ne preklapaju, i tuđi rad se ne gazi.
+23. **Knjigovodstvo komituje samo poznate fajlove.** `commitBookkeeping`
+    komituje isključivo fajlove zadataka, `tasks/events.jsonl`, `wiki/Index.md`,
+    `.agents/raw-manifest.json` i **nove** izvore u `raw/`. Sve što je u zoni
+    crne table a nije na tom spisku se prijavljuje (`bookkeeping.foreign-change`)
+    i **ne komituje** — inače bi upis mimo radnog stabla završio u `main` bez
+    merge-a, pečata i kapije.
+24. **Istekao reprodukcioni skript nije „nema nalaza".** Skript koji istekne ili
+    nije izvršen daje verdikt `unexecuted` i **blokira** spajanje. Nalaz se
+    priznaje samo ako skript izađe sa 0 **i** ispiše `OBORENO`.
+25. **Kapija se preglasava samo svesno i uz zapis.** `agentctl override <id>
+    --reason "<zašto>"` otvara kapiju za **jedan** zadatak; razlog, vreme i autor
+    ostaju u zadatku i u `tasks/events.jsonl`. Isključivanje kroz konfiguraciju
+    (`pipeline.challenge: false`) gasi kapiju za sve zadatke i tada se ne pravi
+    `challenge` zapis — to je odluka operatera, ne tiho ponašanje sistema.
+
 ## 3. Životni ciklus zadatka
 
 ```

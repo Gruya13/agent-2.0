@@ -76,6 +76,7 @@ Komande:
   renew <TASK-ID> --owner   obnovi zakup
   release <TASK-ID> --owner oslobodi zakup
   reclaim                   vrati zadatke sa isteklim zakupom u opticaj
+  ready <TASK-ID> --reason <tekst>      vrati blokiran zadatak u opticaj (ljudska odluka)
   override <TASK-ID> --reason <tekst>   svesno preglаsaj red-team nalaz (zapisuje se)
   phase <faza> <TASK-ID>    izvrši jednu fazu (extract|research|verify|challenge|audit|consolidate)
   run [--rounds N]          kontrolna petlja kroz sve faze
@@ -96,7 +97,7 @@ Globalne opcije:
   --depends TASK-001,...    zavisnosti
   --owner <ime>             vlasnik zakupa
   --token <token>           token zakupa (izlaz komande claim)
-  --reason <tekst>          razlog za override red-team nalaza
+  --reason <tekst>          razlog za override red-team nalaza ili za odblokiranje
   --ttl <ms>                trajanje zakupa
   --rounds <n>              broj krugova kontrolne petlje
   --only <faza>             ograniči run na jednu fazu
@@ -104,6 +105,15 @@ Globalne opcije:
   --extract / --no-extract  forsiraj ili zabrani fazu extract
   --config <fajl>           alternativna konfiguracija
 `;
+
+async function commitBookkeepingSafe(config, message) {
+  const { commitPaths } = await import('./lib/git.mjs');
+  try {
+    return await commitPaths(config.root, ['tasks', 'wiki', '.agents/raw-manifest.json'], message, { actor: 'agentctl' });
+  } catch {
+    return { committed: false };
+  }
+}
 
 async function buildContext(flags) {
   const vaultRoot = flags.vault ? path.resolve(flags.vault) : PACKAGE_ROOT;
@@ -255,6 +265,21 @@ const COMMANDS = {
     });
     out(`zakup oslobođen: ${task.data.id} -> ${task.data.status}`);
     return 0;
+  },
+
+  /** Vrati blokiran zadatak u opticaj posle ljudske intervencije. */
+  async ready({ store, config, flags }, positional) {
+    const id = positional[0];
+    if (!id) throw new Error('ready zahteva TASK-ID');
+    const task = await store.get(id);
+    if (task.data.status !== 'blocked') {
+      throw new Error(`zadatak ${id} nije blokiran (status: ${task.data.status})`);
+    }
+    const note = typeof flags.reason === 'string' ? flags.reason : 'čovek je vratio zadatak u opticaj';
+    const updated = await store.transition(id, 'ready', { actor: 'operator', note });
+    await commitBookkeepingSafe(config, `agentctl: ${id} vraćen u opticaj (${note})`);
+    out(`zadatak ${id}: blocked -> ready (${note})`);
+    return updated ? 0 : 0;
   },
 
   async reclaim({ store, config }) {

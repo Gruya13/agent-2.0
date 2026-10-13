@@ -288,6 +288,19 @@ krivotvorenje tog fajla ne daje nove privilegije — upis i tako ide u radno
 stablo agenta, a u `main` ulazi samo kroz kontrolni sloj koji proverava stvarno
 stanje zadatka u kontrolnom korenu.
 
+## Spremnost za realan zadatak
+
+Procena sa dokazima je u [`SPREMNOST.md`](SPREMNOST.md). Kratko: sistem je
+**spreman**, uz tri uslova — izvor treba da bude spoljni predmet (ne opis samog
+sistema), realan prolaz traje desetinama minuta i troši 6–15 poziva modela, i za
+blokiran zadatak je potreban čovek (`agentctl ready`, `agentctl override`).
+
+Pravi prolaz sa šest uloga je izvršen i **odbio je da objavi** sadržaj koji nije
+prošao kapiju: red-team je našao 3 reproduktivna nalaza, autor je preradio nacrt,
+red-team je našao još 3, i posle dozvoljenog broja sporenja zadatak je blokiran.
+Osam skripti koje je red-team napisao (5 + 3) posle popravki **ne reprodukuje se
+nijedna**.
+
 ## Nezavisna verifikacija
 
 Implementaciju je proveravao **drugi vendor** (OpenAI Codex), u odvojenoj
