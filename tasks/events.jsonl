@@ -54,3 +54,6 @@
 {"ts":"2026-10-13T20:45:20.690Z","kind":"phase.done","task":null,"phase":"reflect","notes":0,"rawManifestAdded":0,"rawManifestTotal":1,"commit":"d8986ef56ebc654f7844bd29e942f40405f025c1"}
 {"ts":"2026-10-13T20:45:20.697Z","kind":"task.write","task":"TASK-101","actor":"consolidator","status":"in_progress","phase":"active","moved":"review->active"}
 {"ts":"2026-10-13T20:45:20.727Z","kind":"phase.start","task":"TASK-101","phase":"consolidate","role":"consolidator","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-101-consolidator"}
+{"ts":"2026-10-13T20:45:20.843Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"blocked","phase":"inbox","moved":"active->inbox"}
+{"ts":"2026-10-13T20:45:20.845Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"blocked","phase":"inbox","moved":null}
+{"ts":"2026-10-13T20:45:20.845Z","kind":"phase.failed","task":"TASK-101","phase":"consolidate","reason":"tekstualni konflikt u: wiki/Index.md","conflict":true}

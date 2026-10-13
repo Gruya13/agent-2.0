@@ -1,9 +1,9 @@
 ---
 id: TASK-101
 title: Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
-status: in_progress
+status: blocked
 created: 2026-10-13T20:45:20.387Z
-updated: 2026-10-13T20:45:20.695Z
+updated: 2026-10-13T20:45:20.844Z
 source: raw/arhitektura-asinhronog-multi-agentskog-sistema.md
 priority: normal
 tags:
@@ -13,9 +13,9 @@ depends_on: []
 authors:
   - researcher
 assignee: consolidator
-lock_owner: consolidator
-locked_at: 2026-10-13T20:45:20.695Z
-lease_expires_at: 2026-10-13T20:55:20.695Z
+lock_owner: null
+locked_at: null
+lease_expires_at: null
 artifacts:
   - wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md
 verification:
@@ -27,7 +27,7 @@ verification:
     MOCK verifier: pregledao wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md, 0 nalaza.
     VERDICT: pass
   by: verifier
-blocked_reason: null
+blocked_reason: "merge u main nije prošao: tekstualni konflikt u: wiki/Index.md"
 history:
   - at: 2026-10-13T20:45:20.387Z
     status: proposed
@@ -72,6 +72,14 @@ history:
   - at: 2026-10-13T20:45:20.695Z
     status: in_progress
     actor: consolidator
+  - at: 2026-10-13T20:45:20.842Z
+    status: blocked
+    actor: agentctl
+    note: "merge u main nije prošao: tekstualni konflikt u: wiki/Index.md"
+  - at: 2026-10-13T20:45:20.844Z
+    status: blocked
+    actor: agentctl
+    note: konflikt pri merge-u
 ---
 
 # Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
@@ -105,3 +113,9 @@ MOCK researcher: nacrt upisan u wiki/drafts/Asinhroni_multi-agentski_sistem_nad_
 MOCK verifier: pregledao wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md, 0 nalaza.
 VERDICT: pass
 ```
+
+### Konflikt pri merge-u (2026-10-13T20:45:20.843Z)
+
+Fajlovi: wiki/Index.md
+
+Radna stabla su zadržana za arbitražu.
