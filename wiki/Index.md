@@ -1,7 +1,7 @@
 ---
 title: Index
-created: 2026-10-13T20:45:05.592Z
-updated: 2026-10-13T20:45:05.592Z
+created: 2026-10-13T20:45:20.564Z
+updated: 2026-10-13T20:45:20.564Z
 authors: [agentctl]
 status: consolidated
 tags: [index]
@@ -9,7 +9,7 @@ tags: [index]
 
 # Index — centralni indeks baze znanja
 
-_Generisano: 2026-10-13T20:45:05.592Z. Ne uređivati ručno; pokreni `agentctl index`._
+_Generisano: 2026-10-13T20:45:20.564Z. Ne uređivati ručno; pokreni `agentctl index`._
 
 ## Beleške (0)
 
