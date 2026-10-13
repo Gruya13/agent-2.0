@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { HARNESS_COMMANDS, runHarness, parseVerdict, HarnessError } from '../tools/orchestrator/lib/agents/harness.mjs';
-import { agentEnv } from '../tools/orchestrator/lib/agents/index.mjs';
+import { agentEnv, materializeTaskContext, TASK_CONTEXT_FILE } from '../tools/orchestrator/lib/agents/index.mjs';
 
 const PROMPT = 'Uradi nešto: sa dvotočkom i "navodnicima"';
 const CWD = '/tmp/probni-cwd';
@@ -90,4 +90,22 @@ test('agentEnv: harnes dobija identitet i svoju zonu, ne tuđu', () => {
   assert.equal(env.WIKI_ROOT, '/radno/stablo');
   assert.equal(env.AGENT_2_0_TASK, 'TASK-101');
   assert.equal(env.AGENT_2_0_HARNESS, 'dsh');
+});
+
+test('materializeTaskContext: harnes dobija zadatak i kontrolni koren u radnom stablu', async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-ctx-'));
+  const task = { data: { id: 'TASK-101', status: 'in_progress', lease_expires_at: '2035-01-01T00:00:00.000Z' } };
+  const file = await materializeTaskContext({ cwd, role: 'consolidator', harness: 'codex', task, config: { root: '/glavni/vault' } });
+  assert.equal(path.relative(cwd, file), TASK_CONTEXT_FILE);
+  const parsed = JSON.parse(await fs.readFile(file, 'utf8'));
+  assert.deepEqual(
+    { task: parsed.task, taskRoot: parsed.taskRoot, role: parsed.role, agent: parsed.agent },
+    { task: 'TASK-101', taskRoot: '/glavni/vault', role: 'consolidator', agent: 'codex' },
+  );
+  // Bez zadatka i kontrolnog korena fajl i dalje postoji, ali bez izmišljenih vrednosti.
+  await materializeTaskContext({ cwd, role: 'researcher', harness: 'agy', task: null, config: null });
+  const drugi = JSON.parse(await fs.readFile(file, 'utf8'));
+  assert.equal(drugi.task, null);
+  assert.equal(drugi.taskRoot, cwd);
+  await fs.rm(cwd, { recursive: true, force: true });
 });

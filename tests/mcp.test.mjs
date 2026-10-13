@@ -362,6 +362,31 @@ test('MCP: skladište bez ugovora zadržava samo zonska pravila', async (t) => {
   await vault.cleanup();
 });
 
+test('MCP: kontekst zadatka iz radnog stabla (.runtime) kada env nije nasleđen', async (t) => {
+  const vault = await seededVault();
+  await makeTask(vault, { id: 'TASK-701', owner: 'codex', status: 'verified', artifacts: ['wiki/drafts/Produkcija.md'] });
+  // Harnes koji ne nasleđuje env (Codex) dobija kontekst iz fajla u radnom stablu.
+  await vault.write('.runtime/task-context.json', JSON.stringify({
+    task: 'TASK-701', taskRoot: vault.root, role: 'consolidator', agent: 'codex',
+  }, null, 2));
+
+  const client = await connect(vault.root, 'consolidator', 'codex', t); // bez OBSIDIAN_TASK
+  const info = await client.callTool('obsidian_vault_info');
+  assert.match(info.content[0].text, /task:\s+TASK-701/);
+  assert.match(info.content[0].text, new RegExp(`task root:\\s+${vault.root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+
+  const ok = await client.callTool('obsidian_write_note', { path: 'wiki/Produkcija.md', content: '# iz fajla\n' });
+  assert.equal(ok.isError, false, `kontekst iz fajla mora da autorizuje legitimni upis: ${ok.content[0].text}`);
+  assert.equal(await vault.exists('wiki/Produkcija.md'), true);
+
+  // Preusmeren `taskRoot` u fajlu ne pomaže ako zadatak tamo ne postoji.
+  await vault.write('.runtime/task-context.json', JSON.stringify({ task: 'TASK-999', taskRoot: vault.root }));
+  const client2 = await connect(vault.root, 'consolidator', 'codex', t);
+  const nepoznat = await client2.callTool('obsidian_write_note', { path: 'wiki/Produkcija.md', content: '# x\n' });
+  assert.equal(nepoznat.isError, true, 'nepostojeći zadatak iz fajla ne otvara upis');
+  await vault.cleanup();
+});
+
 // --------------------------------------------------------------- patch
 
 test('MCP: patch menja samo zadati odeljak', async (t) => {

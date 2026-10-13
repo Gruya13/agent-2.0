@@ -37,7 +37,7 @@
 import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promises as fs } from 'node:fs';
+import { promises as fs, readFileSync } from 'node:fs';
 import { exists, realRelativeTo, resolveInside, writeFileAtomic } from '../orchestrator/lib/fsx.mjs';
 import { parseFrontmatter, stringifyFrontmatter } from '../orchestrator/lib/yaml.mjs';
 import {
@@ -52,11 +52,33 @@ const PROTOCOL_VERSION = '2024-11-05';
 const VAULT = path.resolve(process.env.OBSIDIAN_VAULT || process.env.WIKI_ROOT || process.cwd());
 const AGENT = process.env.OBSIDIAN_AGENT || process.env.WIKI_AGENT || 'anonymous';
 const ROLE = process.env.OBSIDIAN_ROLE || 'readonly';
+
+/**
+ * Kontekst zadatka koji je kontrolni sloj materijalizovao u radnom stablu.
+ *
+ * Ne može se osloniti na nasleđeno okruženje: pokazalo se da neki harnesi
+ * (npr. Codex) prosleđuju MCP serveru samo svoju `env` tabelu, pa bi
+ * `OBSIDIAN_TASK` tiho nestao i legitimni upis bio odbijen. Fajl je u
+ * `.runtime/` (gitignore), pa ne ulazi u granu.
+ *
+ * Redosled prioriteta: env > fajl > podrazumevano. Krivotvorenje fajla ne daje
+ * nove privilegije: upis i tako ide u radno stablo agenta, a u `main` ulazi
+ * samo kroz kontrolni sloj koji proverava stvarno stanje zadatka.
+ */
+const TASK_CONTEXT_FILE = path.join(VAULT, '.runtime', 'task-context.json');
+const fileContext = (() => {
+  try {
+    return JSON.parse(readFileSync(TASK_CONTEXT_FILE, 'utf8'));
+  } catch {
+    return null;
+  }
+})();
+
 // Stanje zadataka živi u kontrolnom korenu (`main`), a ne u izolovanom radnom
 // stablu agenta: worktree nosi kopiju crne table od trenutka grananja, pa bi
 // provera zakupa nad njom bila provera zastarelog stanja.
-const TASK_ROOT = path.resolve(process.env.OBSIDIAN_TASK_ROOT || VAULT);
-const TASK_ID = process.env.OBSIDIAN_TASK || null;
+const TASK_ROOT = path.resolve(process.env.OBSIDIAN_TASK_ROOT || fileContext?.taskRoot || VAULT);
+const TASK_ID = process.env.OBSIDIAN_TASK || fileContext?.task || null;
 
 const NEVER_WRITABLE = ['raw'];
 // Izvedeni artefakti kontrolnog sloja: nijedna uloga ih ne piše.
@@ -428,14 +450,17 @@ async function opLint() {
 
 async function opInfo() {
   const zones = await listNotes(VAULT, ['wiki', 'raw', 'tasks']);
-  const writable = ROLE_WRITE_PREFIXES[ROLE] ?? [];
+  const zones4role = ROLE_WRITE_ZONES[ROLE] ?? [];
   return [
     `server:      ${SERVER_NAME} ${SERVER_VERSION}`,
     `vault:       ${VAULT}`,
     `agent:       ${AGENT}`,
     `role:        ${ROLE}`,
-    `write zone:  ${writable.length ? writable.join(', ') : '(samo čitanje)'}`,
+    `task:        ${TASK_ID || '(nije zadat)'}`,
+    `task root:   ${TASK_ROOT}`,
+    `write zones: ${zones4role.length ? zones4role.join(', ') : '(samo čitanje)'}`,
     `never write: ${NEVER_WRITABLE.join(', ')}`,
+    `protected:   ${PROTECTED_FILES.join(', ')}`,
     `beleške:     ${zones.length}`,
   ].join('\n');
 }

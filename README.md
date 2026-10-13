@@ -199,6 +199,16 @@ proverljiva osnova nad bajtovima.
 Skladište koje ne nosi `.agents/AGENTS.md` (običan Obsidian vault) zadržava samo
 kapiju 1 — tako MCP server ostaje upotrebljiv i van crne table.
 
+**Kontekst zadatka u radnom stablu.** Pokazalo se da harnesi ne prosleđuju
+okruženje MCP serveru isto: `dsh` i `agy` nasleđuju `OBSIDIAN_*`, a `codex exec`
+prosleđuje samo svoju `env` tabelu. Zato kontrolni sloj pre svakog poziva upisuje
+`.runtime/task-context.json` u radno stablo zadatka (gitignore — ne ulazi u
+granu), a MCP server ga čita kao fallback: `env > fajl > podrazumevano`. Time
+legitiman upis prolazi i kod harnesa koji ne nasleđuje okruženje, a
+krivotvorenje tog fajla ne daje nove privilegije — upis i tako ide u radno
+stablo agenta, a u `main` ulazi samo kroz kontrolni sloj koji proverava stvarno
+stanje zadatka u kontrolnom korenu.
+
 ## Nezavisna verifikacija
 
 Implementaciju je proveravao **drugi vendor** (OpenAI Codex), u odvojenoj
@@ -210,6 +220,21 @@ zadatka i pečata. Svaki nalaz je ispravljen i pokriven regresionim testom koji
 reprodukuje **verifikatorov** kontraprimer.
 
 Detalji, komande i dokazi: [`VERIFIKACIJA.md`](VERIFIKACIJA.md).
+
+## Registrovano u ovom okruženju
+
+MCP server beleški je registrovan kod sva tri harnesa i proveren živim pozivom:
+
+| Harnes | Gde je registracija | Dokaz |
+|---|---|---|
+| `agy` | `~/.gemini/config/mcp_config.json` (`agy mcp add obsidian …`) | `agy mcp list` → `obsidian stdio enabled` |
+| `codex` | `~/.codex/config.toml` → `[mcp_servers.obsidian]` | `codex mcp list` → `obsidian enabled`; živi poziv `obsidian_vault_info` kroz `codex exec` |
+| `dsh` | `~/.dsh/profiles/headless/cordis.patch.yml` | `dsh --profile headless --dump-config` → `obsidian-mcp`; živi poziv kroz `dsh headless` |
+
+Konfiguracije nose **samo identitet** (`OBSIDIAN_AGENT`, `OBSIDIAN_ROLE`);
+`OBSIDIAN_VAULT`, `OBSIDIAN_TASK` i `OBSIDIAN_TASK_ROOT` dolaze po pozivu, jer
+statična `env` tabela pobjeđuje nasleđeno okruženje. Backup pre izmena:
+`~/.dsh/config-backup-<datum>/`.
 
 ## Ograničenja koja treba znati
 

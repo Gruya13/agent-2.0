@@ -34,12 +34,10 @@ case "$MODE" in
   --agy)
     command -v agy >/dev/null || { echo "agy nije instaliran" >&2; exit 1; }
     agy mcp add \
-      --env "OBSIDIAN_VAULT=$VAULT" \
       --env OBSIDIAN_AGENT=agy \
       --env OBSIDIAN_ROLE=researcher \
-      --env "OBSIDIAN_TASK_ROOT=$VAULT" \
       obsidian node "$SERVER"
-    echo "napomena: OBSIDIAN_TASK se dodaje po pozivu (id zadatka pod zakupom)" >&2
+    echo "napomena: OBSIDIAN_VAULT i OBSIDIAN_TASK dolaze iz okruženja po pozivu" >&2
     agy mcp list
     ;;
   --check)

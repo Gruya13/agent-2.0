@@ -1,20 +1,22 @@
 # MCP server beleški za OpenAI Codex.
 #
 # Ovaj blok ide u ~/.codex/config.toml. Codex je u ovom sistemu glavni urednik:
-# ima pun pristup upisu u wiki/ (unutar svog izolovanog worktree-a).
+# ima pristup upisu u wiki/ (unutar svog izolovanog worktree-a).
 #
-# Zameni __VAULT__ apsolutnom putanjom (skripta register.sh ispisuje gotov blok).
+# `env` nosi SAMO identitet. `OBSIDIAN_VAULT`, `OBSIDIAN_TASK` i
+# `OBSIDIAN_TASK_ROOT` dolaze iz okruženja poziva (kontrolni sloj ih postavlja po
+# zadatku); ako se ne naslede, server koristi svoj `cwd`, a kontrolni sloj
+# harnes uvek pokreće sa `cwd` = radno stablo zadatka.
 
 [mcp_servers.obsidian]
 command = "node"
 args = ["__VAULT__/tools/mcp/obsidian-mcp.mjs"]
 startup_timeout_sec = 20
 tool_timeout_sec = 60
+# `codex exec` bez ovoga odbija svaki MCP poziv:
+# "MCP tool call requires approval, but approval policy is never".
+default_tools_approval_mode = "approve"
 
 [mcp_servers.obsidian.env]
-OBSIDIAN_VAULT = "__VAULT__"
 OBSIDIAN_AGENT = "codex"
 OBSIDIAN_ROLE = "consolidator"
-# Zadatak pod zakupom (kontrolni sloj ga upisuje u env poziva harnesa).
-OBSIDIAN_TASK = "TASK-NNN"
-OBSIDIAN_TASK_ROOT = "__VAULT__"

@@ -1,14 +1,18 @@
 # MCP server beleški za DeepSeek Harness (dsh).
 #
-# Ovaj fragment se dodaje u cordis.patch.yml profila (npr. headless) ili
-# prosleđuje kao `dsh --patch ./tools/config/mcp/dsh.patch.yml`.
+# Dodaje se u cordis.patch.yml profila (npr. headless) ili se prosleđuje kao
+# `dsh --patch ./tools/config/mcp/dsh.patch.yml`.
 #
-# VAŽNO: `cwd` se ne sme koristiti za lociranje vault-a. DSH host zadržava svoj
-# radni direktorijum (onaj iz koga je `dsh` pokrenut), koji NIJE radni prostor
-# sesije, pa bi relativna putanja tiho pokazala na pogrešno mesto. Zato je
-# OBSIDIAN_VAULT obavezan i mora biti apsolutna putanja.
+# VAŽNO — šta se NE stavlja ovde:
+#   `env` u ovom bloku je statičan i POBIJEĐUJE nasleđeno okruženje
+#   (`buildChildEnv` = {...parentEnv, ...config.env}). Zato se `OBSIDIAN_VAULT`,
+#   `OBSIDIAN_TASK` i `OBSIDIAN_TASK_ROOT` NE upisuju ovde: kontrolni sloj ih
+#   šalje po pozivu, za svako izolovano radno stablo i svaki zadatak.
+#   Ako se `OBSIDIAN_VAULT` ne nasledi, server koristi svoj `cwd`, a kontrolni
+#   sloj harnes uvek pokreće sa `cwd` = radno stablo zadatka.
 #
-# Zameni __VAULT__ apsolutnom putanjom (skripta register.sh to radi automatski).
+# Identitet se fiksira ovde jer ne zavisi od zadatka i ne sme da ga nadjača
+# slučajna promenljiva iz okruženja.
 - insert:
     - id: obsidian-mcp
       name: '@deepseek-ai/dsh-mcp-client'
@@ -19,13 +23,8 @@
         args:
           - __VAULT__/tools/mcp/obsidian-mcp.mjs
         env:
-          OBSIDIAN_VAULT: __VAULT__
           OBSIDIAN_AGENT: dsh
-          # DeepSeek je u ovom sistemu logički arbitar: čita sve, piše samo revizije.
+          # DeepSeek je u ovom sistemu logički arbitar: čita sve, piše revizije.
           OBSIDIAN_ROLE: verifier
-          # Upis zahteva zadatak pod zakupom; OBSIDIAN_TASK_ROOT je kontrolni
-          # koren (main), jer radno stablo agenta nosi zastarelu kopiju tasks/.
-          OBSIDIAN_TASK: TASK-NNN
-          OBSIDIAN_TASK_ROOT: __VAULT__
         toolCallTimeoutMs: 15000
         failOnStartupError: true

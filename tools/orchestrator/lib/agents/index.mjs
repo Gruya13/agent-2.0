@@ -3,6 +3,8 @@
  * Kontrolni sloj nikad ne zna koji je harnes pozvan — samo da li je posao
  * proizveo očekivani artefakt.
  */
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { roleOf } from '../config.mjs';
 import { runHarness } from './harness.mjs';
 import { runMock } from './mock.mjs';
@@ -29,9 +31,37 @@ export function agentEnv({ role, harness, cwd, task, config = null }) {
   };
 }
 
+export const TASK_CONTEXT_FILE = '.runtime/task-context.json';
+
+/**
+ * Upiši kontekst zadatka u radno stablo pre poziva harnesa.
+ *
+ * MCP server beleški čita ovaj fajl kada `OBSIDIAN_TASK` nije u okruženju (vidi
+ * `tools/mcp/obsidian-mcp.mjs`). Bez njega harnes koji ne nasleđuje env ne bi
+ * mogao da dokaže zakup, pa bi svaki upis bio odbijen.
+ */
+export async function materializeTaskContext({ cwd, role, harness, task, config }) {
+  const file = path.join(cwd, TASK_CONTEXT_FILE);
+  const context = {
+    task: task?.data?.id ?? null,
+    taskRoot: config?.root ?? cwd,
+    role,
+    agent: harness,
+    leaseExpiresAt: task?.data?.lease_expires_at ?? null,
+    status: task?.data?.status ?? null,
+    writtenAt: new Date().toISOString(),
+  };
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, `${JSON.stringify(context, null, 2)}\n`, 'utf8');
+  return file;
+}
+
 export async function runAgent(config, { role, task, cwd, prompt, now, logger = () => {} }) {
   const spec = roleOf(config, role);
   const started = Date.now();
+  await materializeTaskContext({
+    cwd, role, harness: spec.adapter === 'mock' ? 'mock' : spec.harness, task, config,
+  });
   logger(`poziv uloge ${role} (${spec.adapter}${spec.adapter === 'harness' ? `:${spec.harness}` : ''}) u ${cwd}`);
 
   let result;
