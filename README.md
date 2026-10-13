@@ -199,6 +199,18 @@ proverljiva osnova nad bajtovima.
 Skladište koje ne nosi `.agents/AGENTS.md` (običan Obsidian vault) zadržava samo
 kapiju 1 — tako MCP server ostaje upotrebljiv i van crne table.
 
+## Nezavisna verifikacija
+
+Implementaciju je proveravao **drugi vendor** (OpenAI Codex), u odvojenoj
+verifikacionoj niti, sa slepim ulazom (specifikacija + artefakt + falsifikabilne
+tvrdnje, bez reasoninga izvršioca). U tri runde je oboreno **10 nalaza** —
+od binarnog izvora koji se menjao bez prijave, preko simboličkog linka koji je
+izvodio upis van zone, do konsolidatora koji je mogao da upiše u `wiki/` bez
+zadatka i pečata. Svaki nalaz je ispravljen i pokriven regresionim testom koji
+reprodukuje **verifikatorov** kontraprimer.
+
+Detalji, komande i dokazi: [`VERIFIKACIJA.md`](VERIFIKACIJA.md).
+
 ## Ograničenja koja treba znati
 
 - **`mock` nije dokaz kvaliteta sadržaja.** On dokazuje tok, izolaciju i
