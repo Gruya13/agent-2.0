@@ -39,6 +39,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promises as fs, readFileSync } from 'node:fs';
 import { exists, realRelativeTo, resolveInside, writeFileAtomic } from '../orchestrator/lib/fsx.mjs';
+import { matchesScope } from '../orchestrator/lib/scope.mjs';
 import { parseFrontmatter, stringifyFrontmatter } from '../orchestrator/lib/yaml.mjs';
 import {
   extractWikilinks, findBacklinks, listNotes, noteName, noteFrontmatterProblems, readNote,
@@ -79,6 +80,8 @@ const fileContext = (() => {
 // provera zakupa nad njom bila provera zastarelog stanja.
 const TASK_ROOT = path.resolve(process.env.OBSIDIAN_TASK_ROOT || fileContext?.taskRoot || VAULT);
 const TASK_ID = process.env.OBSIDIAN_TASK || fileContext?.task || null;
+// Zakup je vezan za proces: kada zadatak nosi token, upis zahteva isti token.
+const LEASE_TOKEN = process.env.OBSIDIAN_LEASE_TOKEN || fileContext?.leaseToken || null;
 
 const NEVER_WRITABLE = ['raw'];
 // Izvedeni artefakti kontrolnog sloja: nijedna uloga ih ne piše.
@@ -91,6 +94,7 @@ const READ_PREFIXES = ['wiki', 'raw', 'tasks', '.agents'];
  */
 const ROLE_WRITE_ZONES = {
   extractor: ['draft'],
+  librarian: ['production', 'audit'],
   researcher: ['draft'],
   verifier: ['review'],
   consolidator: ['production'],
@@ -99,6 +103,7 @@ const ROLE_WRITE_ZONES = {
 
 const ROLE_WRITE_PREFIXES = {
   extractor: ['wiki/drafts'],
+  librarian: ['wiki', 'tasks/audits'],
   researcher: ['wiki/drafts'],
   verifier: ['tasks/reviews'],
   consolidator: ['wiki'],
@@ -109,6 +114,7 @@ const ROLE_WRITE_PREFIXES = {
 function zoneOf(relative) {
   if (relative === 'wiki/drafts' || relative.startsWith('wiki/drafts/')) return 'draft';
   if (relative === 'tasks/reviews' || relative.startsWith('tasks/reviews/')) return 'review';
+  if (relative === 'tasks/audits' || relative.startsWith('tasks/audits/')) return 'audit';
   if (relative.startsWith('wiki/')) return 'production';
   return 'other';
 }
@@ -223,7 +229,21 @@ async function requireTaskContext(relative) {
   if (!task) throw new AccessError(`zadatak ${TASK_ID} ne postoji u ${path.join(TASK_ROOT, 'tasks')}`);
 
   const zone = zoneOf(relative);
-  if (zone === 'production') {
+  const kind = task.data.kind ?? 'ingest';
+  if (zone === 'production' && kind === 'audit') {
+    // Revizorski zadatak menja POSTOJEĆE beleške, pa pečat ne može da prethodi
+    // izmeni — verifikacija ide posle, pre merge-a (automat stanja je garantuje).
+    // Zato je ovde granica OPSEG: sme se samo ono što je zadatkom stavljeno u
+    // `audit_scope`, i to isključivo nad postojećim beleškama.
+    if (!matchesScope(relative, task.data.audit_scope)) {
+      throw new AccessError(
+        `"${relative}" ne ulazi u opseg revizije zadatka ${TASK_ID} (${(task.data.audit_scope ?? []).join(', ') || 'prazan opseg'})`,
+      );
+    }
+    if (!(await exists(path.join(VAULT, relative)))) {
+      throw new AccessError(`revizija menja postojeće beleške; "${relative}" ne postoji`);
+    }
+  } else if (zone === 'production') {
     // Produkcija zahteva verifikacioni pečat (drugi vendor), ne samo zakup:
     // konsolidator drži zakup nad zadatkom koji JE verifikovan.
     const verdict = task.data.verification?.verdict;
@@ -243,14 +263,18 @@ async function requireTaskContext(relative) {
   if (task.data.lock_owner !== AGENT) {
     throw new AccessError(`zadatak ${TASK_ID} ne drži "${AGENT}" (drži "${task.data.lock_owner}")`);
   }
+  if (task.data.lock_token && task.data.lock_token !== LEASE_TOKEN) {
+    throw new AccessError(`zakup nad zadatkom ${TASK_ID} drži drugi proces istog identiteta`);
+  }
   const expires = Date.parse(task.data.lease_expires_at ?? '');
   if (!Number.isFinite(expires) || expires <= Date.now()) {
     throw new AccessError(`zakup nad zadatkom ${TASK_ID} je istekao (${task.data.lease_expires_at})`);
   }
-  if (zone === 'production') {
+  if (zone === 'production' && kind !== 'audit') {
     // Produkcioni upis mora biti konsolidacija deklarisanog artefakta. Prazna
     // lista artefakata ne znači "bilo šta sme" — znači da zadatak nije prošao
-    // kroz fazu istraživanja.
+    // kroz fazu istraživanja. Revizorski zadatak je izuzetak: njegova granica je
+    // `audit_scope`, proveren iznad.
     const target = path.basename(relative, '.md');
     const artifacts = (task.data.artifacts ?? []).map((rel) => path.basename(rel, '.md'));
     if (!artifacts.length) {

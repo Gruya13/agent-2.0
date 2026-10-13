@@ -26,6 +26,7 @@ export function agentEnv({ role, harness, cwd, task, config = null }) {
     // koji nosi kopiju crne table od trenutka grananja.
     OBSIDIAN_TASK: task?.data?.id ?? '',
     OBSIDIAN_TASK_ROOT: config?.root ?? cwd,
+    OBSIDIAN_LEASE_TOKEN: task?.leaseToken ?? '',
     WIKI_AGENT: harness,
     WIKI_ROOT: cwd,
   };
@@ -62,6 +63,9 @@ export async function materializeTaskContext({ cwd, role, harness, task, config 
     taskRoot: config?.root ?? cwd,
     role,
     agent: harness,
+    // Token zakupa: MCP server zahteva da se poklapa sa `lock_token` u zadatku,
+    // pa drugi proces istog harnesa ne može da piše pod tuđim zakupom.
+    leaseToken: task?.leaseToken ?? null,
     leaseExpiresAt: task?.data?.lease_expires_at ?? null,
     status: task?.data?.status ?? null,
     writtenAt: new Date().toISOString(),

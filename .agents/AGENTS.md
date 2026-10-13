@@ -16,12 +16,14 @@ fajlova u ovom repozitorijumu.
 | `raw/` | nepromenljivi izvori (append-only) | **niko** — samo dodavanje novih fajlova od strane operatera |
 | `wiki/` | produkciona, verifikovana enciklopedija | isključivo `consolidator` (Codex) |
 | `wiki/drafts/` | preliminarni nacrti | `researcher` (Gemini/agy) |
+| `wiki/drafts/fragments/` | fragmenti multimodalnog unosa | `extractor` (agy) |
 | `wiki/Index.md` | izveden centralni indeks | isključivo `agentctl` (faza 5) |
 | `tasks/inbox/` | predloženi i spremni zadaci | operater i `agentctl` |
 | `tasks/active/` | zadaci pod zakupom | vlasnik zakupa kroz `agentctl` |
 | `tasks/review/` | zadaci na verifikaciji | `agentctl` |
 | `tasks/completed/` | arhivirani zadaci | `agentctl` |
 | `tasks/reviews/` | revizorski tragovi i primedbe | `verifier` (DeepSeek) |
+| `tasks/audits/` | izveštaji o održavanju baze | `librarian` (Codex) |
 | `.agents/raw-manifest.json` | otisci izvora (nepromenljivost) | `agentctl` |
 | `tasks/events.jsonl` | append-only tok događaja kontrolnog sloja | `agentctl` |
 
@@ -90,6 +92,23 @@ i u `agentctl` kontrolnom sloju (Git sloj).
     (za `wiki/`) verifikacionog pečata je odbijen — bez obzira na
     `OBSIDIAN_TASK_ROOT`. Zadatak bez artefakata ne otvara produkciju.
 
+16. **Grana zadatka menja samo zone znanja.** Kontrolni sloj odbija merge ako
+    grana dira `raw/`, `tools/`, `tests/`, `scripts/` ili `.agents/`. Agent koji
+    piše fajl-sistemom (mimo MCP-a) ne može da ubaci izmenu van svoje zone u
+    `main` — provera je na merge-u, gde se odlučuje o produkcionoj grani.
+17. **Zakup je vezan za proces, ne samo za ime harnesa.** Uz `lock_owner` zakup
+    nosi i `lock_token`; drugi proces istog identiteta (`agy`) ne može da obnovi,
+    otpusti ni piše pod živim zakupom prvog. MCP proverava isti token.
+18. **`raw/` sadrži samo prave fajlove.** Simbolički link u `raw/` je prekršaj
+    (`raw.symlink`), jer link nikad ne uđe u manifest i može da preusmeri čitanje
+    na drugi sadržaj. Nedostatak `.agents/raw-manifest.json` uz postojeće izvore
+    je **greška**, ne upozorenje: bez manifesta se nepromenljivost ne može
+    dokazati, pa se izmene u `raw/` ne komituju.
+19. **Revizija baze (`kind: audit`) menja samo postojeće beleške iz `audit_scope`.**
+    Nova beleška kroz reviziju nije dozvoljena, `raw/` i izvedeni artefakti su i
+    tada zabranjeni, a verifikacioni pečat dolazi **posle** izmene a **pre**
+    merge-a (automat stanja to garantuje). Izmene van opsega obaraju fazu.
+
 ## 3. Životni ciklus zadatka
 
 ```
@@ -146,8 +165,10 @@ međusobnog isključivanja; istekao zakup se automatski opoziva.
 
 | Uloga | Harness | Zona pisanja | Zabranjeno |
 |---|---|---|---|
+| `extractor` | agy (Antigravity / Gemini) | `wiki/drafts/fragments/` | tumačenje i sažimanje; sve ostalo |
 | `researcher` | agy (Antigravity / Gemini) | `wiki/drafts/` | `wiki/` produkcija, merge |
 | `verifier` | dsh (DeepSeek headless) | `tasks/reviews/` | izmena nacrta, kod |
+| `librarian` | codex (codex-rs) | `wiki/` u opsegu + `tasks/audits/` | novi članci, prepisivanje sadržaja, izlazak iz opsega |
 | `consolidator` | codex (codex-rs) | `wiki/` (bez `Index.md`) | izmišljanje sadržaja, merge |
 
 Kognitivna podela rada: Gemini sintetiše, DeepSeek arbitrira, Codex integriše.

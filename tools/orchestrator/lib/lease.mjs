@@ -7,7 +7,7 @@
  * deterministički testabilno.
  */
 
-export const LEASE_FIELDS = ['lock_owner', 'locked_at', 'lease_expires_at'];
+export const LEASE_FIELDS = ['lock_owner', 'locked_at', 'lease_expires_at', 'lock_token'];
 
 export function isLeaseLive(data, now = new Date()) {
   if (!data?.lock_owner) return false;
@@ -35,25 +35,38 @@ export function leaseInfo(data, now = new Date()) {
 }
 
 /**
- * Može li `owner` da preuzme zadatak koji trenutno drži neko drugi?
- * Da, ali samo ako je zakup istekao. Živ zakup se nikad ne otima.
+ * Može li ovaj PROCES da preuzme zadatak?
+ *
+ * Ime vendora nije dovoljno: dva procesa istog harnesa (`agy`) imaju isto ime,
+ * pa bi oba držala „isti" zakup. Zato zakup nosi i **token** koji izdaje proces
+ * koji ga je uzeo — tuđi živ zakup se ne preuzima ni pod istim imenom.
  */
-export function canTakeOver(data, owner, now = new Date()) {
+export function canTakeOver(data, owner, now = new Date(), token = null) {
   if (!data?.lock_owner) return true;
-  if (data.lock_owner === owner) return true;
-  return leaseExpired(data, now);
+  if (leaseExpired(data, now)) return true;
+  if (data.lock_owner === owner && data.lock_token && token && data.lock_token === token) return true;
+  return false;
 }
 
-export function newLease(owner, ttlMs, now = new Date()) {
+/** Da li ovaj proces drži zakup (ime + token), i to važeći? */
+export function holdsLease(data, owner, token, now = new Date()) {
+  if (!data?.lock_owner || data.lock_owner !== owner) return false;
+  if (!isLeaseLive(data, now)) return false;
+  if (data.lock_token && data.lock_token !== token) return false;
+  return true;
+}
+
+export function newLease(owner, ttlMs, now = new Date(), token = null) {
   if (!owner) throw new Error('vlasnik zakupa je obavezan');
   if (!Number.isFinite(ttlMs) || ttlMs <= 0) throw new Error('ttl zakupa mora biti pozitivan broj');
   return {
     lock_owner: owner,
     locked_at: now.toISOString(),
     lease_expires_at: new Date(now.getTime() + ttlMs).toISOString(),
+    lock_token: token,
   };
 }
 
 export function clearLease() {
-  return { lock_owner: null, locked_at: null, lease_expires_at: null };
+  return { lock_owner: null, locked_at: null, lease_expires_at: null, lock_token: null };
 }

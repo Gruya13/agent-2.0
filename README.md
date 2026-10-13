@@ -99,6 +99,26 @@ posle `maxRevisions` pokušaja zadatak ide u `blocked` (nikad u produkcioni
 | „`raw/` je nepromenljiv" i za binarne izvore | manifest v2 hashira bajtove (`sha256Bytes`), test sa `.pdf` bajtom 0x80 → 0x81 |
 | „revizorski uvid u doprinos svakog modela" | Git autor po komitu (`-c user.name=<agent>`), `agentctl log` |
 
+## Uloge (i kako su dogovorene)
+
+Pet uloga. Tri su iz prvobitne podele, dve su dodate posle **konsultacije sva tri
+vendora** (svaki je zadržao svoje postojeće uloge i birao 0–2 nove, uz
+obrazloženje i dokaz; svi odgovori su u [KONSULTACIJA-ULOGA.md](KONSULTACIJA-ULOGA.md)):
+
+| Uloga | Harnes | Zona | Šta radi |
+|---|---|---|---|
+| `extractor` | `agy` | `wiki/drafts/fragments/` | verna transkripcija PDF-ova, tabela i skenova; bez tumačenja; fragment nosi `source_sha256` |
+| `researcher` | `agy` | `wiki/drafts/` | dekomponuje izvor u enciklopedijski nacrt sa Vikilinkovima |
+| `verifier` | `dsh` | `tasks/reviews/` | nezavisno obara ili potvrđuje tuđi rad, svaki nalaz sa dokazom |
+| `librarian` | `codex` | `wiki/` u opsegu + `tasks/audits/` | održava postojeću bazu: duplikati, siročići, oznake, pokvarene veze |
+| `consolidator` | `codex` | `wiki/` (bez `Index.md`) | premešta verifikovan nacrt u produkciju i uređuje strukturu |
+
+`extractor` je bio **jednoglasan** (svi su ga predložili agy-ju, jer fragmenti
+ostaju u njegovoj zoni). `librarian` nije tražio niko, pa je dodeljen kodexu kao
+jedinom koji već ima pravo upisa u `wiki/` — uz obaveznu nezavisnu proveru i
+strog opseg. Red-team je bio sporan i rešen je **izvršavanjem**, ne dogovorom:
+vidi [KONSULTACIJA-ULOGA.md](KONSULTACIJA-ULOGA.md).
+
 ## Prelazak na prave harnese
 
 Podrazumevano su sva tri adaptera `mock`: to je deterministički zamenik istog
@@ -238,6 +258,17 @@ proverljiva osnova nad bajtovima.
 
 Skladište koje ne nosi `.agents/AGENTS.md` (običan Obsidian vault) zadržava samo
 kapiju 1 — tako MCP server ostaje upotrebljiv i van crne table.
+
+**Kapija na merge-u.** Grana sme da menja samo zone znanja (`wiki/`,
+`tasks/reviews/`, `tasks/audits/`). Ako grana dira `raw/`, `tools/`, `tests/` ili
+`.agents/`, merge se odbija — time agent koji piše fajl-sistemom, mimo MCP-a, ne
+može da ubaci izmenu van svoje zone u `main`. Ovo je kapija koju je našao
+red-team nalaz (reprodukcioni skript: `NALAZ-1.sh`), a pokrivena je testovima
+`tests/worktree.test.mjs` i `tests/pipeline.test.mjs`.
+
+**Zakup vezan za proces.** Uz `lock_owner` zakup nosi i `lock_token`. Dva procesa
+istog harnesa (`agy`) imaju isto ime, ali ne i isti token — drugi ne može da
+obnovi, otpusti ni piše pod živim zakupom prvog. MCP proverava isti token.
 
 **Kontekst zadatka u radnom stablu.** Pokazalo se da harnesi ne prosleđuju
 okruženje MCP serveru isto: `dsh` i `agy` nasleđuju `OBSIDIAN_*`, a `codex exec`

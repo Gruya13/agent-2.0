@@ -387,6 +387,48 @@ test('MCP: kontekst zadatka iz radnog stabla (.runtime) kada env nije nasleđen'
   await vault.cleanup();
 });
 
+test('MCP: revizorski zadatak menja samo ono što je u opsegu', async (t) => {
+  const vault = await seededVault();
+  const now = NOW;
+  await writeNote(vault.root, 'wiki/U_opsegu.md', {
+    frontmatter: { title: 'U opsegu', created: now, updated: now, authors: ['researcher'], status: 'consolidated', tags: [] },
+    body: '# U opsegu\n',
+  });
+  await writeNote(vault.root, 'wiki/Van_opsega.md', {
+    frontmatter: { title: 'Van opsega', created: now, updated: now, authors: ['researcher'], status: 'consolidated', tags: [] },
+    body: '# Van opsega\n',
+  });
+  // Revizorski zadatak: kind=audit, opseg pokriva samo jednu belešku.
+  await makeTask(vault, { id: 'TASK-801', status: 'in_progress', owner: 'codex', artifacts: [], verdict: null });
+  await vault.write('tasks/active/TASK-801.md', (await vault.read('tasks/active/TASK-801.md'))
+    .replace('source: raw/dokument.md', 'kind: audit\nsource: null\naudit_scope:\n  - wiki/U_opsegu.md'));
+
+  const client = await connect(vault.root, 'librarian', 'codex', t, { OBSIDIAN_TASK: 'TASK-801' });
+
+  // U opsegu: prolazi i bez verifikacionog pečata (pečat dolazi POSLE revizije).
+  const uOpsegu = await client.callTool('obsidian_write_note', { path: 'wiki/U_opsegu.md', content: '# U opsegu\n\nizmenjeno\n' });
+  assert.equal(uOpsegu.isError, false, uOpsegu.content[0].text);
+
+  // Van opsega: odbijeno.
+  const vanOpsega = await client.callTool('obsidian_write_note', { path: 'wiki/Van_opsega.md', content: '# x\n' });
+  assert.equal(vanOpsega.isError, true);
+  assert.match(vanOpsega.content[0].text, /ne ulazi u opseg revizije/);
+
+  // Revizija menja postojeće beleške, ne uvodi nove.
+  const nova = await client.callTool('obsidian_write_note', { path: 'wiki/Nova.md', content: '# x\n' });
+  assert.equal(nova.isError, true);
+  assert.match(nova.content[0].text, /ne ulazi u opseg revizije/);
+
+  // Izveštaj revizije ima svoju zonu.
+  const izvestaj = await client.callTool('obsidian_write_note', { path: 'tasks/audits/TASK-801.md', content: '# Revizija\n\n## Nalazi\n' });
+  assert.equal(izvestaj.isError, false, izvestaj.content[0].text);
+
+  // Izvedeni artefakt ostaje zaštićen i za reviziju.
+  const indeks = await client.callTool('obsidian_patch_note', { path: 'wiki/Index.md', section: 'X', content: 'y' });
+  assert.equal(indeks.isError, true);
+  await vault.cleanup();
+});
+
 // --------------------------------------------------------------- patch
 
 test('MCP: patch menja samo zadati odeljak', async (t) => {

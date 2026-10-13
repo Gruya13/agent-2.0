@@ -18,11 +18,12 @@ import { createStore } from './store.mjs';
 import { exists, sha256File } from './fsx.mjs';
 import { commitPaths, log as gitLog } from './git.mjs';
 import {
-  createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
+  changedFilesInWorktree, createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
   removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
 } from './worktree.mjs';
 import { buildPrompt, identityFor, parseVerdict, runAgent } from './agents/index.mjs';
 import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
+import { matchesScope } from './scope.mjs';
 import { listNotes, normalizeConsolidatedNote, readNote, renderIndex } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
 
@@ -36,6 +37,7 @@ export class PipelineError extends Error {
 
 const ROLE_OF_PHASE = {
   extract: 'extractor',
+  audit: 'librarian',
   research: 'researcher',
   verify: 'verifier',
   consolidate: 'consolidator',
@@ -46,6 +48,12 @@ export function createPipeline(config, options = {}) {
   const logger = options.logger ?? (() => {});
   const store = options.store ?? createStore(config, { clock });
   const maxRevisions = options.maxRevisions ?? config.pipeline.maxRevisions ?? 3;
+  /**
+   * Zakup je vezan za PROCES, ne samo za ime vendora: svaki `claim` dobija token
+   * koji se pamti ovde i predaje dalje uz `release`. Bez toga bi dva procesa
+   * istog harnesa držala „isti" zakup.
+   */
+  const leaseTokens = new Map();
 
   const now = () => clock().toISOString();
 
@@ -64,7 +72,7 @@ export function createPipeline(config, options = {}) {
   async function commitBookkeeping(message, actor = 'agentctl') {
     let paths = BOOKKEEPING_PATHS;
     const rawProblems = (await lintRawImmutability(config))
-      .filter((f) => f.level === 'error' && ['raw.modified', 'raw.deleted', 'raw.legacy-unknown'].includes(f.code));
+      .filter((f) => f.level === 'error' && ['raw.modified', 'raw.deleted', 'raw.legacy-unknown', 'raw.no-manifest', 'raw.symlink'].includes(f.code));
     if (rawProblems.length) {
       paths = BOOKKEEPING_PATHS.filter((p) => p !== 'raw');
       await store.emit('raw.violation', {
@@ -122,6 +130,35 @@ export function createPipeline(config, options = {}) {
     return store.get(id);
   }
 
+  /**
+   * Revizorski zadatak: nema izvora, ima **opseg**. Nastaje kada treba održati
+   * postojeću bazu (duplikati, siročići, oznake, kontradikcije), a ne uneti nov
+   * sadržaj.
+   */
+  async function audit({ title = null, scope, request = '', tags = [] } = {}) {
+    if (!Array.isArray(scope) || scope.length === 0) {
+      throw new PipelineError('revizorski zadatak zahteva opseg (npr. "wiki/*.md")', 'NO_SCOPE');
+    }
+    const id = await nextTaskId(config);
+    const naslov = title ?? `Revizija baze ${id}`;
+    const { data, body } = newTaskData({
+      id,
+      title: naslov,
+      kind: 'audit',
+      auditScope: scope,
+      extractRequired: false,
+      tags,
+      now: now(),
+      body: defaultBody(naslov, request || `Opseg revizije: ${scope.join(', ')}`),
+    });
+    await writeTaskFile(path.join(config.inbox, `${id}.md`), data, body);
+    await store.emit('task.audit', { task: id, scope, actor: 'operator' });
+    await store.transition(id, 'ready', { actor: 'agentctl', note: `opseg: ${scope.join(', ')}` });
+    await commitBookkeeping(`agentctl: revizorski zadatak ${id} (${scope.join(', ')})`);
+    logger(`audit: ${id} (${scope.join(', ')})`);
+    return store.get(id);
+  }
+
   /** Zavisnosti: sve iz `depends_on` moraju biti `consolidated`. */
   async function evaluateReadiness(id) {
     const task = await store.get(id);
@@ -163,7 +200,7 @@ export function createPipeline(config, options = {}) {
     const task = await store.tryGet(id);
     if (task && task.data.lock_owner === owner) {
       try {
-        await store.release(id, owner, { toStatus, note: `neuspeh: ${reason}` });
+        await store.release(id, owner, { toStatus, token: leaseTokens.get(id), note: `neuspeh: ${reason}` });
       } catch (error) {
         logger(`release nije uspeo za ${id}: ${error.message}`);
       }
@@ -180,6 +217,9 @@ export function createPipeline(config, options = {}) {
     if (task.data.status !== 'ready') {
       throw new PipelineError(`${id} nije u stanju ready (${task.data.status})`, 'NOT_READY');
     }
+    if ((task.data.kind ?? 'ingest') !== 'ingest') {
+      throw new PipelineError(`${id}: istraživanje se radi samo nad izvornim zadacima`, 'NOT_INGEST');
+    }
     if (task.data.extract_required && !task.data.extracted) {
       throw new PipelineError(`${id}: izvor čeka fazu extract`, 'AWAIT_EXTRACT');
     }
@@ -190,8 +230,9 @@ export function createPipeline(config, options = {}) {
 
     const role = ROLE_OF_PHASE.research;
     const owner = identityFor(config, role);
-    await store.claim(id, owner);
-    const claimed = await store.get(id);
+    const claimResult = await store.claim(id, owner);
+    leaseTokens.set(id, claimResult.leaseToken);
+    const claimed = { ...(await store.get(id)), leaseToken: claimResult.leaseToken };
     // Nacrt se gradi nad fragmentima ekstraktora, ako ih ima.
     const researchBase = task.data.extract_required ? `agent/${ROLE_OF_PHASE.extract}/${id}` : MAIN_BRANCH;
     const { path: wt, branch, config: wtConfig } = await prepareWorktree({
@@ -241,11 +282,105 @@ export function createPipeline(config, options = {}) {
       ].join('\n'),
       note: 'faza research završena',
     });
-    await store.release(id, owner, { toStatus: 'review', note: `nacrt spreman: ${produced.join(', ')}` });
+    await store.release(id, owner, { toStatus: 'review', token: leaseTokens.get(id), note: `nacrt spreman: ${produced.join(', ')}` });
     await commitBookkeeping(`agentctl: ${id} -> review (nacrt: ${produced.join(', ')})`);
     await store.emit('phase.done', { task: id, phase: 'research', role, artifacts: produced, commit: commit.sha });
     logger(`research: ${id} -> ${produced.join(', ')} (${result.harness})`);
     return { phase: 'research', task: id, ok: true, artifacts: produced, commit: commit.sha, branch };
+  }
+
+  // ------------------------------------------------------------- faza 1b
+
+  /**
+   * Faza `audit`: održavanje postojeće baze (`librarian`).
+   *
+   * Kontrolni sloj ovde ima drugu, važniju dužnost od MCP-a: agent koji radi
+   * fajl-sistemom može da zaobiđe MCP zonu, pa se **svaka** izmena proverava
+   * prema opsegu zadatka pre nego što uđe u granu. Izmena van opsega obara fazu.
+   */
+  async function runAudit(id) {
+    const task = await store.get(id);
+    if ((task.data.kind ?? 'ingest') !== 'audit') {
+      throw new PipelineError(`${id} nije revizorski zadatak`, 'NOT_AUDIT');
+    }
+    if (task.data.status !== 'ready') {
+      throw new PipelineError(`${id} nije u stanju ready (${task.data.status})`, 'NOT_READY');
+    }
+    const scope = task.data.audit_scope ?? [];
+    const role = ROLE_OF_PHASE.audit;
+    const owner = identityFor(config, role);
+    const claimResult = await store.claim(id, owner);
+    leaseTokens.set(id, claimResult.leaseToken);
+    const claimed = { ...(await store.get(id)), leaseToken: claimResult.leaseToken };
+    const { path: wt, branch, config: wtConfig } = await prepareWorktree({
+      id, role, fresh: true, branch: `agent/${role}/${id}`,
+    });
+    await store.emit('phase.start', { task: id, phase: 'audit', role, worktree: wt, branch, scope });
+
+    const prompt = await buildPrompt(config, {
+      role,
+      task: claimed,
+      extra: {
+        worktree: wt,
+        instructions: [
+          `Opseg revizije: ${scope.join(', ')}`,
+          `Izveštaj piši u ${config.vault.tasks}/audits/${id}.md.`,
+          'Menjaj samo postojeće beleške iz opsega; ne kreiraj nove članke.',
+        ].join('\n'),
+      },
+    });
+
+    let result;
+    try {
+      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+    } catch (error) {
+      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
+      throw error;
+    }
+
+    const izvestaj = `tasks/audits/${id}.md`;
+    const changed = await changedFilesInWorktree(wt, MAIN_BRANCH);
+    const vanOpsega = changed.filter((rel) => rel !== izvestaj && !matchesScope(rel, scope));
+    if (vanOpsega.length) {
+      await store.updateBody(id, {
+        actor: owner,
+        append: `### Revizija odbijena (${now()})\n\nIzmene van opsega \`${scope.join(', ')}\`:\n\n${vanOpsega.map((r) => `- ${r}`).join('\n')}`,
+        note: 'izmene van opsega revizije',
+      });
+      await failPhase(id, role, { reason: `izmene van opsega: ${vanOpsega.join(', ')}` });
+      return { phase: 'audit', task: id, ok: false, reason: 'izmene van opsega', outside: vanOpsega };
+    }
+    const beleske = changed.filter((rel) => rel.startsWith('wiki/'));
+    if (!result.ok || (!beleske.length && !changed.includes(izvestaj))) {
+      await failPhase(id, role, { reason: `nema izveštaja ni izmena (exit ${result.exitCode})` });
+      return { phase: 'audit', task: id, ok: false, reason: 'nema rezultata revizije' };
+    }
+
+    const commit = await commitWorktreeSafe(config, id, role, `librarian(${id}): revizija baze (${scope.join(', ')})`, owner);
+    await store.attachArtifacts(id, changed, { actor: owner, note: `revizija: ${changed.length} fajlova` });
+    await store.updateBody(id, {
+      actor: owner,
+      append: [
+        `### Faza audit (${now()})`,
+        '',
+        `- harnes: ${result.harness}`,
+        `- trajanje: ${result.durationMs} ms`,
+        `- opseg: ${scope.join(', ')}`,
+        `- izmenjenih belešaka: ${beleske.length}`,
+        `- izveštaj: ${changed.includes(izvestaj) ? izvestaj : '(nije napisan)'}`,
+        `- grana: ${branch} @ ${commit.sha ?? '(bez komita)'}`,
+        '',
+        '```',
+        result.output.slice(0, 3000),
+        '```',
+      ].join('\n'),
+      note: 'faza audit završena',
+    });
+    await store.release(id, owner, { toStatus: 'review', token: leaseTokens.get(id), note: `revizija predata: ${beleske.length} belešaka` });
+    await commitBookkeeping(`agentctl: ${id} -> review (revizija baze)`);
+    await store.emit('phase.done', { task: id, phase: 'audit', role, changed, commit: commit.sha, scope });
+    logger(`audit: ${id} -> ${beleske.length} izmenjenih belešaka (${result.harness})`);
+    return { phase: 'audit', task: id, ok: true, artifacts: changed, commit: commit.sha, scope };
   }
 
   // ------------------------------------------------------------- faza 2a
@@ -263,6 +398,9 @@ export function createPipeline(config, options = {}) {
     if (task.data.status !== 'ready') {
       throw new PipelineError(`${id} nije u stanju ready (${task.data.status})`, 'NOT_READY');
     }
+    if ((task.data.kind ?? 'ingest') !== 'ingest') {
+      throw new PipelineError(`${id}: ekstrakcija se radi samo nad izvornim zadacima`, 'NOT_INGEST');
+    }
     if (!task.data.extract_required) {
       throw new PipelineError(`${id}: izvor ne zahteva ekstrakciju`, 'NO_EXTRACT');
     }
@@ -271,8 +409,9 @@ export function createPipeline(config, options = {}) {
     }
     const role = ROLE_OF_PHASE.extract;
     const owner = identityFor(config, role);
-    await store.claim(id, owner);
-    const claimed = await store.get(id);
+    const claimResult = await store.claim(id, owner);
+    leaseTokens.set(id, claimResult.leaseToken);
+    const claimed = { ...(await store.get(id)), leaseToken: claimResult.leaseToken };
     const { path: wt, branch, config: wtConfig } = await prepareWorktree({
       id, role, fresh: true, branch: `agent/${role}/${id}`,
     });
@@ -340,7 +479,7 @@ export function createPipeline(config, options = {}) {
       ].join('\n'),
       note: 'faza extract završena',
     });
-    await store.release(id, owner, { toStatus: 'ready', note: `fragmenti spremni: ${produced.join(', ')}` });
+    await store.release(id, owner, { toStatus: 'ready', token: leaseTokens.get(id), note: `fragmenti spremni: ${produced.join(', ')}` });
     await commitBookkeeping(`agentctl: ${id} -> ready (fragmenti: ${produced.length})`);
     await store.emit('phase.done', { task: id, phase: 'extract', role, artifacts: produced, commit: commit.sha, sourceSha });
     logger(`extract: ${id} -> ${produced.length} fragment(a) (${result.harness})`);
@@ -356,11 +495,16 @@ export function createPipeline(config, options = {}) {
     }
     const role = ROLE_OF_PHASE.verify;
     const owner = identityFor(config, role);
-    const researcherBranch = `agent/${ROLE_OF_PHASE.research}/${id}`;
-    await store.claim(id, owner);
-    const claimed = await store.get(id);
+    // Revizorski zadatak dolazi iz `librarian` grane, izvorni iz `researcher`.
+    const jeRevizija = (task.data.kind ?? 'ingest') === 'audit';
+    const izvorna = jeRevizija
+      ? `agent/${ROLE_OF_PHASE.audit}/${id}`
+      : `agent/${ROLE_OF_PHASE.research}/${id}`;
+    const claimResult = await store.claim(id, owner);
+    leaseTokens.set(id, claimResult.leaseToken);
+    const claimed = { ...(await store.get(id)), leaseToken: claimResult.leaseToken };
     const { path: wt, config: wtConfig } = await prepareWorktree({
-      id, role, base: researcherBranch, fresh: true, branch: `agent/${role}/${id}`,
+      id, role, base: izvorna, fresh: true, branch: `agent/${role}/${id}`,
     });
     await store.emit('phase.start', { task: id, phase: 'verify', role, worktree: wt });
 
@@ -369,7 +513,16 @@ export function createPipeline(config, options = {}) {
       task: claimed,
       extra: {
         worktree: wt,
-        instructions: `Nacrt: ${(claimed.data.artifacts ?? []).join(', ') || '(vidi wiki/drafts/)'}. Revizorski trag ide u ${config.vault.tasks}/reviews/${id}.md. Poslednja linija izlaza mora biti "VERDICT: pass" ili "VERDICT: fail".`,
+        instructions: [
+          jeRevizija
+            ? `Ovo je REVIZIJA BAZE, ne nacrt. Opseg: ${(claimed.data.audit_scope ?? []).join(', ')}. Izveštaj revizije: ${config.vault.tasks}/audits/${id}.md. Izmenjene beleške: ${(claimed.data.artifacts ?? []).filter((r) => r.startsWith('wiki/')).join(', ') || '(nema)'}.`
+            : `Nacrt: ${(claimed.data.artifacts ?? []).join(', ') || '(vidi wiki/drafts/)'}.`,
+          jeRevizija
+            ? 'Proveri da su izmene unutar opsega, da izveštaj navodi dokaz za svaku izmenu i da nijedan novi članak nije uveden.'
+            : 'Proveri nacrt protiv izvora i postojećeg znanja.',
+          `Revizorski trag ide u ${config.vault.tasks}/reviews/${id}.md.`,
+          'Poslednja linija izlaza mora biti "VERDICT: pass" ili "VERDICT: fail".',
+        ].join('\n'),
       },
     });
 
@@ -404,7 +557,7 @@ export function createPipeline(config, options = {}) {
         `- harnes: ${result.harness}`,
         `- trajanje: ${result.durationMs} ms`,
         `- verdikt: ${verdict}`,
-        `- grana: ${researcherBranch} -> verifier @ ${commit.sha ?? '(bez komita)'}`,
+        `- grana: ${izvorna} -> verifier @ ${commit.sha ?? '(bez komita)'}`,
         '',
         '```',
         result.output.slice(0, 4000),
@@ -414,7 +567,7 @@ export function createPipeline(config, options = {}) {
     });
 
     if (verdict === 'pass') {
-      await store.release(id, owner, { toStatus: 'verified', note: 'verifikator dao pečat' });
+      await store.release(id, owner, { toStatus: 'verified', token: leaseTokens.get(id), note: 'verifikator dao pečat' });
       await commitBookkeeping(`agentctl: ${id} -> verified (${result.harness})`);
       await store.emit('phase.done', { task: id, phase: 'verify', role, verdict });
       logger(`verify: ${id} -> pass`);
@@ -433,7 +586,7 @@ export function createPipeline(config, options = {}) {
       await store.emit('phase.failed', { task: id, role, reason: 'previse revizija' });
       return { phase: 'verify', task: id, ok: false, verdict: 'fail', blocked: true };
     }
-    await store.release(id, owner, { toStatus: 'ready', note: `odbijen nacrt (pokušaj ${attempts}); vraćeno istraživaču` });
+    await store.release(id, owner, { toStatus: 'ready', token: leaseTokens.get(id), note: `odbijen nacrt (pokušaj ${attempts}); vraćeno istraživaču` });
     await commitBookkeeping(`agentctl: ${id} -> ready (nacrt odbijen, pokušaj ${attempts})`);
     await removeWorktree(config, id, { role });
     await store.emit('phase.rejected', { task: id, role, attempts });
@@ -443,16 +596,55 @@ export function createPipeline(config, options = {}) {
 
   // ------------------------------------------------------------- faza 4
 
+  /**
+   * Revizorski zadatak nema šta da se „promoviše": izmene su već u `wiki/`, na
+   * grani verifikatora. Zato ovde nema konsolidatora — kontrolni sloj samo
+   * spaja verifikovanu granu i regeneriše izvedene artefakte.
+   */
+  async function mergeAudit(id, task) {
+    const role = ROLE_OF_PHASE.consolidate;
+    const owner = identityFor(config, role);
+    const verifyRole = ROLE_OF_PHASE.verify;
+    const branch = `agent/${verifyRole}/${id}`;
+    await store.claim(id, owner);
+    await store.emit('phase.start', { task: id, phase: 'consolidate', role, branch, kind: 'audit' });
+
+    const merge = await mergeIntoMain(config, {
+      branch,
+      message: `agentctl(${id}): revizija baze (librarian+verifier)`,
+      worktreeDir: worktreePath(config, id, verifyRole),
+      generatedPaths: [config.vault.index],
+    });
+    if (!merge.merged) {
+      await store.transition(id, 'blocked', { actor: 'agentctl', note: `merge revizije nije prošao: ${merge.reason}` });
+      await commitBookkeeping(`agentctl: ${id} -> blocked (revizija: ${merge.reason})`);
+      await store.emit('phase.failed', { task: id, phase: 'consolidate', kind: 'audit', reason: merge.reason });
+      return { phase: 'consolidate', task: id, ok: false, reason: merge.reason, kind: 'audit' };
+    }
+
+    await store.transition(id, 'consolidated', { actor: 'agentctl', note: `revizija spojena ${merge.sha.slice(0, 8)}` });
+    await store.setAuthors(id, [ROLE_OF_PHASE.audit, verifyRole], { actor: 'agentctl' });
+    await removeWorktreesForTask(config, id);
+    await deleteBranch(config, `agent/${ROLE_OF_PHASE.audit}/${id}`);
+    await deleteBranch(config, branch);
+    await commitBookkeeping(`agentctl: ${id} revizija konsolidovana (${merge.sha.slice(0, 8)})`);
+    await store.emit('phase.done', { task: id, phase: 'consolidate', role, kind: 'audit', merge: merge.sha });
+    logger(`consolidate: ${id} (revizija) -> main @ ${merge.sha.slice(0, 8)}`);
+    return { phase: 'consolidate', task: id, ok: true, kind: 'audit', merge: merge.sha };
+  }
+
   async function runConsolidate(id) {
     const task = await store.get(id);
     if (task.data.status !== 'verified') {
       throw new PipelineError(`${id} nije u stanju verified (${task.data.status})`, 'NOT_VERIFIED');
     }
+    if ((task.data.kind ?? 'ingest') === 'audit') return mergeAudit(id, task);
     const role = ROLE_OF_PHASE.consolidate;
     const owner = identityFor(config, role);
     const verifierBranch = `agent/${ROLE_OF_PHASE.verify}/${id}`;
-    await store.claim(id, owner);
-    const claimed = await store.get(id);
+    const claimResult = await store.claim(id, owner);
+    leaseTokens.set(id, claimResult.leaseToken);
+    const claimed = { ...(await store.get(id)), leaseToken: claimResult.leaseToken };
     const { path: wt, config: wtConfig } = await prepareWorktree({
       id, role, base: verifierBranch, fresh: true, branch: `agent/${role}/${id}`,
     });
@@ -606,25 +798,28 @@ export function createPipeline(config, options = {}) {
     const tasks = await store.list();
     const pick = (status) => tasks.filter((t) => t.data.status === status).map((t) => t.data.id);
 
-    const phases = only ? [only] : ['consolidate', 'verify', 'extract', 'research'];
+    const phases = only ? [only] : ['consolidate', 'verify', 'audit', 'extract', 'research'];
     for (const phase of phases) {
       const status = {
-        consolidate: 'verified', verify: 'review', extract: 'ready', research: 'ready',
+        consolidate: 'verified', verify: 'review', audit: 'ready', extract: 'ready', research: 'ready',
       }[phase];
       for (const id of pick(status)) {
         const role = ROLE_OF_PHASE[phase];
         // Stanje se čita iznova: faza `extract` u istom krugu pušta `research`.
         const fresh = await store.tryGet(id);
         if (!fresh) continue;
-        if (phase === 'extract' && (!fresh.data.extract_required || fresh.data.extracted)) continue;
-        if (phase === 'research' && fresh.data.extract_required && !fresh.data.extracted) continue;
+        const kind = fresh.data.kind ?? 'ingest';
+        if (phase === 'audit' && kind !== 'audit') continue;
+        if (phase === 'extract' && (kind !== 'ingest' || !fresh.data.extract_required || fresh.data.extracted)) continue;
+        if (phase === 'research' && (kind !== 'ingest' || (fresh.data.extract_required && !fresh.data.extracted))) continue;
         if (phase === 'verify' && fresh.data.status !== 'review') continue;
         if (phase === 'consolidate' && fresh.data.status !== 'verified') continue;
         try {
           const result = phase === 'consolidate' ? await runConsolidate(id)
             : phase === 'verify' ? await runVerify(id)
-              : phase === 'extract' ? await runExtract(id)
-                : await runResearch(id);
+              : phase === 'audit' ? await runAudit(id)
+                : phase === 'extract' ? await runExtract(id)
+                  : await runResearch(id);
           actions.push(result);
         } catch (error) {
           await store.emit('phase.error', { task: id, phase, role, error: error.message });
@@ -685,7 +880,7 @@ export function createPipeline(config, options = {}) {
 
   return {
     config, store, clock, logger,
-    ingest, runExtract, runResearch, runVerify, runConsolidate, reflect, runOnce, run, status,
+    ingest, audit, runAudit, runExtract, runResearch, runVerify, runConsolidate, reflect, runOnce, run, status,
     evaluateReadiness, failPhase,
   };
 }

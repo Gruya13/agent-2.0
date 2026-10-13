@@ -81,9 +81,16 @@ test('CLI: ručni zakup kroz claim/renew/release', async () => {
   const claim = await runCli(vault.root, ['claim', 'TASK-101', '--owner', 'researcher', '--ttl', '60000']);
   assert.equal(claim.code, 0, claim.stderr);
   assert.match(claim.stdout, /TASK-101 -> researcher/);
+  const token = /token: (\S+)/.exec(claim.stdout)?.[1];
+  assert.ok(token, 'claim mora da ispiše token zakupa');
 
-  const renew = await runCli(vault.root, ['renew', 'TASK-101', '--owner', 'researcher']);
+  const renew = await runCli(vault.root, ['renew', 'TASK-101', '--owner', 'researcher', '--token', token]);
   assert.equal(renew.code, 0, renew.stderr);
+
+  // Isti identitet, ali bez tokena: zakup drži drugi proces.
+  const bezTokena = await runCli(vault.root, ['renew', 'TASK-101', '--owner', 'researcher']);
+  assert.equal(bezTokena.code, 1);
+  assert.match(bezTokena.stderr, /drugi proces/);
 
   const conflict = await runCli(vault.root, ['claim', 'TASK-101', '--owner', 'verifier']);
   assert.equal(conflict.code, 1);
@@ -94,7 +101,7 @@ test('CLI: ručni zakup kroz claim/renew/release', async () => {
   assert.equal(badRelease.code, 1);
   assert.match(badRelease.stderr, /ne može da ostavi TASK-101 u stanju "in_progress"/);
 
-  const release = await runCli(vault.root, ['release', 'TASK-101', '--owner', 'researcher', '--to', 'ready']);
+  const release = await runCli(vault.root, ['release', 'TASK-101', '--owner', 'researcher', '--to', 'ready', '--token', token]);
   assert.equal(release.code, 0, release.stderr);
   assert.match(release.stdout, /TASK-101 -> ready/);
 
@@ -124,6 +131,24 @@ test('CLI: phase izvršava jednu fazu i vraća 0', async () => {
   await vault.cleanup();
 });
 
+test('CLI: audit otvara revizorski zadatak sa opsegom i proverava ga', async () => {
+  const vault = await makeVault();
+  await runCli(vault.root, ['init']);
+
+  const bezOpsega = await runCli(vault.root, ['audit']);
+  assert.equal(bezOpsega.code, 1);
+  assert.match(bezOpsega.stderr, /opseg/);
+
+  const audit = await runCli(vault.root, ['audit', '--title', 'Revizija baze', '--scope', 'wiki/*.md']);
+  assert.equal(audit.code, 0, audit.stderr);
+  assert.match(audit.stdout, /revizorski zadatak TASK-101 \(ready\) opseg: wiki\/\*\.md/);
+
+  const show = await runCli(vault.root, ['show', 'TASK-101']);
+  assert.match(show.stdout, /vrsta: audit/);
+  assert.match(show.stdout, /opseg: wiki\/\*\.md/);
+  await vault.cleanup();
+});
+
 test('CLI: doctor proverava okruženje i prijavljuje adaptere', async () => {
   const vault = await makeVault();
   await runCli(vault.root, ['init']);
@@ -136,7 +161,7 @@ test('CLI: doctor proverava okruženje i prijavljuje adaptere', async () => {
   assert.ok(names.some((n) => n.includes('harnes codex')));
   assert.ok(names.some((n) => n.includes('harnes agy')));
   const roles = checks.filter((c) => c.name.startsWith('uloga '));
-  assert.equal(roles.length, 4, 'extractor, researcher, verifier, consolidator');
+  assert.equal(roles.length, 5, 'extractor, researcher, verifier, librarian, consolidator');
   assert.match(roles.map((r) => r.detail).join(','), /mock/);
   await vault.cleanup();
 });

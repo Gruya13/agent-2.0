@@ -48,6 +48,11 @@ agents:
     harness: dsh
     model: null
     timeoutMs: 900000
+  librarian:
+    adapter: harness
+    harness: codex
+    model: null
+    timeoutMs: 900000
   consolidator:
     adapter: harness
     harness: codex

@@ -157,6 +157,20 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
     return { merged: false, reason: 'glavni repozitorijum nije registrovan kao radno stablo' };
   }
 
+  // 0. Grana sme da menja SAMO zone znanja. Bez ove kapije bi agent koji piše
+  //    fajl-sistemom (mimo MCP-a) mogao da ubaci `raw/`, `tools/` ili `.agents/`
+  //    u `main` — dokazano reprodukcionim skriptom u protnoj rundi.
+  const dozvoljeneZone = ['wiki/', 'tasks/reviews/', 'tasks/audits/'];
+  const izmene = await branchChangedPaths(config, branch);
+  const vanZone = izmene.filter((f) => !dozvoljeneZone.some((z) => f.startsWith(z)));
+  if (vanZone.length) {
+    return {
+      merged: false,
+      outOfZone: vanZone,
+      reason: `grana menja zone van dozvole: ${vanZone.join(', ')}`,
+    };
+  }
+
   // 1. Knjigovodstvo crne table u main mora biti komitovano pre spajanja.
   const dirty = await statusPorcelain(config.root);
   if (dirty.length) {
@@ -214,6 +228,40 @@ export async function mergeIntoMain(config, { branch, message, actor = 'agentctl
  * Poslednja linija odbrane: i pored zakupa, proveri da su izmene na grani
  * zaista iz agentske zone pre nego što uđu u `main`.
  */
+/**
+ * Fajlovi koje je agent izmenio u svom radnom stablu, prema bazi grane.
+ *
+ * Obuhvata TRI izvora, jer svaki sam za sebe nešto propušta:
+ *   - `git diff base` — izmene praćenih fajlova,
+ *   - `git status --porcelain` — NEpraćene (novi izveštaj, novi fajl),
+ *   - `git diff base HEAD` — slučaj kada je agent sam komitovao svoj rad.
+ * Koristi se pre commit-a, npr. da se proveri da revizija nije izašla iz opsega.
+ */
+export async function changedFilesInWorktree(worktreeDir, base = MAIN_BRANCH) {
+  const skup = new Set();
+  const dodaj = (text) => {
+    for (const line of String(text ?? '').split('\n')) {
+      if (!line.trim()) continue;
+      let rel = line.slice(3).trim();
+      if (rel.includes(' -> ')) rel = rel.split(' -> ').pop();
+      skup.add(rel.replace(/^"|"$/g, ''));
+    }
+  };
+
+  const radni = await git(worktreeDir, ['diff', '--name-only', '--no-renames', base], { allowFailure: true });
+  for (const rel of radni.stdout ? radni.stdout.split('\n') : []) if (rel) skup.add(rel);
+
+  // `-uall`: bez toga git sažima nepraćene direktorijume ("tasks/audits/"), pa se
+  // fajl unutra ne vidi i opseg se ne može proveriti po putanji.
+  const status = await git(worktreeDir, ['status', '--porcelain', '--no-renames', '--untracked-files=all'], { allowFailure: true });
+  dodaj(status.stdout);
+
+  const komitovano = await git(worktreeDir, ['diff', '--name-only', '--no-renames', base, 'HEAD'], { allowFailure: true });
+  for (const rel of komitovano.stdout ? komitovano.stdout.split('\n') : []) if (rel) skup.add(rel);
+
+  return [...skup].sort();
+}
+
 export async function branchChangedPaths(config, branch, base = MAIN_BRANCH) {
   const { stdout } = await git(config.root, ['diff', '--name-only', `${base}...${branch}`], { allowFailure: true });
   return stdout ? stdout.split('\n').filter(Boolean) : [];

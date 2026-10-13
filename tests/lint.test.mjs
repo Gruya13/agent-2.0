@@ -145,6 +145,34 @@ test('lint: uklonjen izvor je greška', async () => {
   await vault.cleanup();
 });
 
+test('lint: simbolički link u raw/ je greška, ne nevidljiv izvor', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
+  await fs.symlink('../izvan.md', path.join(vault.root, 'raw', 'link.md'));
+  const result = await lintVault(config);
+  const linkovi = find(result.findings, 'raw.symlink');
+  assert.equal(linkovi.length, 1, 'link u raw/ mora biti prijavljen');
+  assert.equal(linkovi[0].target, 'raw/link.md');
+  assert.equal(result.ok, false);
+  await vault.cleanup();
+});
+
+test('lint: bez manifesta izvori nisu „nepromenljivi" po defaultu', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
+  // Brisanje manifesta ne sme da snizi zaštitu na upozorenje.
+  await fs.rm(path.join(vault.root, '.agents', 'raw-manifest.json'));
+  await vault.write('raw/dokument.md', 'izmijenjen sadrzaj bez manifesta');
+  const result = await lintVault(config);
+  const bezManifesta = find(result.findings, 'raw.no-manifest');
+  assert.equal(bezManifesta.length, 1);
+  assert.equal(bezManifesta[0].level, 'error', 'raw/ ima fajlove, pa je nedostatak manifesta greška');
+  assert.equal(result.ok, false);
+  await vault.cleanup();
+});
+
 test('lint: git izmena u raw/ je nezavisna greška', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);
@@ -266,6 +294,7 @@ test('lint: zadatak u pogrešnoj fazi i neispravna istorija prelaza se prijavlju
 test('lint: istekao zakup je upozorenje, ne greška', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);
+  await updateRawManifest(config);
   await vault.write('tasks/active/TASK-002.md', [
     '---',
     'id: TASK-002',

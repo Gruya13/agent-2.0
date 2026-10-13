@@ -69,6 +69,7 @@ Upotreba: agentctl <komanda> [opcije]
 Komande:
   init                      uspostavi topologiju vault-a i glavnu granu
   ingest <raw/fajl>         otvori zadatak iz izvornog dokumenta
+  audit [--scope A,B]       otvori revizorski zadatak nad opsegom baze
   list [--status <s>]       prikaži zadatke
   show <TASK-ID>            prikaži zadatak
   claim <TASK-ID> --owner   preuzmi zadatak pod vremenski zakup
@@ -93,9 +94,12 @@ Globalne opcije:
   --tag a,b                 oznake zadatka
   --depends TASK-001,...    zavisnosti
   --owner <ime>             vlasnik zakupa
+  --token <token>           token zakupa (izlaz komande claim)
   --ttl <ms>                trajanje zakupa
   --rounds <n>              broj krugova kontrolne petlje
   --only <faza>             ograniči run na jednu fazu
+  --scope a,b               opseg revizije (npr. "wiki/*.md")
+  --extract / --no-extract  forsiraj ili zabrani fazu extract
   --config <fajl>           alternativna konfiguracija
 `;
 
@@ -134,14 +138,30 @@ const COMMANDS = {
     if (!source) throw new Error('ingest zahteva putanju izvora, npr. raw/dokument.md');
     const tags = flags.tag ? String(flags.tag).split(',').map((t) => t.trim()).filter(Boolean) : [];
     const dependsOn = flags.depends ? String(flags.depends).split(',').map((t) => t.trim()).filter(Boolean) : [];
+    const extract = flags.extract === true ? true : flags['no-extract'] === true ? false : null;
     const task = await pipeline.ingest({
       source,
       title: typeof flags.title === 'string' ? flags.title : null,
       request: typeof flags.request === 'string' ? flags.request : '',
       tags,
       dependsOn,
+      extract,
     });
     out(`zadatak ${task.data.id} (${task.data.status}) <- ${task.data.source}`);
+    return 0;
+  },
+
+  async audit({ flags, pipeline }, positional) {
+    const scope = flags.scope
+      ? String(flags.scope).split(',').map((x) => x.trim()).filter(Boolean)
+      : positional.slice(0);
+    const task = await pipeline.audit({
+      title: typeof flags.title === 'string' ? flags.title : null,
+      scope,
+      request: typeof flags.request === 'string' ? flags.request : '',
+      tags: flags.tag ? String(flags.tag).split(',').map((x) => x.trim()).filter(Boolean) : [],
+    });
+    out(`revizorski zadatak ${task.data.id} (${task.data.status}) opseg: ${(task.data.audit_scope ?? []).join(', ')}`);
     return 0;
   },
 
@@ -165,7 +185,9 @@ const COMMANDS = {
     if (flags.json) { json({ ...task.data, phase: task.phase }); return 0; }
     out(`# ${task.data.id} — ${task.data.title}`);
     out(`status: ${task.data.status}   faza: ${task.phase}   zakup: ${task.data.lock_owner ?? '—'}`);
+    out(`vrsta: ${task.data.kind ?? 'ingest'}`);
     out(`izvor: ${task.data.source ?? '—'}`);
+    if ((task.data.audit_scope ?? []).length) out(`opseg: ${task.data.audit_scope.join(', ')}`);
     out(`artefakti: ${(task.data.artifacts ?? []).join(', ') || '—'}`);
     if (task.data.verification) out(`verifikacija: ${task.data.verification.verdict} (${task.data.verification.harness ?? '?'})`);
     out('');
@@ -180,12 +202,18 @@ const COMMANDS = {
     const ttl = flags.ttl ? Number(flags.ttl) : config.lease.ttlMs;
     const task = await store.claim(id, owner, { ttlMs: ttl });
     out(`zakup: ${task.data.id} -> ${task.data.lock_owner} do ${task.data.lease_expires_at}`);
+    // Token vezuje zakup za PROCES: drugi proces istog identiteta ne može da ga
+    // obnovi, otpusti ni piše pod njim.
+    out(`token: ${task.leaseToken}`);
     return 0;
   },
 
   async renew({ store, config, flags }, positional) {
     const id = positional[0];
-    const task = await store.renew(id, flags.owner, { ttlMs: flags.ttl ? Number(flags.ttl) : config.lease.ttlMs });
+    const task = await store.renew(id, flags.owner, {
+      ttlMs: flags.ttl ? Number(flags.ttl) : config.lease.ttlMs,
+      token: typeof flags.token === 'string' ? flags.token : null,
+    });
     out(`zakup obnovljen: ${task.data.id} do ${task.data.lease_expires_at}`);
     return 0;
   },
@@ -193,7 +221,10 @@ const COMMANDS = {
   async release({ store, flags }, positional) {
     const id = positional[0];
     const status = typeof flags.to === 'string' ? flags.to : 'ready';
-    const task = await store.release(id, flags.owner, { toStatus: status });
+    const task = await store.release(id, flags.owner, {
+      toStatus: status,
+      token: typeof flags.token === 'string' ? flags.token : null,
+    });
     out(`zakup oslobođen: ${task.data.id} -> ${task.data.status}`);
     return 0;
   },
@@ -207,8 +238,11 @@ const COMMANDS = {
 
   async phase({ pipeline, flags }, positional) {
     const [phase, id] = positional;
-    if (!phase || !id) throw new Error('phase zahteva: phase <research|verify|consolidate> <TASK-ID>');
-    const run = { research: pipeline.runResearch, verify: pipeline.runVerify, consolidate: pipeline.runConsolidate }[phase];
+    if (!phase || !id) throw new Error('phase zahteva: phase <extract|research|verify|audit|consolidate> <TASK-ID>');
+    const run = {
+      extract: pipeline.runExtract, research: pipeline.runResearch, verify: pipeline.runVerify,
+      audit: pipeline.runAudit, consolidate: pipeline.runConsolidate,
+    }[phase];
     if (!run) throw new Error(`nepoznata faza "${phase}"`);
     const result = await run(id);
     if (flags.json) json(result); else out(JSON.stringify(result, null, 2));

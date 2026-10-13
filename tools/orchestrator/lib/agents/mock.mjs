@@ -13,7 +13,7 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { loadConfig } from '../config.mjs';
-import { exists, sha256File } from '../fsx.mjs';
+import { exists, sha256File, writeFileAtomic } from '../fsx.mjs';
 import { lintVault } from '../lint.mjs';
 import {
   extractWikilinks, listNotes, noteFrontmatterProblems, noteName, noteSlug,
@@ -40,6 +40,11 @@ function firstParagraph(text) {
 }
 
 async function researcher(config, { task, cwd, now }) {
+  // Testni režim: upis van zone znanja (u `raw/`), da se dokaže da ga kontrolni
+  // sloj zaustavlja na merge-u — agent to može fajl-sistemom, mimo MCP-a.
+  if (process.env.AGENT_2_0_MOCK_INJECT_RAW === '1') {
+    await writeFileAtomic(path.join(cwd, 'raw', 'INJECTED.md'), '# injektirano\n');
+  }
   const source = task.data.source;
   if (!source) return { ok: false, output: 'zadatak nema polje "source"', artifacts: [] };
   const sourcePath = path.resolve(cwd, source);
@@ -96,6 +101,55 @@ async function researcher(config, { task, cwd, now }) {
 }
 
 async function verifier(config, { task, cwd, now }) {
+  // Revizija baze se proverava drugačije: nema nacrta, ali postoje izveštaj i
+  // izmenjene produkcione beleške.
+  if ((task.data.kind ?? 'ingest') === 'audit') {
+    const izvestaj = `tasks/audits/${task.data.id}.md`;
+    const problemi = [];
+    if (!(await exists(path.resolve(cwd, izvestaj)))) {
+      problemi.push('- [error] nema izveštaja revizije');
+    } else {
+      const n = await readNote(cwd, izvestaj);
+      for (const p of noteFrontmatterProblems(n.frontmatter)) problemi.push(`- [error] izveštaj: ${p}`);
+      if (!/## Nalazi/.test(n.body)) problemi.push('- [error] izveštaj nema odeljak "Nalazi"');
+    }
+    for (const rel of (task.data.artifacts ?? []).filter((r) => r.startsWith('wiki/'))) {
+      try {
+        const n = await readNote(cwd, rel);
+        for (const p of noteFrontmatterProblems(n.frontmatter)) problemi.push(`- [error] ${rel}: ${p}`);
+      } catch {
+        problemi.push(`- [error] ${rel} se ne može pročitati`);
+      }
+    }
+    const forced = process.env.AGENT_2_0_MOCK_VERDICT;
+    const verdikt = forced === 'fail' ? 'fail' : forced === 'pass' ? 'pass' : (problemi.length ? 'fail' : 'pass');
+    const reviewRel = `tasks/reviews/${task.data.id}.md`;
+    await writeNote(cwd, reviewRel, {
+      frontmatter: {
+        title: `Revizija revizije ${task.data.id}`, created: now, updated: now,
+        authors: ['verifier'], status: 'review', tags: ['revizija', task.data.id],
+      },
+      body: [
+        `# Revizija revizije ${task.data.id}`, '',
+        `- opseg: ${(task.data.audit_scope ?? []).join(', ')}`,
+        `- verdikt: ${verdikt}`,
+        `- nalaza: ${problemi.length}`, '',
+        '## Nalazi', '',
+        ...(problemi.length ? problemi : ['- nema nalaza; revizija je u opsegu i izveštaj je potpun']), '',
+        '## Dokazi', '',
+        `- izveštaj postoji: ${await exists(path.resolve(cwd, izvestaj))}`,
+        `- izmenjenih belešaka: ${(task.data.artifacts ?? []).filter((r) => r.startsWith('wiki/')).length}`, '',
+      ].join('\n'),
+    });
+    return {
+      ok: true,
+      output: [`MOCK verifier (revizija baze): ${problemi.length} nalaza.`, ...problemi,
+        `VERDICT: ${verdikt}`, ...(verdikt === 'fail' ? [`REASONS: ${problemi.length || 1}`] : [])].join('\n'),
+      artifacts: [reviewRel],
+      verdict: verdikt,
+    };
+  }
+
   // Fragment je sirovina, ne nacrt: bira se prvi artefakt koji nije fragment.
   const svi = (task.data.artifacts ?? []).length
     ? task.data.artifacts
@@ -289,9 +343,104 @@ async function extractor(config, { task, cwd, now }) {
   };
 }
 
+/**
+ * Librarian: pregled opsega i strukturne popravke. Mock radi deterministički
+ * ono što je merljivo: skida pokvarene Vikilinkove iz produkcionih belešaka i
+ * normalizuje oznake na mala slova, pa o svemu tome napiše izveštaj.
+ */
+async function librarian(config, { task, cwd, now }) {
+  const opseg = task.data.audit_scope ?? [];
+  const sve = await listNotes(cwd, ['wiki']);
+  const mete = sve.filter((rel) => !rel.includes('/drafts/') && rel !== 'wiki/Index.md'
+    && opseg.some((scope) => new RegExp(`^${scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*\\\*/g, '.*').replace(/\\\*/g, '[^/]*')}$`).test(rel)));
+  if (!mete.length) return { ok: false, output: `nijedna beleška ne ulazi u opseg (${opseg.join(', ')})`, artifacts: [] };
+
+  const imena = new Set(sve.map((p) => normalizeName(noteName(p))));
+  const nalazi = [];
+  const izmene = [];
+  let linkova = 0;
+  let oznaka = 0;
+
+  for (const rel of mete) {
+    const note = await readNote(cwd, rel);
+    let telo = note.text;
+    const pokvareni = extractWikilinks(note.text).filter((l) => !imena.has(l.normalized));
+    if (pokvareni.length) {
+      for (const link of pokvareni) telo = telo.split(link.raw).join(link.target);
+      linkova += pokvareni.length;
+      nalazi.push(`- ${rel}: ${pokvareni.length} pokvarenih Vikilinkova (${pokvareni.map((l) => l.raw).join(', ')})`);
+    }
+    const norm = (note.frontmatter?.tags ?? []).map((x) => String(x).toLowerCase());
+    const promenaOznaka = norm.join(',') !== (note.frontmatter?.tags ?? []).join(',');
+    if (promenaOznaka) {
+      oznaka += 1;
+      nalazi.push(`- ${rel}: oznake normalizovane (${(note.frontmatter?.tags ?? []).join(', ')} -> ${norm.join(', ')})`);
+    }
+    if (pokvareni.length || promenaOznaka) {
+      await writeNote(cwd, rel, {
+        frontmatter: { ...note.frontmatter, updated: now, tags: norm },
+        body: telo,
+      });
+      izmene.push(rel);
+    }
+  }
+
+  // Testni režim: namerna izmena van opsega, da se dokaže da kontrolni sloj to
+  // zaustavlja pre nego što uđe u granu (agent to može i fajl-sistemom).
+  if (process.env.AGENT_2_0_MOCK_OUT_OF_SCOPE === '1') {
+    await writeNote(cwd, 'wiki/Van_opsega.md', {
+      frontmatter: {
+        title: 'Van opsega', created: now, updated: now, authors: ['librarian'],
+        status: 'consolidated', tags: [],
+      },
+      body: '# Van opsega\n\nne sme da uđe u granu\n',
+    });
+  }
+
+  const izvestaj = `tasks/audits/${task.data.id}.md`;
+  await writeNote(cwd, izvestaj, {
+    frontmatter: {
+      title: `Revizija baze ${task.data.id}`,
+      created: now,
+      updated: now,
+      authors: ['librarian'],
+      status: 'review',
+      tags: ['revizija', 'baza'],
+    },
+    body: [
+      `# Revizija baze ${task.data.id}`,
+      '',
+      `- opseg: ${opseg.join(', ')}`,
+      `- pregledano belešaka: ${mete.length}`,
+      `- izmenjeno belešaka: ${izmene.length}`,
+      `- uklonjenih pokvarenih linkova: ${linkova}`,
+      `- normalizovanih oznaka: ${oznaka}`,
+      '',
+      '## Nalazi',
+      '',
+      ...(nalazi.length ? nalazi : ['- nema strukturnih nalaza u opsegu']),
+      '',
+      '## Izmene',
+      '',
+      ...(izmene.length ? izmene.map((r) => `- ${r}`) : ['- nema izmena']),
+      '',
+      '## Ostaje čoveku',
+      '',
+      '- sadržajne kontradikcije i duplikati se prijavljuju, ne prepisuju',
+      '',
+    ].join('\n'),
+  });
+
+  return {
+    ok: true,
+    output: `MOCK librarian: ${mete.length} pregledanih, ${izmene.length} izmenjenih, ${linkova} linkova, ${oznaka} oznaka`,
+    artifacts: [...izmene, izvestaj, ...(process.env.AGENT_2_0_MOCK_OUT_OF_SCOPE === '1' ? ['wiki/Van_opsega.md'] : [])],
+  };
+}
+
 export async function runMock(config, { role, task, cwd, now = new Date().toISOString() }) {
   const started = Date.now();
-  const handlers = { extractor, researcher, verifier, consolidator };
+  const handlers = { extractor, researcher, verifier, librarian, consolidator };
   const handler = handlers[role];
   if (!handler) throw new Error(`mock adapter ne poznaje ulogu "${role}"`);
 

@@ -11,8 +11,9 @@ import {
   TaskError, assertTransition, appendHistory, dirForPhase, findTask, listTasks,
   phaseFor, readTaskFile, writeTaskFile, validateTaskData,
 } from './task.mjs';
+import { randomUUID } from 'node:crypto';
 import { appendJsonl, withFileLock } from './fsx.mjs';
-import { canTakeOver, clearLease, isLeaseLive, leaseExpired, leaseInfo, newLease } from './lease.mjs';
+import { canTakeOver, clearLease, holdsLease, isLeaseLive, leaseExpired, leaseInfo, newLease } from './lease.mjs';
 
 export function createStore(config, options = {}) {
   const clock = options.clock ?? (() => new Date());
@@ -113,37 +114,35 @@ export function createStore(config, options = {}) {
      * Preuzmi zadatak pod zakup. Dozvoljeno je samo iz stanja `ready` ili iz
      * stanja sa isteklim zakupom (tada se prethodni vlasnik opoziva).
      */
-    async claim(id, owner, { ttlMs = config.lease.ttlMs, force = false } = {}) {
+    async claim(id, owner, { ttlMs = config.lease.ttlMs, force = false, token = randomUUID() } = {}) {
       const task = await mutate(id, owner, (current) => {
         const now = clock();
         const info = leaseInfo(current.data, now);
-        if (!force && current.data.status === 'in_progress' && info.live && info.owner !== owner) {
-          throw new TaskError(
-            `zadatak ${id} drži "${info.owner}" do ${info.expiresAt}`,
-            'LEASE_HELD',
-          );
-        }
-        if (current.data.status === 'in_progress' && info.held && info.owner !== owner && !canTakeOver(current.data, owner, now)) {
-          throw new TaskError(`zadatak ${id} je pod živim zakupom vlasnika "${info.owner}"`, 'LEASE_HELD');
+        if (!force && current.data.status === 'in_progress' && info.live && !canTakeOver(current.data, owner, now, token)) {
+          const dodatak = info.owner === owner ? ' (drugi proces istog identiteta)' : '';
+          throw new TaskError(`zadatak ${id} drži "${info.owner}" do ${info.expiresAt}${dodatak}`, 'LEASE_HELD');
         }
         if (!['ready', 'review', 'verified', 'in_progress'].includes(current.data.status)) {
           throw new TaskError(`zadatak ${id} je u stanju "${current.data.status}" i ne može se preuzeti`, 'NOT_READY');
         }
         if (current.data.status !== 'in_progress') assertTransition(current.data.status, 'in_progress');
-        const lease = newLease(owner, ttlMs, now);
+        const lease = newLease(owner, ttlMs, now, token);
         let data = { ...current.data, ...lease, status: 'in_progress', assignee: owner, updated: now.toISOString() };
         data = appendHistory(data, { status: 'in_progress', actor: owner, note: info.held ? 'preuzet istekao zakup' : null, now: now.toISOString() });
         return { data };
       });
-      return task;
+      return { ...task, leaseToken: token };
     },
 
-    /** Obnovi zakup. Vraća grešku ako zakup nije vaš ili je istekao. */
-    async renew(id, owner, { ttlMs = config.lease.ttlMs } = {}) {
+    /** Obnovi zakup. Vraća grešku ako zakup nije vaš, ako ga drži drugi proces istog imena, ili je istekao. */
+    async renew(id, owner, { ttlMs = config.lease.ttlMs, token = null } = {}) {
       return mutate(id, owner, (current) => {
         const now = clock();
         if (current.data.lock_owner !== owner) {
           throw new TaskError(`zadatak ${id} ne drži "${owner}"`, 'NOT_OWNER');
+        }
+        if (current.data.lock_token && current.data.lock_token !== token) {
+          throw new TaskError(`zakup nad ${id} drži drugi proces istog identiteta`, 'NOT_OWNER');
         }
         if (leaseExpired(current.data, now)) {
           throw new TaskError(`zakup nad ${id} je istekao`, 'LEASE_EXPIRED');
@@ -151,7 +150,7 @@ export function createStore(config, options = {}) {
         return {
           data: {
             ...current.data,
-            ...newLease(owner, ttlMs, now),
+            ...newLease(owner, ttlMs, now, token),
             updated: now.toISOString(),
           },
         };
@@ -159,7 +158,7 @@ export function createStore(config, options = {}) {
     },
 
     /** Oslobodi zakup i vrati zadatak u zadato stanje (podrazumevano `ready`). */
-    async release(id, owner, { toStatus = 'ready', note = null, actor = owner } = {}) {
+    async release(id, owner, { toStatus = 'ready', note = null, actor = owner, token = null } = {}) {
       // `in_progress` bez zakupa je nevalidno stanje; otpuštanje zakupa mora da
       // ostavi zadatak u stanju koje čeka sledeću fazu.
       if (toStatus === 'in_progress') {
@@ -171,6 +170,9 @@ export function createStore(config, options = {}) {
       return mutate(id, actor, (current) => {
         if (current.data.lock_owner && current.data.lock_owner !== owner) {
           throw new TaskError(`zadatak ${id} drži "${current.data.lock_owner}", ne "${owner}"`, 'NOT_OWNER');
+        }
+        if (current.data.lock_token && current.data.lock_token !== token) {
+          throw new TaskError(`zakup nad ${id} drži drugi proces istog identiteta`, 'NOT_OWNER');
         }
         assertTransition(current.data.status, toStatus);
         let data = { ...current.data, ...clearLease(), status: toStatus, assignee: null, updated: nowIso() };
@@ -249,11 +251,14 @@ export function createStore(config, options = {}) {
       });
     },
 
-    /** Da li je zakup nad zadatkom živ i pripada datom vlasniku? */
-    async assertLease(id, owner) {
+    /** Da li zakup nad zadatkom drži TAJ PROCES (ime + token) i da li je živ? */
+    async assertLease(id, owner, { token = null } = {}) {
       const task = await requireTask(id);
       if (task.data.lock_owner !== owner) {
         throw new TaskError(`zadatak ${id} ne drži "${owner}" (drži "${task.data.lock_owner}")`, 'NOT_OWNER');
+      }
+      if (task.data.lock_token && task.data.lock_token !== token) {
+        throw new TaskError(`zakup nad ${id} drži drugi proces istog identiteta`, 'NOT_OWNER');
       }
       if (!isLeaseLive(task.data, clock())) {
         throw new TaskError(`zakup nad ${id} je istekao u ${task.data.lease_expires_at}`, 'LEASE_EXPIRED');

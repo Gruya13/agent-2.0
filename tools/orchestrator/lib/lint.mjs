@@ -53,14 +53,54 @@ export function isRoundTripUtf8(buffer) {
   return Buffer.from(buffer.toString('utf8'), 'utf8').equals(buffer);
 }
 
+/**
+ * Simbolički linkovi u `raw/`.
+ *
+ * `readdir(withFileTypes)` vraća link kao `isSymbolicLink()`, ne `isFile()`, pa
+ * link nikad ne uđe u manifest — a može da preusmeri čitanje na drugi sadržaj
+ * ili da sakrije izmenu. Zato je link u `raw/` nalaz, ne izvor.
+ */
+export async function rawSymlinks(config) {
+  const out = [];
+  async function walk(dir) {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        out.push(path.relative(config.paths.sources, full).split(path.sep).join('/'));
+        continue;
+      }
+      if (entry.isDirectory() && entry.name !== '.git') await walk(full);
+    }
+  }
+  await walk(config.paths.sources);
+  return out.sort();
+}
+
 /** Uporedi trenutno stanje `raw/` sa manifestom; svaka izmena je error. */
 export async function lintRawImmutability(config) {
   const findings = [];
   const manifestFile = path.join(config.root, RAW_MANIFEST);
   const files = await rawFiles(config);
 
+  // Linkovi se proveravaju pre manifesta: oni nikad nisu u manifestu.
+  for (const rel of await rawSymlinks(config)) {
+    findings.push(makeFinding('error', 'raw.symlink', `raw/${rel}`, 'simbolički link nije izvor; raw/ sme da sadrži samo prave fajlove'));
+  }
+
   if (!(await exists(manifestFile))) {
-    findings.push(makeFinding('warning', 'raw.no-manifest', RAW_MANIFEST, 'manifest izvora ne postoji; pokreni `agentctl index` da se uspostavi'));
+    // Bez manifesta nema osnova za poređenje. Ako u raw/ ima ijedan fajl, to je
+    // greška, a ne upozorenje: inače brisanje manifesta ukida nepromenljivost.
+    const level = files.length ? 'error' : 'warning';
+    findings.push(makeFinding(level, 'raw.no-manifest', RAW_MANIFEST,
+      files.length
+        ? 'manifest izvora ne postoji, a raw/ sadrži fajlove — nepromenljivost se ne može dokazati; pokreni `agentctl index`'
+        : 'manifest izvora ne postoji; pokreni `agentctl index` da se uspostavi'));
     return findings;
   }
 

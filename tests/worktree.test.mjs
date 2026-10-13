@@ -79,6 +79,28 @@ test('worktree: sekvencijalni merge u main i čišćenje', async () => {
   await vault.cleanup();
 });
 
+test('worktree: grana koja menja zone van dozvole se ne spaja', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await ensureMainBranch(config);
+  await createWorktree(config, { id: 'TASK-070', role: 'researcher' });
+  const wt = worktreePath(config, 'TASK-070', 'researcher');
+
+  // Agent piše fajl-sistemom, mimo MCP-a: `raw/` i `tools/` nisu njegova zona.
+  await vault.write('.worktrees/TASK-070-researcher/raw/INJECTED.md', '# injektirano\n');
+  await vault.write('.worktrees/TASK-070-researcher/tools/podmetnuto.mjs', '// podmetnuto\n');
+  await gitExec(wt, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'add', '-A']);
+  await gitExec(wt, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'commit', '-q', '-m', 'injection']);
+
+  const merge = await mergeIntoMain(config, { branch: 'agent/researcher/TASK-070', message: 'probe' });
+  assert.equal(merge.merged, false);
+  assert.match(merge.reason, /zone van dozvole/);
+  assert.deepEqual(merge.outOfZone.sort(), ['raw/INJECTED.md', 'tools/podmetnuto.mjs']);
+  assert.equal(await vault.exists('raw/INJECTED.md'), false);
+  assert.equal(await vault.exists('tools/podmetnuto.mjs'), false);
+  await vault.cleanup();
+});
+
 test('worktree: konflikt se detektuje i main se vraća u pređašnje stanje', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);

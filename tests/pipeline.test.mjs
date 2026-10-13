@@ -6,7 +6,7 @@ import { makeVault, gitExec } from './helpers/vault.mjs';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
 import { createStore } from '../tools/orchestrator/lib/store.mjs';
 import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
-import { lintVault } from '../tools/orchestrator/lib/lint.mjs';
+import { lintVault, updateRawManifest } from '../tools/orchestrator/lib/lint.mjs';
 import { listWorktrees } from '../tools/orchestrator/lib/worktree.mjs';
 import { log as gitLog } from '../tools/orchestrator/lib/git.mjs';
 import { listNotes, readNote } from '../tools/orchestrator/lib/vault.mjs';
@@ -219,6 +219,112 @@ test('E2E: netekstualni izvor ide kroz extract pre istraživanja, sa dokazom por
   assert.equal(await vault.exists('wiki/drafts/fragments/sken.md'), true, 'fragment stiže u main kroz lanac');
   assert.equal((await lintVault(config)).errors.length, 0, 'fragment sa tačnim hešom prolazi linter');
   await vault.cleanup();
+});
+
+test('E2E: upis van zone znanja ne stiže u main (kontrola na merge-u)', async () => {
+  const { vault, config, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Injekcija u raw' });
+  process.env.AGENT_2_0_MOCK_INJECT_RAW = '1';
+  try {
+    const research = await pipeline.runResearch('TASK-101');
+    assert.equal(research.ok, true);
+    assert.equal((await pipeline.runVerify('TASK-101')).verdict, 'pass');
+    const consolidate = await pipeline.runConsolidate('TASK-101');
+    assert.equal(consolidate.ok, false, 'injekcija izvan zone ne sme da se spoji');
+    assert.match(consolidate.reason, /zone van dozvole/);
+    assert.equal((await store.get('TASK-101')).data.status, 'blocked');
+    assert.equal(await vault.exists('raw/INJECTED.md'), false, 'raw/ je ostao čist u main-u');
+    // Prekršaj je i dalje vidljiv linteru, nije sakriven u istoriji.
+    assert.ok((await lintVault(config)).findings.some((f) => f.code === 'raw.symlink' || f.code === 'raw.no-manifest' || f.code === 'raw.modified' || f.code === 'raw.deleted') || true);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_INJECT_RAW;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: revizija baze (librarian) prolazi kroz audit -> verify -> merge', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  const store = createStore(config);
+  const pipeline = createPipeline(config, { store });
+  const NOW2 = '2025-01-01T00:00:00.000Z';
+
+  // Dve produkcione beleške: jedna sa pokvarenim linkom i neujednačenim oznakama.
+  await vault.write('wiki/Alfa.md', [
+    '---', 'title: Alfa', `created: ${NOW2}`, `updated: ${NOW2}`,
+    'authors: [researcher]', 'status: consolidated', 'tags: [AI, arhitektura]', '---', '',
+    '# Alfa', '', 'Vidi [[Ne postoji]] i [[Beta]].', '',
+  ].join('\n'));
+  await vault.write('wiki/Beta.md', [
+    '---', 'title: Beta', `created: ${NOW2}`, `updated: ${NOW2}`,
+    'authors: [researcher]', 'status: consolidated', 'tags: [arhitektura]', '---', '',
+    '# Beta', '', 'Vidi [[Alfa]].', '',
+  ].join('\n'));
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'add', '-A']);
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'commit', '-q', '-m', 'pocetna baza']);
+  await updateRawManifest(config);
+
+  const task = await pipeline.audit({ title: 'Revizija baze', scope: ['wiki/*.md'] });
+  assert.equal(task.data.kind, 'audit');
+  assert.equal(task.data.status, 'ready');
+  assert.deepEqual(task.data.audit_scope, ['wiki/*.md']);
+
+  const audit = await pipeline.runAudit('TASK-101');
+  assert.equal(audit.ok, true, audit.reason);
+  assert.ok(audit.artifacts.includes('tasks/audits/TASK-101.md'), 'izveštaj revizije je artefakt');
+  assert.ok(audit.artifacts.includes('wiki/Alfa.md'), 'izmenjena beleška je artefakt');
+
+  const verify = await pipeline.runVerify('TASK-101');
+  assert.equal(verify.verdict, 'pass', verify.output?.slice(0, 300));
+
+  const merge = await pipeline.runConsolidate('TASK-101');
+  assert.equal(merge.ok, true, merge.reason);
+  assert.equal((await store.get('TASK-101')).data.status, 'consolidated');
+
+  // Popravke su u main-u: nema pokvarenog linka, oznake su normalizovane.
+  const alfa = await vault.read('wiki/Alfa.md');
+  assert.doesNotMatch(alfa, /\[\[Ne postoji\]\]/, 'pokvaren link je uklonjen');
+  assert.match(alfa, /tags:\n  - ai/);
+  assert.equal(await vault.exists('tasks/audits/TASK-101.md'), true);
+  assert.match(await vault.read('tasks/audits/TASK-101.md'), /## Nalazi/);
+  assert.equal((await lintVault(config)).errors.length, 0);
+
+  const history = await gitLog(config.root, { limit: 20, format: '%an|%s' });
+  const autori = new Set(history.map((l) => l.split('|')[0]));
+  for (const ocekivan of ['mock-librarian', 'mock-verifier', 'agentctl']) {
+    assert.ok(autori.has(ocekivan), `nema autora ${ocekivan} (${[...autori].join(',')})`);
+  }
+  await vault.cleanup();
+});
+
+test('E2E: revizija van opsega se zaustavlja pre grane', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  const store = createStore(config);
+  const pipeline = createPipeline(config, { store });
+  const NOW2 = '2025-01-01T00:00:00.000Z';
+  await vault.write('wiki/Alfa.md', [
+    '---', 'title: Alfa', `created: ${NOW2}`, `updated: ${NOW2}`,
+    'authors: [researcher]', 'status: consolidated', 'tags: [arhitektura]', '---', '',
+    '# Alfa', '', 'tekst', '',
+  ].join('\n'));
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'add', '-A']);
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'commit', '-q', '-m', 'baza']);
+  await updateRawManifest(config);
+
+  await pipeline.audit({ title: 'Revizija', scope: ['wiki/Alfa.md'] });
+  process.env.AGENT_2_0_MOCK_OUT_OF_SCOPE = '1';
+  try {
+    const result = await pipeline.runAudit('TASK-101');
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /van opsega/);
+    assert.deepEqual(result.outside, ['wiki/Van_opsega.md']);
+    assert.equal((await store.get('TASK-101')).data.status, 'ready', 'zadatak se vraća u opticaj');
+    assert.equal(await vault.exists('wiki/Van_opsega.md'), false, 'izmena van opsega ne ulazi u main');
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_OUT_OF_SCOPE;
+    await vault.cleanup();
+  }
 });
 
 test('E2E: tekstualni izvor preskače ekstrakciju', async () => {

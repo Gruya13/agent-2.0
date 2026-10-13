@@ -32,7 +32,8 @@ export const TRANSITIONS = {
 };
 
 export const TASK_FIELD_ORDER = [
-  'id', 'title', 'status', 'created', 'updated', 'source', 'extract_required', 'extracted', 'priority', 'tags',
+  'id', 'title', 'status', 'created', 'updated', 'kind', 'source', 'audit_scope',
+  'extract_required', 'extracted', 'priority', 'tags',
   'depends_on', 'authors', 'assignee', 'lock_owner', 'locked_at',
   'lease_expires_at', 'artifacts', 'verification', 'blocked_reason', 'history',
 ];
@@ -87,6 +88,9 @@ export function validateTaskData(data) {
     for (const field of ['lock_owner', 'locked_at', 'lease_expires_at']) {
       if (!data[field]) problems.push(`status "in_progress" zahteva polje "${field}"`);
     }
+  }
+  if (data.kind === 'audit' && !(data.audit_scope ?? []).length) {
+    problems.push('zadatak vrste "audit" zahteva neprazan "audit_scope"');
   }
   if (data.status === 'blocked' && !data.blocked_reason) {
     problems.push('status "blocked" zahteva polje "blocked_reason"');
@@ -220,6 +224,7 @@ export async function listTasks(config) {
 export function newTaskData({
   id, title, source = null, priority = 'normal', tags = [], dependsOn = [],
   now = new Date().toISOString(), body = '', extractRequired = false,
+  kind = 'ingest', auditScope = [],
 }) {
   const data = {
     id,
@@ -227,7 +232,10 @@ export function newTaskData({
     status: 'proposed',
     created: now,
     updated: now,
+    // `ingest` = zadatak iz izvora; `audit` = održavanje postojeće baze.
+    kind,
     source,
+    audit_scope: auditScope,
     extract_required: Boolean(extractRequired),
     extracted: !extractRequired,
     priority,

@@ -87,3 +87,33 @@ Obrazloženja koja su se poklopila kod svih:
 - `prompt-engineer` — uređivanje ugovora ostaje čoveku kod sva tri odgovora.
 - `arbitrator` — danas nema izmerenog konflikta u praksi (nijedan stvarni merge
   nije pao); uvođenje uloge bez dokaza da je potrebna nije opravdano.
+
+
+## Ishod protne runde za `red-team` (rešeno izvršavanjem)
+
+Oba kandidata dobila su **istu zamrznutu reviziju** (`dd9b6a8`), isti zadatak
+(pet tvrdnji, falsifikaciona provera), isti budžet (10 minuta) i isto pravilo:
+nalaz bez reprodukcionog skripta se ne računa.
+
+| Kandidat | Vreme | Ishod |
+|---|---|---|
+| `dsh` | 250 s, exit 0 | **5 tvrdnji provereno, 3 oborene, 4 reproduktivna nalaza** (`NALAZ-1..4.sh`), 1 sumnja bez reprodukcije — prijavljena kao sumnja, ne kao nalaz |
+| `codex` | 143 s, exit 1 | **prekinut od svog provajdera**: „This content was flagged for possible cybersecurity risk" (dva puta). Stigao je do jednog nalaza pre prekida |
+
+**Odluka: `red-team` → `dsh`.** Nije stvar preferencije: `codex` ne može
+pouzdano da izvrši ovu klasu zadatka jer ga filtrira sopstveni provajder, a
+`dsh` je u istom budžetu dao četiri reproduktivna nalaza. `codex` ostaje
+`consolidator`, `librarian` i watchdog integriteta testova, gde mu je dokaz
+jak (10 oborenih tvrdnji u 4 runde verifikacije).
+
+Nalazi iz protne runde su popravljeni i pokriveni testovima:
+
+| Nalaz | Šta je oboreno | Ispravka |
+|---|---|---|
+| NALAZ-1 | grana može da ubaci `raw/` ili `tools/` u `main` (merge nije proveravao zone) | kapija na merge-u: samo `wiki/`, `tasks/reviews/`, `tasks/audits/` |
+| NALAZ-2 | simbolički link u `raw/` nikad ne uđe u manifest, pa izmena ostaje nevidljiva | `raw.symlink` je greška; linkovi se skeniraju odvojeno |
+| NALAZ-3 | brisanje manifesta snizuje nepromenljivost `raw/` na upozorenje | nedostatak manifesta uz postojeće izvore je **greška** i blokira commit `raw/` |
+| NALAZ-4 | dva procesa istog harnesa drže isti živ zakup | zakup nosi `lock_token`; MCP i store zahtevaju poklapanje |
+
+Sumnja bez reprodukcije (trka u `reclaimExpired` nad snapshot-om) ostaje
+zabeležena kao nepotvrđena i nije „popravljena naslepo".
