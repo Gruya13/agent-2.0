@@ -125,3 +125,6 @@
 {"ts":"2026-10-13T22:02:56.125Z","kind":"phase.done","task":null,"phase":"reflect","notes":1,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":2,"commit":"2024228d932d9460739beb1537e654f02ba418f0"}
 {"ts":"2026-10-13T22:02:56.162Z","kind":"phase.done","task":null,"phase":"reflect","notes":1,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":2,"commit":"17f1a9a8e68326d5103d3a35795da2252b93bf9b"}
 {"ts":"2026-10-13T22:03:38.893Z","kind":"phase.done","task":null,"phase":"reflect","notes":1,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":2,"commit":"487a6cdf554a51132c00963fdd32d8967b540c77"}
+{"ts":"2026-10-13T22:42:31.951Z","kind":"task.ingested","task":"TASK-102","source":"raw/sest-uloga-i-dve-kapije.md","actor":"operator"}
+{"ts":"2026-10-13T22:42:31.953Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T22:42:31.955Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"ready","phase":"inbox","moved":null}

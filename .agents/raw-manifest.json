@@ -13,7 +13,13 @@
       "bytes": true,
       "size": 1435,
       "registeredAt": "2026-10-13T21:44:35.590Z"
+    },
+    "sest-uloga-i-dve-kapije.md": {
+      "sha256": "3baa723e5932030ede9d00bc029741bef035672295862c720c83e38b5191b3d3",
+      "bytes": true,
+      "size": 1443,
+      "registeredAt": "2026-10-13T22:42:31.947Z"
     }
   },
-  "updated": "2026-10-13T22:03:38.856Z"
+  "updated": "2026-10-13T22:42:31.947Z"
 }
