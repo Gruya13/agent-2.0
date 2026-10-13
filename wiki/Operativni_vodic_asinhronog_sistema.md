@@ -1,10 +1,10 @@
 ---
 title: Operativni vodic asinhronog sistema
 created: 2026-10-13T21:44:35.592Z
-updated: 2026-10-13T21:58:00.000Z
+updated: 2026-10-13T22:02:42.691Z
 authors:
   - researcher
-status: draft
+status: consolidated
 tags:
   - operativa
   - arhitektura
