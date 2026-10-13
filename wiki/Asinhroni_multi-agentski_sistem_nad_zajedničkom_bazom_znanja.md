@@ -1,10 +1,11 @@
 ---
 title: Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
 created: 2026-10-13T20:46:03.609Z
-updated: 2026-10-13T20:46:03.609Z
+updated: 2026-10-13T20:46:03.816Z
 authors:
   - researcher
-status: draft
+  - consolidator
+status: consolidated
 tags:
   - arhitektura
   - agenti
