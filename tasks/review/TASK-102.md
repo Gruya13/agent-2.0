@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: review
+status: verified
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T22:55:24.665Z
+updated: 2026-10-13T23:00:55.597Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -25,20 +25,19 @@ artifacts:
 verification:
   verdict: pass
   harness: dsh
-  at: 2026-10-13T22:48:19.621Z
-  commit: d8318d6ab7d87fe5534dd9c5a3e69cea569df5be
+  at: 2026-10-13T23:00:55.591Z
+  commit: db590fbd2add9ab79fc9b1ec2bcbe88718e21e9d
   summary: |-
-    Verifikacija TASK-102 je završena. Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (jedina izmena u radnom stablu), lint prolazi bez grešaka.
-    | Provera | Ishod |
-    |---|---|
-    | Izvor verzionisan + manifest | `sha256 3baa723e…` poklapa se sa `.agents/raw-manifest.json`; `raw/sest-uloga-i-dve-kapije.md` pod gitom (commit `e23f569`) |
-    | 6 citata red-po-red (L3–5, 7–10, 12–14, 16–19, 21–23, 25–27) | svi tačni, bez izmišljenih isečaka |
-    | Vikilinkovi `[[Operativni_vodic_asinhronog_sistema]]`, `[[Index]]` | oba fajla postoje u `wiki/`; backlinkovi potvrđeni |
-    | YAML zaglavlje / invarijante | `status: draft`, sva obavezna polja; `obsidian_lint_vault` → 0 grešaka, 0 upozorenja |
-    | Raspodela uloga/harnesa (otvoreno pitanje 3) | `agents.yml` redovi 43–70 i `.agents/AGENTS.md` §5 (176–183) — tačno |
-    | Kod-citate iz otvorenih pitanja | `worktree.mjs` red 163 `dozvoljeneZone`; `pipeline.mjs` redovi 676–677, 693 (`falsePositives`); `agents.yml` 35–36 — tačno |
-    **0.** Postoje dva informativna zapažanja bez snage nalaza: napomena o „dve produkcione beleške" je brojčano tačna (dve datoteke), ali `wiki/Index.md` trenutno broji samo jednu konsolidovanu belešku (red 14); i otvoreno pitanje 1 citira `.agents/AGENTS.md` §1 uz implementaciju, gde zajedničku listu zona daje `worktree.mjs`. Nijedno ne obara tvrdnju, pa su zapisana kao zapažanja sa predlogom izmene teksta.
-    Nacrt nije menjan; predlozi su dati tekstom u revizorskom tragu.
+    Revizija je završena. Provera je rađena nezavisno u worktree-u `TASK-102-verifier`, nad nacrtom `wiki/drafts/Sest_uloga_i_dve_kapije.md` (blob `d25d0baf`, revizija `7945aa53`) i izvorom `raw/sest-uloga-i-dve-kapije.md`.
+    **Šta je provereno i potvrđeno:**
+    1. **Izvor** — `sha256sum` daje `3baa723e…b5191b3d3`, poklapa se sa `.agents/raw-manifest.json` (red 18); izvor je i u Gitu.
+    2. **Svih 6 citata red-po-red** odgovara izvoru (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27); tri direktna citata potvrđena poklapanjem podstringa.
+    3. **Vikilinkovi** — samo `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]`; oba fajla postoje, `obsidian_backlinks` ih potvrđuje; nema markdown linkova.
+    4. **Lint** — `obsidian_lint_vault`: grešaka 0, upozorenja 0.
+    5. **Kod-tvrdnje** — `worktree.mjs:163` (zone `wiki/`, `tasks/reviews/`, `tasks/audits/`, `tasks/challenges/`), `agents.yml:35–36` (`challengeTimeoutMs`, `challengeMaxScripts`), `pipeline.mjs:676–677` i `:693/:724` (`falsePositives`), `AGENTS.md:178–183` (šest uloga), `KONSULTACIJA-ULOGA.md:103` (`red-team → dsh`).
+    6. **Nema kontradikcija sa produkcijom** (`wiki/Operativni_vodic_asinhronog_sistema.md`, redovi 24–28).
+    Tri informativna zapažanja (npr. citiranje merge-kapije upućuje na sekciju 1 umesto na invarijantu 16; dvostruka negacija „bez odsustva…") nisu nalazi protiv nacrta — svako ima dokaz i predlog teksta, bez izmene fajla.
+    Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (poslednja linija `VERDICT: pass`). Commit nije moguć iz ovog worktree-a: Git indeks je na read-only delu (`.git/worktrees/…/index.lock`), pa fajl ostaje nekomitovan za kontrolni sloj.
     VERDICT: pass
   by: dsh
 challenge:
@@ -115,6 +114,21 @@ history:
     status: review
     actor: dsh
     note: red-team oborio 3 tvrdnji; vraćeno autoru
+  - at: 2026-10-13T22:58:50.357Z
+    status: in_progress
+    actor: dsh
+  - at: 2026-10-13T23:00:55.592Z
+    status: in_progress
+    actor: dsh
+    note: "verdikt: pass"
+  - at: 2026-10-13T23:00:55.595Z
+    status: in_progress
+    actor: dsh
+    note: "faza verify: pass"
+  - at: 2026-10-13T23:00:55.597Z
+    status: verified
+    actor: dsh
+    note: verifikator dao pečat
 lock_token: null
 ---
 
@@ -226,4 +240,30 @@ NALAZI: 5
 LAZNI: 0
 SUM NJE: 3
 ```
+```
+
+### Faza verify (2026-10-13T23:00:55.594Z)
+
+- harnes: dsh
+- trajanje: 125151 ms
+- verdikt: pass
+- grana: agent/researcher/TASK-102 -> verifier @ db590fbd2add9ab79fc9b1ec2bcbe88718e21e9d
+
+```
+Revizija je završena. Provera je rađena nezavisno u worktree-u `TASK-102-verifier`, nad nacrtom `wiki/drafts/Sest_uloga_i_dve_kapije.md` (blob `d25d0baf`, revizija `7945aa53`) i izvorom `raw/sest-uloga-i-dve-kapije.md`.
+
+**Šta je provereno i potvrđeno:**
+
+1. **Izvor** — `sha256sum` daje `3baa723e…b5191b3d3`, poklapa se sa `.agents/raw-manifest.json` (red 18); izvor je i u Gitu.
+2. **Svih 6 citata red-po-red** odgovara izvoru (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27); tri direktna citata potvrđena poklapanjem podstringa.
+3. **Vikilinkovi** — samo `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]`; oba fajla postoje, `obsidian_backlinks` ih potvrđuje; nema markdown linkova.
+4. **Lint** — `obsidian_lint_vault`: grešaka 0, upozorenja 0.
+5. **Kod-tvrdnje** — `worktree.mjs:163` (zone `wiki/`, `tasks/reviews/`, `tasks/audits/`, `tasks/challenges/`), `agents.yml:35–36` (`challengeTimeoutMs`, `challengeMaxScripts`), `pipeline.mjs:676–677` i `:693/:724` (`falsePositives`), `AGENTS.md:178–183` (šest uloga), `KONSULTACIJA-ULOGA.md:103` (`red-team → dsh`).
+6. **Nema kontradikcija sa produkcijom** (`wiki/Operativni_vodic_asinhronog_sistema.md`, redovi 24–28).
+
+Tri informativna zapažanja (npr. citiranje merge-kapije upućuje na sekciju 1 umesto na invarijantu 16; dvostruka negacija „bez odsustva…") nisu nalazi protiv nacrta — svako ima dokaz i predlog teksta, bez izmene fajla.
+
+Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (poslednja linija `VERDICT: pass`). Commit nije moguć iz ovog worktree-a: Git indeks je na read-only delu (`.git/worktrees/…/index.lock`), pa fajl ostaje nekomitovan za kontrolni sloj.
+
+VERDICT: pass
 ```
