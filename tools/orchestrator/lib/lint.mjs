@@ -11,7 +11,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { promisify } from 'node:util';
-import { exists, sha256, walkFiles } from './fsx.mjs';
+import { exists, sha256, sha256Bytes, sha256File, walkFiles } from './fsx.mjs';
 import { listTasks, TASK_STATUSES, canTransition, validateTaskData } from './task.mjs';
 import { noteFrontmatterProblems, noteName, normalizeName, readNote, listNotes, extractWikilinks } from './vault.mjs';
 
@@ -23,11 +23,21 @@ export function makeFinding(level, code, target, message) {
   return { level, code, target, message };
 }
 
+/** Svi regularni fajlovi u `raw/` (bez skrivenih), bez obzira na format. */
+export async function rawFiles(config) {
+  return walkFiles(config.paths.sources, { filter: (f) => !path.basename(f).startsWith('.') });
+}
+
+/** Hash izvora: bajtovi za sve formate (vidi `sha256File`). */
+export async function hashRawFile(file) {
+  return sha256File(file);
+}
+
 /** Uporedi trenutno stanje `raw/` sa manifestom; svaka izmena je error. */
 export async function lintRawImmutability(config) {
   const findings = [];
   const manifestFile = path.join(config.root, RAW_MANIFEST);
-  const files = await walkFiles(config.paths.sources, { filter: (f) => f.endsWith('.md') || f.endsWith('.pdf') || f.endsWith('.txt') });
+  const files = await rawFiles(config);
 
   if (!(await exists(manifestFile))) {
     findings.push(makeFinding('warning', 'raw.no-manifest', RAW_MANIFEST, 'manifest izvora ne postoji; pokreni `agentctl index` da se uspostavi'));
@@ -45,12 +55,16 @@ export async function lintRawImmutability(config) {
   const recorded = manifest.files ?? {};
   for (const rel of files) {
     const full = path.join(config.paths.sources, rel);
-    const hash = sha256(await fs.readFile(full, 'utf8'));
+    const buffer = await fs.readFile(full);
+    const hash = sha256Bytes(buffer);
+    const legacyHash = sha256(buffer.toString('utf8'));
     const known = recorded[rel];
     if (!known) continue; // novo u raw/ je dozvoljeno (append-only)
-    if (known.sha256 !== hash) {
-      findings.push(makeFinding('error', 'raw.modified', `raw/${rel}`, `izvorni fajl je izmenjen (očekivan ${known.sha256.slice(0, 12)}, stvarni ${hash.slice(0, 12)})`));
-    }
+    if (known.sha256 === hash) continue;
+    // Zapisi iz manifesta v1 hashirali su UTF-8 dekodiran tekst. Ako se bajtovi
+    // razlikuju samo u nevalidnim sekvencama, to nije izmena izvora.
+    if (!known.bytes && known.sha256 === legacyHash) continue;
+    findings.push(makeFinding('error', 'raw.modified', `raw/${rel}`, `izvorni fajl je izmenjen (očekivan ${String(known.sha256).slice(0, 12)}, stvarni ${hash.slice(0, 12)})`));
   }
   for (const rel of Object.keys(recorded)) {
     if (!files.includes(rel)) {
@@ -165,30 +179,47 @@ export async function lintTasks(config) {
  */
 export async function updateRawManifest(config) {
   const manifestFile = path.join(config.root, RAW_MANIFEST);
-  let manifest = { version: 1, files: {} };
+  let manifest = { version: 2, files: {} };
   if (await exists(manifestFile)) {
     try {
       manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8'));
       manifest.files ??= {};
     } catch {
-      manifest = { version: 1, files: {} };
+      manifest = { version: 2, files: {} };
     }
   }
-  const files = await walkFiles(config.paths.sources, { filter: (f) => f.endsWith('.md') || f.endsWith('.pdf') || f.endsWith('.txt') });
+  const files = await rawFiles(config);
   let added = 0;
+  let upgraded = 0;
   for (const rel of files) {
-    if (manifest.files[rel]) continue;
     const full = path.join(config.paths.sources, rel);
-    manifest.files[rel] = {
-      sha256: sha256(await fs.readFile(full, 'utf8')),
-      registeredAt: new Date().toISOString(),
-    };
-    added += 1;
+    const buffer = await fs.readFile(full);
+    const byteHash = sha256Bytes(buffer);
+    const existing = manifest.files[rel];
+    if (!existing) {
+      manifest.files[rel] = {
+        sha256: byteHash,
+        bytes: true,
+        size: buffer.byteLength,
+        registeredAt: new Date().toISOString(),
+      };
+      added += 1;
+      continue;
+    }
+    // v1 zapis (hash teksta) se nadograđuje na hash bajtova samo ako se sadržaj
+    // nije promenio — inače bi nadogradnja zamaskirala izmenu.
+    if (!existing.bytes) {
+      if (existing.sha256 === byteHash || existing.sha256 === sha256(buffer.toString('utf8'))) {
+        manifest.files[rel] = { ...existing, sha256: byteHash, bytes: true, size: buffer.byteLength, upgradedFrom: 'v1' };
+        upgraded += 1;
+      }
+    }
   }
+  manifest.version = 2;
   manifest.updated = new Date().toISOString();
   await fs.mkdir(path.dirname(manifestFile), { recursive: true });
   await fs.writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-  return { manifestFile, added, total: Object.keys(manifest.files).length };
+  return { manifestFile, added, upgraded, total: Object.keys(manifest.files).length };
 }
 
 export async function lintVault(config) {

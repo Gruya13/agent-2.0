@@ -9,9 +9,15 @@
  * Pristup se sprovodi OVDE, ne na fajl sistemu: svi procesi rade kao isti
  * korisnik, pa samo server koji odbija operaciju može da razdvoji uloge.
  *
- *   OBSIDIAN_VAULT  koren skladišta                  (default: cwd)
- *   OBSIDIAN_AGENT  identitet agenta, npr. "codex"   (default: anonymous)
- *   OBSIDIAN_ROLE   researcher|verifier|consolidator|readonly
+ *   OBSIDIAN_VAULT       koren skladišta (radno stablo agenta)  (default: cwd)
+ *   OBSIDIAN_AGENT       identitet agenta, npr. "codex"         (default: anonymous)
+ *   OBSIDIAN_ROLE        researcher|verifier|consolidator|readonly
+ *   OBSIDIAN_TASK        id zadatka (TASK-NNN) koji nosi zakup   (obavezan za upis)
+ *   OBSIDIAN_TASK_ROOT   kontrolni koren sa `tasks/` (default: OBSIDIAN_VAULT)
+ *
+ * Upis nije dozvoljen samo po ulozi: uz zonu se proverava i da zadatak iz
+ * OBSIDIAN_TASK postoji, da je u odgovarajućem stanju i da zakup nad njim drži
+ * ovaj agent (invarijante 5 i 9 iz `.agents/AGENTS.md`).
  *
  * Zonska pravila (ugovor iz .agents/AGENTS.md):
  *   raw/                 nikad upisiv — ni za jednu ulogu
@@ -32,7 +38,7 @@ import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promises as fs } from 'node:fs';
-import { writeFileAtomic, resolveInside, walkFiles } from '../orchestrator/lib/fsx.mjs';
+import { exists, realRelativeTo, resolveInside, writeFileAtomic } from '../orchestrator/lib/fsx.mjs';
 import { parseFrontmatter, stringifyFrontmatter } from '../orchestrator/lib/yaml.mjs';
 import {
   extractWikilinks, findBacklinks, listNotes, noteName, noteFrontmatterProblems, readNote,
@@ -46,8 +52,15 @@ const PROTOCOL_VERSION = '2024-11-05';
 const VAULT = path.resolve(process.env.OBSIDIAN_VAULT || process.env.WIKI_ROOT || process.cwd());
 const AGENT = process.env.OBSIDIAN_AGENT || process.env.WIKI_AGENT || 'anonymous';
 const ROLE = process.env.OBSIDIAN_ROLE || 'readonly';
+// Stanje zadataka živi u kontrolnom korenu (`main`), a ne u izolovanom radnom
+// stablu agenta: worktree nosi kopiju crne table od trenutka grananja, pa bi
+// provera zakupa nad njom bila provera zastarelog stanja.
+const TASK_ROOT = path.resolve(process.env.OBSIDIAN_TASK_ROOT || VAULT);
+const TASK_ID = process.env.OBSIDIAN_TASK || null;
 
 const NEVER_WRITABLE = ['raw'];
+// Izvedeni artefakti kontrolnog sloja: nijedna uloga ih ne piše.
+const PROTECTED_FILES = ['wiki/Index.md', '.agents/raw-manifest.json', 'tasks/events.jsonl'];
 const READ_PREFIXES = ['wiki', 'raw', 'tasks', '.agents'];
 
 const ROLE_WRITE_PREFIXES = {
@@ -56,6 +69,14 @@ const ROLE_WRITE_PREFIXES = {
   consolidator: ['wiki'],
   readonly: [],
 };
+
+/** Zona upisa za datu putanju (zahteva status zadatka i proveru artefakta). */
+function zoneOf(relative) {
+  if (relative.startsWith('wiki/drafts/')) return 'draft';
+  if (relative.startsWith('tasks/reviews/')) return 'review';
+  if (relative.startsWith('wiki/')) return 'production';
+  return 'other';
+}
 
 function log(...args) {
   process.stderr.write(`[${SERVER_NAME}:${AGENT}/${ROLE}] ${args.join(' ')}\n`);
@@ -75,23 +96,46 @@ function normalizeRel(rel) {
   return clean.endsWith('.md') || clean.includes('.') ? clean : `${clean}.md`;
 }
 
-export function assertReadable(rel) {
-  const clean = resolveInside(VAULT, normalizeRel(rel));
-  const relative = path.relative(VAULT, clean).split(path.sep).join('/');
+/**
+ * Razreši putanju kroz simboličke linkove i vrati REALNU relativnu putanju.
+ * Leksička provera (`..`) je nedovoljna: `wiki/drafts/raw-link -> raw` bi prošao
+ * kao da je u zoni nacrta, a upis bi završio u `raw/`.
+ */
+async function resolveReal(rel) {
+  const lexical = resolveInside(VAULT, normalizeRel(rel));
+  const resolved = await realRelativeTo(VAULT, lexical);
+  if (resolved.escapes) {
+    throw new AccessError(`putanja izlazi iz skladišta preko simboličkog linka: ${rel} -> ${resolved.real}`);
+  }
+  return { full: lexical, relative: resolved.relative };
+}
+
+export async function assertReadable(rel) {
+  const { full, relative } = await resolveReal(rel);
   if (!READ_PREFIXES.some((prefix) => relative === prefix || relative.startsWith(`${prefix}/`))) {
     throw new AccessError(`čitanje van zona znanja nije dozvoljeno: ${relative}`);
   }
-  return clean;
+  return full;
 }
 
-export function assertWritable(rel) {
-  const clean = resolveInside(VAULT, normalizeRel(rel));
-  const relative = path.relative(VAULT, clean).split(path.sep).join('/');
+/**
+ * Dozvola za upis ima dva sloja:
+ *   1. zona uloge (gde agent sme da piše), i
+ *   2. zadatak + zakup (invarijante 5 i 9 iz `.agents/AGENTS.md`).
+ *
+ * Drugi sloj se preskače samo u skladištu koje ne nosi ugovor
+ * (`.agents/AGENTS.md`), jer tada nije crna tabla nego običan wiki.
+ */
+export async function assertWritable(rel) {
+  const { full, relative } = await resolveReal(rel);
   if (!READ_PREFIXES.some((prefix) => relative === prefix || relative.startsWith(`${prefix}/`))) {
     throw new AccessError(`upis van zona znanja nije dozvoljen: ${relative}`);
   }
   if (NEVER_WRITABLE.some((prefix) => relative === prefix || relative.startsWith(`${prefix}/`))) {
     throw new AccessError(`zona "${relative}" je nepromenljiva (append-only) i niko je ne menja`);
+  }
+  if (PROTECTED_FILES.includes(relative)) {
+    throw new AccessError(`"${relative}" je izveden artefakt kontrolnog sloja i ne piše se kroz MCP`);
   }
   const allowed = ROLE_WRITE_PREFIXES[ROLE];
   if (!allowed) throw new AccessError(`nepoznata uloga "${ROLE}"`);
@@ -99,7 +143,71 @@ export function assertWritable(rel) {
   if (!allowed.some((prefix) => relative === prefix || relative.startsWith(`${prefix}/`))) {
     throw new AccessError(`uloga "${ROLE}" ne sme da piše u "${relative}" (dozvoljeno: ${allowed.join(', ')})`);
   }
-  return clean;
+  await requireTaskContext(relative);
+  return full;
+}
+
+let cachedControlConfig = null;
+
+/** Učitaj konfiguraciju kontrolnog korena (keširano za život procesa). */
+async function controlConfig() {
+  if (!cachedControlConfig) {
+    const { loadConfig } = await import('../orchestrator/lib/config.mjs');
+    cachedControlConfig = await loadConfig(TASK_ROOT);
+  }
+  return cachedControlConfig;
+}
+
+/**
+ * Provera zakupa i stanja zadatka. Bez ovoga bi bilo ko sa ulogom
+ * `consolidator` mogao da upiše proizvoljnu belešku u `wiki/` bez zadatka,
+ * zakupa i verifikacionog pečata.
+ */
+async function requireTaskContext(relative) {
+  if (!(await exists(path.join(TASK_ROOT, '.agents', 'AGENTS.md')))) {
+    return { skipped: 'skladište ne nosi ugovor .agents/AGENTS.md' };
+  }
+  if (!TASK_ID) {
+    throw new AccessError(`upis u "${relative}" zahteva OBSIDIAN_TASK (id zadatka) — bez njega nema zakupa ni verifikacije`);
+  }
+  const config = await controlConfig();
+  const { findTask } = await import('../orchestrator/lib/task.mjs');
+  const task = await findTask(config, TASK_ID);
+  if (!task) throw new AccessError(`zadatak ${TASK_ID} ne postoji u ${path.join(TASK_ROOT, 'tasks')}`);
+
+  const zone = zoneOf(relative);
+  if (zone === 'production') {
+    // Produkcija zahteva verifikacioni pečat (drugi vendor), ne samo zakup:
+    // konsolidator drži zakup nad zadatkom koji JE verifikovan.
+    const verdict = task.data.verification?.verdict;
+    if (verdict !== 'pass') {
+      throw new AccessError(
+        `zadatak ${TASK_ID} nema verifikacioni pečat (verdict: ${verdict ?? 'nema'}) — upis u produkciju je zabranjen`,
+      );
+    }
+  } else if (task.data.status !== 'in_progress') {
+    throw new AccessError(
+      `zadatak ${TASK_ID} je u stanju "${task.data.status}"; upis u "${relative}" zahteva stanje in_progress`,
+    );
+  }
+  const owners = [AGENT, ROLE];
+  if (!owners.includes(task.data.lock_owner)) {
+    throw new AccessError(`zadatak ${TASK_ID} ne drži "${AGENT}/${ROLE}" (drži "${task.data.lock_owner}")`);
+  }
+  const expires = Date.parse(task.data.lease_expires_at ?? '');
+  if (!Number.isFinite(expires) || expires <= Date.now()) {
+    throw new AccessError(`zakup nad zadatkom ${TASK_ID} je istekao (${task.data.lease_expires_at})`);
+  }
+  if (zone === 'production') {
+    const target = path.basename(relative, '.md');
+    const artifacts = (task.data.artifacts ?? []).map((rel) => path.basename(rel, '.md'));
+    if (artifacts.length && !artifacts.includes(target)) {
+      throw new AccessError(
+        `beleška "${target}" nije artefakt zadatka ${TASK_ID} (artefakti: ${artifacts.join(', ')})`,
+      );
+    }
+  }
+  return { task: task.data.id, status: task.data.status, zone };
 }
 
 // ------------------------------------------------------------------ operacije
@@ -141,7 +249,7 @@ async function opRead({ paths, path: single, frontmatter_only = false, section =
   if (!targets.length) throw new Error('zadaj `path` ili `paths`');
   const chunks = [];
   for (const rel of targets) {
-    const full = assertReadable(rel);
+    const full = await assertReadable(rel);
     const relative = path.relative(VAULT, full).split(path.sep).join('/');
     let text;
     try {
@@ -198,7 +306,7 @@ async function opBacklinks({ path: rel, dir = 'wiki' } = {}) {
   if (!rel) throw new Error('`path` je obavezan');
   // Prihvata se i putanja (wiki/Crna_tabla.md) i samo ime beleške (Crna tabla),
   // da bi se grafom moglo hodati direktno iz teksta Vikilinka.
-  if (rel.includes('/')) assertReadable(rel);
+  if (rel.includes('/')) await assertReadable(rel);
   const hits = await findBacklinks(VAULT, rel, { dirs: [dir] });
   if (!hits.length) return `${rel}: nema backlinkova`;
   const lines = [`${rel}: ${hits.length} backlinkova`, ''];
@@ -212,7 +320,7 @@ async function opBacklinks({ path: rel, dir = 'wiki' } = {}) {
 async function opWrite({ path: rel, content, status = null, tags = null, title = null, authors = null } = {}) {
   if (!rel) throw new Error('`path` je obavezan');
   if (typeof content !== 'string') throw new Error('`content` je obavezan');
-  const full = assertWritable(rel);
+  const full = await assertWritable(rel);
   const relative = path.relative(VAULT, full).split(path.sep).join('/');
   const now = new Date().toISOString();
   const parsed = parseFrontmatter(content);
@@ -239,7 +347,7 @@ async function opPatch({ path: rel, section, content, mode = 'replace', create =
   if (!rel) throw new Error('`path` je obavezan');
   if (!section) throw new Error('`section` je obavezan');
   if (typeof content !== 'string') throw new Error('`content` je obavezan');
-  const full = assertWritable(rel);
+  const full = await assertWritable(rel);
   const relative = path.relative(VAULT, full).split(path.sep).join('/');
   let text = '';
   try {

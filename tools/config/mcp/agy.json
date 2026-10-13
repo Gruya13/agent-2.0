@@ -1,14 +1,18 @@
 {
-  "_comment": "Fragment za Google Antigravity (agy). Spaja se u ~/.gemini/config/mcp_config.json pod ključ 'mcpServers', ili se registruje komandom: agy mcp add --env OBSIDIAN_VAULT=<VAULT> --env OBSIDIAN_AGENT=agy --env OBSIDIAN_ROLE=researcher obsidian node <VAULT>/tools/mcp/obsidian-mcp.mjs",
+  "_comment": "Fragment za Google Antigravity (agy). Spaja se u ~/.gemini/config/mcp_config.json pod ključ 'mcpServers', ili se registruje komandom: agy mcp add --env OBSIDIAN_VAULT=<VAULT> --env OBSIDIAN_AGENT=agy --env OBSIDIAN_ROLE=researcher obsidian node <VAULT>/tools/mcp/obsidian-mcp.mjs Upis zahteva OBSIDIAN_TASK (zadatak pod zakupom); OBSIDIAN_TASK_ROOT pokazuje na kontrolni koren (main).",
   "mcpServers": {
     "obsidian": {
       "command": "node",
-      "args": ["__VAULT__/tools/mcp/obsidian-mcp.mjs"],
+      "args": [
+        "__VAULT__/tools/mcp/obsidian-mcp.mjs"
+      ],
       "disabled": false,
       "env": {
         "OBSIDIAN_VAULT": "__VAULT__",
         "OBSIDIAN_AGENT": "agy",
-        "OBSIDIAN_ROLE": "researcher"
+        "OBSIDIAN_ROLE": "researcher",
+        "OBSIDIAN_TASK": "TASK-NNN",
+        "OBSIDIAN_TASK_ROOT": "__VAULT__"
       }
     }
   }

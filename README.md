@@ -95,6 +95,8 @@ posle `maxRevisions` pokušaja zadatak ide u `blocked` (nikad u produkcioni
 | „izolacija kroz `git worktree`" | `worktree.mjs`, `tests/worktree.test.mjs` (izolacija, konflikt, merge) |
 | „Gemini sintetiše, DeepSeek arbitrira, Codex integriše" | `agents.yml` + `agents/index.mjs` (dispečer po ulozi) |
 | „MCP server sa tipiziranim alatima" | `tools/mcp/obsidian-mcp.mjs` + `tests/mcp.test.mjs` (pravi JSON-RPC preko stdio) |
+| „pre modifikacije baze harness mora imati važeći zakup" | MCP proverava `OBSIDIAN_TASK` + status + zakup + pečat pre svakog upisa |
+| „`raw/` je nepromenljiv" i za binarne izvore | manifest v2 hashira bajtove (`sha256Bytes`), test sa `.pdf` bajtom 0x80 → 0x81 |
 | „revizorski uvid u doprinos svakog modela" | Git autor po komitu (`-c user.name=<agent>`), `agentctl log` |
 
 ## Prelazak na prave harnese
@@ -161,6 +163,24 @@ tests/              jedinični, integracioni i protokolski testovi
 scripts/demo.mjs    petofazna demonstracija
 .worktrees/         izolovana radna stabla (gitignore)
 ```
+
+## Bezbednosni sloj MCP servera
+
+Upis kroz MCP ima tri kapije, i sve tri su pokrivene testovima:
+
+1. **Zona uloge** — `researcher` → `wiki/drafts/`, `verifier` → `tasks/reviews/`,
+   `consolidator` → `wiki/`, `readonly` → ništa; `raw/` nikad.
+2. **Zadatak i zakup** — `OBSIDIAN_TASK` mora da postoji u kontrolnom korenu
+   (`OBSIDIAN_TASK_ROOT`, podrazumevano `main`), zakup mora biti živ i vlasništvo
+   tog agenta. Za upis u produkciju dodatno je obavezan `verification.verdict:
+   pass` i poklapanje imena beleške sa artefaktom zadatka.
+3. **Realna putanja** — zona se proverava kroz `realpath`, pa simbolički link
+   (`wiki/drafts/link -> raw`) ne može da izvede upis van zone; izvedeni
+   artefakti (`wiki/Index.md`, `.agents/raw-manifest.json`, `tasks/events.jsonl`)
+   nisu upisivi.
+
+Skladište koje ne nosi `.agents/AGENTS.md` (običan Obsidian vault) zadržava samo
+kapiju 1 — tako MCP server ostaje upotrebljiv i van crne table.
 
 ## Ograničenja koja treba znati
 

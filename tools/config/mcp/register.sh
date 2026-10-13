@@ -37,7 +37,9 @@ case "$MODE" in
       --env "OBSIDIAN_VAULT=$VAULT" \
       --env OBSIDIAN_AGENT=agy \
       --env OBSIDIAN_ROLE=researcher \
+      --env "OBSIDIAN_TASK_ROOT=$VAULT" \
       obsidian node "$SERVER"
+    echo "napomena: OBSIDIAN_TASK se dodaje po pozivu (id zadatka pod zakupom)" >&2
     agy mcp list
     ;;
   --check)

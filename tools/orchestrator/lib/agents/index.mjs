@@ -11,7 +11,7 @@ export { parseVerdict, runHarness, HARNESS_COMMANDS } from './harness.mjs';
 export { buildPrompt, loadRoleBrief, ROLE_ARTIFACT_ZONE } from './prompts.mjs';
 
 /** Izvršno okruženje koje harnesu predaje identitet i zonu upisa. */
-export function agentEnv({ role, harness, cwd, task }) {
+export function agentEnv({ role, harness, cwd, task, config = null }) {
   return {
     AGENT_2_0_ROLE: role,
     AGENT_2_0_HARNESS: harness,
@@ -20,6 +20,10 @@ export function agentEnv({ role, harness, cwd, task }) {
     OBSIDIAN_AGENT: harness,
     OBSIDIAN_ROLE: role,
     OBSIDIAN_VAULT: cwd,
+    // Zakup i status se proveravaju u kontrolnom korenu (main), ne u worktree-u
+    // koji nosi kopiju crne table od trenutka grananja.
+    OBSIDIAN_TASK: task?.data?.id ?? '',
+    OBSIDIAN_TASK_ROOT: config?.root ?? cwd,
     WIKI_AGENT: harness,
     WIKI_ROOT: cwd,
   };
@@ -38,7 +42,7 @@ export async function runAgent(config, { role, task, cwd, prompt, now, logger = 
       prompt,
       cwd,
       timeoutMs: spec.timeoutMs ?? config.pipeline.agentTimeoutMs,
-      env: agentEnv({ role, harness: spec.harness, cwd, task }),
+      env: agentEnv({ role, harness: spec.harness, cwd, task, config }),
       config,
     });
     if (result.harness === 'dsh' || result.harness === 'codex' || result.harness === 'agy') {

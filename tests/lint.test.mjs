@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { makeVault, gitExec } from './helpers/vault.mjs';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
 import { formatFindings, lintVault, updateRawManifest } from '../tools/orchestrator/lib/lint.mjs';
 import { writeNote } from '../tools/orchestrator/lib/vault.mjs';
+import { sha256 } from '../tools/orchestrator/lib/fsx.mjs';
 
 const NOW = '2025-01-01T00:00:00.000Z';
 
@@ -24,6 +26,47 @@ test('lint: izmenjen izvor u raw/ je greška i linter to vidi', async () => {
   assert.equal(modified.length, 1);
   assert.equal(modified[0].level, 'error');
   assert.equal(result.ok, false);
+  await vault.cleanup();
+});
+
+test('lint: izmena BINARNOG izvora se detektuje (hash bajtova, ne teksta)', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  // Bajt 0x80 i 0x81 su nevalidni UTF-8: dekodiranjem oba postaju isti U+FFFD,
+  // pa bi hash teksta propustio izmenu.
+  const original = Buffer.concat([Buffer.from('%PDF-1.7\n', 'utf8'), Buffer.from([0x80]), Buffer.from('\n', 'utf8')]);
+  await fs.writeFile(path.join(vault.root, 'raw', 'binary.pdf'), original);
+  await updateRawManifest(config);
+  assert.deepEqual(find((await lintVault(config)).findings, 'raw.modified'), []);
+
+  const changed = Buffer.concat([Buffer.from('%PDF-1.7\n', 'utf8'), Buffer.from([0x81]), Buffer.from('\n', 'utf8')]);
+  await fs.writeFile(path.join(vault.root, 'raw', 'binary.pdf'), changed);
+  const result = await lintVault(config);
+  const modified = find(result.findings, 'raw.modified');
+  assert.equal(modified.length, 1, 'jedan izmenjen bajt u binarnom izvoru mora biti prijavljen');
+  assert.equal(modified[0].target, 'raw/binary.pdf');
+  assert.equal(result.ok, false);
+  await vault.cleanup();
+});
+
+test('lint: manifest v1 (hash teksta) se nadograđuje bez lažne prijave', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  // Simuliraj stari manifest: hash UTF-8 dekodiranog teksta, bez oznake `bytes`.
+  const text = await vault.read('raw/dokument.md');
+  await fs.writeFile(path.join(vault.root, '.agents', 'raw-manifest.json'), JSON.stringify({
+    version: 1,
+    files: { 'dokument.md': { sha256: sha256(text), registeredAt: '2025-01-01T00:00:00.000Z' } },
+  }, null, 2));
+  const result = await lintVault(config);
+  assert.deepEqual(find(result.findings, 'raw.modified'), [], 'nepromenjen izvor ne sme biti prijavljen');
+
+  const upgrade = await updateRawManifest(config);
+  assert.equal(upgrade.upgraded, 1);
+  const manifest = JSON.parse(await vault.read('.agents/raw-manifest.json'));
+  assert.equal(manifest.version, 2);
+  assert.equal(manifest.files['dokument.md'].bytes, true);
+  assert.deepEqual(find((await lintVault(config)).findings, 'raw.modified'), []);
   await vault.cleanup();
 });
 

@@ -6,7 +6,7 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { parseFrontmatter, stringifyFrontmatter } from './yaml.mjs';
-import { resolveInside, walkFiles, writeFileAtomic } from './fsx.mjs';
+import { assertRealInside, resolveInside, walkFiles, writeFileAtomic } from './fsx.mjs';
 
 export const NOTE_STATUSES = ['draft', 'review', 'verified', 'consolidated'];
 export const NOTE_REQUIRED_FIELDS = ['title', 'created', 'updated', 'authors', 'status', 'tags'];
@@ -80,6 +80,8 @@ export function noteFrontmatterProblems(data) {
 /** Učitaj belešku iz vault-a; `rel` je putanja relativna na koren vault-a. */
 export async function readNote(vaultRoot, rel) {
   const full = resolveInside(vaultRoot, rel);
+  // Simbolički link unutar vault-a ne sme da odvede čitanje van njega.
+  await assertRealInside(vaultRoot, full, { label: `beleška ${rel}` });
   const text = await fs.readFile(full, 'utf8');
   const { data, body, present } = parseFrontmatter(text);
   return {
@@ -94,6 +96,7 @@ export async function readNote(vaultRoot, rel) {
 
 export async function writeNote(vaultRoot, rel, { frontmatter, body, order } = {}) {
   const full = resolveInside(vaultRoot, rel);
+  await assertRealInside(vaultRoot, full, { label: `beleška ${rel}` });
   const text = frontmatter ? stringifyFrontmatter(frontmatter, body ?? '', order ? { order } : {}) : (body ?? '');
   await writeFileAtomic(full, text);
   return full;

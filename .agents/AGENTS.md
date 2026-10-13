@@ -63,6 +63,19 @@ i u `agentctl` kontrolnom sloju (Git sloj).
 11. **Granа agenta se pre spajanja rebase-uje na `main`.** Tako grana ne nosi
     zastarelo stanje crne table (`tasks/`), a merge u `main` ostaje sekvencijalan
     i eksplicitan (`--no-ff`), sa autorstvom svakog doprinosa u Git dnevniku.
+12. **MCP sloj ne veruje ulozi na reč.** Upis kroz `obsidian-mcp` zahteva
+    `OBSIDIAN_TASK`: zadatak mora da postoji, da zakup nad njim drži taj agent i
+    da zakup nije istekao. Za upis u produkciju (`wiki/`) dodatno se zahteva
+    verifikacioni pečat (`verification.verdict: pass`) i da je ciljna beleška
+    artefakt tog zadatka. Bez zadatka i pečata nema upisa u `wiki/`.
+13. **Putanja se razrešava kroz simboličke linkove.** Zona upisa se proverava na
+    realnoj putanji, pa link poput `wiki/drafts/link -> raw` ne može da izvede
+    upis van zone. `raw/` i izvedeni artefakti (`wiki/Index.md`,
+    `.agents/raw-manifest.json`, `tasks/events.jsonl`) nisu upisivi ni jednoj
+    ulozi kroz MCP.
+14. **Manifest izvora hashira bajtove, ne tekst.** Izmena jednog bajta u
+    binarnom izvoru (`.pdf`, slika) mora biti prijavljena; `readFile(..., 'utf8')`
+    bi različite bajtove sveo na isti zamenski znak.
 
 ## 3. Životni ciklus zadatka
 

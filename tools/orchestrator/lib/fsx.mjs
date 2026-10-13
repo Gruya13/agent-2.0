@@ -94,8 +94,54 @@ export function sha256(text) {
   return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
+/** Hash BAJTOVA, ne dekodiranog teksta: binarni izvori (.pdf, .png) moraju biti
+ *  proverljivi. `readFile(..., 'utf8')` bi različite bajtove sveo na isti
+ *  U+FFFD, pa bi izmena binarnog fajla prošla neprimećeno. */
+export function sha256Bytes(buffer) {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
 export async function sha256File(file) {
-  return sha256(await fs.readFile(file, 'utf8'));
+  return sha256Bytes(await fs.readFile(file));
+}
+
+/**
+ * Realna putanja najdubljeg postojećeg pretka + ostatak putanje.
+ * Koristi se za odbranu od simboličkih linkova: leksička provera (`..`) ne vidi
+ * da `wiki/drafts/link -> raw` vodi van zone upisa.
+ */
+export async function realpathDeepest(target) {
+  const missing = [];
+  let probe = path.resolve(target);
+  for (;;) {
+    try {
+      const real = await fs.realpath(probe);
+      return path.join(real, ...missing.slice().reverse());
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+      const parent = path.dirname(probe);
+      if (parent === probe) throw error;
+      missing.push(path.basename(probe));
+      probe = parent;
+    }
+  }
+}
+
+/** Razreši `full` kroz simboličke linkove i vrati relativnu putanju u odnosu na `root`. */
+export async function realRelativeTo(root, full) {
+  const realRoot = await fs.realpath(path.resolve(root)).catch(() => path.resolve(root));
+  const real = await realpathDeepest(full);
+  const relative = path.relative(realRoot, real);
+  return { realRoot, real, relative: relative.split(path.sep).join('/'), escapes: relative === '..' || relative.startsWith(`..${path.sep}`) };
+}
+
+/** Baci grešku ako `full` (kroz linkove) izlazi iz `root`. */
+export async function assertRealInside(root, full, { label = 'putanja' } = {}) {
+  const resolved = await realRelativeTo(root, full);
+  if (resolved.escapes) {
+    throw new Error(`${label} izlazi iz korena preko simboličkog linka: ${full} -> ${resolved.real}`);
+  }
+  return resolved;
 }
 
 /** Dopuni JSONL tok jednim zapisom (append-only; nikad se ne prepisuje). */

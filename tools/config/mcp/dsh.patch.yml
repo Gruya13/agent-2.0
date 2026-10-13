@@ -23,5 +23,9 @@
           OBSIDIAN_AGENT: dsh
           # DeepSeek je u ovom sistemu logički arbitar: čita sve, piše samo revizije.
           OBSIDIAN_ROLE: verifier
+          # Upis zahteva zadatak pod zakupom; OBSIDIAN_TASK_ROOT je kontrolni
+          # koren (main), jer radno stablo agenta nosi zastarelu kopiju tasks/.
+          OBSIDIAN_TASK: TASK-NNN
+          OBSIDIAN_TASK_ROOT: __VAULT__
         toolCallTimeoutMs: 15000
         failOnStartupError: true
