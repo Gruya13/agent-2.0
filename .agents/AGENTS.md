@@ -183,7 +183,20 @@ međusobnog isključivanja; istekao zakup se automatski opoziva.
 | `consolidator` | codex (codex-rs) | `wiki/` (bez `Index.md`) | izmišljanje sadržaja, merge |
 
 Kognitivna podela rada: Gemini sintetiše, DeepSeek arbitrira, Codex integriše.
-Homogeni agenti se ne koriste za dve uzastopne faze istog zadatka.
+
+**Nezavisnost je precizno definisana, ne preširoko:**
+
+- **Autor nikad nije verifikator.** Nacrt (`researcher`) i reviziju
+  (`verifier`) rade različiti vendori; to je invarijanta 7 i ona se ne
+  potkopa ni u jednom toku.
+- **`extractor` i `researcher` mogu biti isti vendor** (oba `agy`): ekstraktor ne
+  sudi o sadržaju, on transkribuje, pa tu nema „verifikacije sopstvenog rada".
+- **Kada verifikator i red-team dele isti vendor** (`dsh`), njihove slepe tačke su
+  korelisane. To se **beleži** u zadatku (`challenge.correlationRisk: true`) i
+  vidljivo je u izveštaju; red-team nalaz ipak mora da se **izvrši** na
+  zamrznutoj reviziji, pa dokaz ne zavisi od toga ko ga je napisao. Vendor se
+  menja čim neki drugi bude mogao da izvrši ovu klasu zadatka (Codex je za nju
+  blokiran od svog provajdera — vidi `KONSULTACIJA-ULOGA.md`).
 
 ## 6. Operativne komande
 

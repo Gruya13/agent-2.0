@@ -262,8 +262,15 @@ export async function changedFilesInWorktree(worktreeDir, base = MAIN_BRANCH) {
   return [...skup].sort();
 }
 
+/**
+ * Sve putanje koje grana menja, uključujući OBE strane rename-a.
+ *
+ * `--no-renames` je obavezan: bez njega `git diff --name-only` za `git mv
+ * tools/x wiki/x` prijavi samo odredište, pa kapija zona ne vidi da je izvor
+ * iz zabranjene zone obrisan. Dokazano reprodukcionim skriptom red-teama.
+ */
 export async function branchChangedPaths(config, branch, base = MAIN_BRANCH) {
-  const { stdout } = await git(config.root, ['diff', '--name-only', `${base}...${branch}`], { allowFailure: true });
+  const { stdout } = await git(config.root, ['diff', '--name-only', '--no-renames', `${base}...${branch}`], { allowFailure: true });
   return stdout ? stdout.split('\n').filter(Boolean) : [];
 }
 

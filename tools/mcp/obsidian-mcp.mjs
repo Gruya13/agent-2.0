@@ -93,7 +93,10 @@ const READ_PREFIXES = ['wiki', 'raw', 'tasks', '.agents'];
  * `consolidator` NE sme u `wiki/drafts/` iako je nacrt „unutar wiki/".
  */
 const ROLE_WRITE_ZONES = {
-  extractor: ['draft'],
+  // `fragment` i `draft` su ODVOJENE zone: `wiki/drafts/fragments/` pripada
+  // ekstraktoru, ostatak `wiki/drafts/` istraživaču. Deljena zona bi značila da
+  // svaka izmena nema tačno jednog autora.
+  extractor: ['fragment'],
   librarian: ['production', 'audit'],
   'red-team': ['challenge'],
   researcher: ['draft'],
@@ -102,18 +105,9 @@ const ROLE_WRITE_ZONES = {
   readonly: [],
 };
 
-const ROLE_WRITE_PREFIXES = {
-  extractor: ['wiki/drafts'],
-  librarian: ['wiki', 'tasks/audits'],
-  'red-team': ['tasks/challenges'],
-  researcher: ['wiki/drafts'],
-  verifier: ['tasks/reviews'],
-  consolidator: ['wiki'],
-  readonly: [],
-};
-
 /** Zona upisa za datu putanju (zahteva status zadatka i proveru artefakta). */
 function zoneOf(relative) {
+  if (relative === 'wiki/drafts/fragments' || relative.startsWith('wiki/drafts/fragments/')) return 'fragment';
   if (relative === 'wiki/drafts' || relative.startsWith('wiki/drafts/')) return 'draft';
   if (relative === 'tasks/reviews' || relative.startsWith('tasks/reviews/')) return 'review';
   if (relative === 'tasks/audits' || relative.startsWith('tasks/audits/')) return 'audit';

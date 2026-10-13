@@ -663,23 +663,45 @@ export function createPipeline(config, options = {}) {
       return { phase: 'challenge', task: id, ok: false, reason: `red-team je menjao van svoje zone: ${vanZone.join(', ')}`, outside: vanZone };
     }
 
+    // Red-team koji je pao ili nije napisao izveštaj NIJE čist nalaz. Bez ove
+    // provere bi pad harnesa tiho otvarao kapiju (dokazano skriptom NALAZ-4).
+    const imaIzvestaj = await exists(path.join(wt, izvestaj));
+    if (!result.ok || !imaIzvestaj) {
+      const razlog = !result.ok ? `harnes je pao (exit ${result.exitCode})` : 'nema izveštaja';
+      await store.setFields(id, {
+        challenge: { verdict: 'error', revision, by: owner, at: now(), reason: razlog },
+      }, { actor: owner, note: `red-team: greška (${razlog})` });
+      if (changed.length) await commitWorktreeSafe(config, id, role, `red-team(${id}): neuspeo prolaz`, owner);
+      await failPhase(id, role, { reason: `red-team nije dao nalaz: ${razlog}`, toStatus: 'verified' });
+      return { phase: 'challenge', task: id, ok: false, verdict: 'error', reason: razlog };
+    }
+
     const scripts = changed.filter(isReproductionScript);
+    const maxSkripti = config.pipeline.challengeMaxScripts ?? 3;
+    const neizvrseni = scripts.slice(maxSkripti);
     let rezultati = [];
     let izvrsavanje = 'isključeno';
-    if (config.pipeline.challengeExecute !== false && scripts.length && result.ok) {
+    if (config.pipeline.challengeExecute !== false && scripts.length) {
       izvrsavanje = 'izvršeno';
       rezultati = await runReproductionScripts({
         repoRoot: config.root,
         revision,
         worktreeDir: wt,
         scripts,
-        max: config.pipeline.challengeMaxScripts,
+        max: maxSkripti,
         timeoutMs: config.pipeline.challengeTimeoutMs,
       });
     }
     const reprodukovani = rezultati.filter((r) => r.reproduced === true);
     const lažni = rezultati.filter((r) => r.reproduced === false).length;
-    const verdict = reprodukovani.length ? 'reproducible' : 'clean';
+    // Verdikt: reproduktivni nalaz blokira; neizvršeni skripti se NE smeju tiho
+    // odbaciti (dokazano skriptom NALAZ-5), pa je i to nalaz.
+    const verdict = reprodukovani.length ? 'reproducible'
+      : neizvrseni.length ? 'unexecuted'
+        : 'clean';
+    // Kada verifikator i red-team dele identitet, njihove slepe tačke su
+    // korelisane — to se u zadatku beleži, a ne prećutkuje.
+    const correlationRisk = identityFor(config, ROLE_OF_PHASE.verify) === owner;
 
     if (changed.length) {
       await commitWorktreeSafe(config, id, role, `red-team(${id}): nalazi na ${revision.slice(0, 8)}`, owner);
@@ -691,7 +713,9 @@ export function createPipeline(config, options = {}) {
         scripts,
         reproduced: reprodukovani.map((r) => r.script),
         falsePositives: lažni,
+        unexecuted: neizvrseni,
         executed: izvrsavanje,
+        correlationRisk,
         by: owner,
         at: now(),
       },
@@ -704,7 +728,8 @@ export function createPipeline(config, options = {}) {
         `- harnes: ${result.harness}`,
         `- zamrznuta revizija: ${revision}`,
         `- verdikt: ${verdict}`,
-        `- skripti: ${scripts.length}, reprodukovano: ${reprodukovani.length}, lažnih: ${lažni} (izvršavanje: ${izvrsavanje})`,
+        `- skripti: ${scripts.length}, reprodukovano: ${reprodukovani.length}, lažnih: ${lažni}, neizvršenih: ${neizvrseni.length} (izvršavanje: ${izvrsavanje})`,
+        `- korelacioni rizik (isti vendor kao verifikator): ${correlationRisk ? 'DA' : 'ne'}`,
         `- izveštaj: ${changed.includes(izvestaj) ? izvestaj : '(nije napisan)'}`,
         '',
         ...(rezultati.length
@@ -721,12 +746,12 @@ export function createPipeline(config, options = {}) {
     if (verdict === 'clean') {
       await store.release(id, owner, { toStatus: 'verified', token: leaseTokens.get(id), note: 'red-team nije našao reproduktivni nalaz' });
       await commitBookkeeping(`agentctl: ${id} -> verified (red-team čist)`);
-      await store.emit('phase.done', { task: id, phase: 'challenge', role, verdict, revision, scripts: scripts.length, falsePositives: lažni });
-      logger(`challenge: ${id} -> clean (${scripts.length} skripti, ${lažni} lažnih)`);
-      return { phase: 'challenge', task: id, ok: true, verdict, revision, falsePositives: lažni };
+      await store.emit('phase.done', { task: id, phase: 'challenge', role, verdict, revision, scripts: scripts.length, falsePositives: lažni, correlationRisk });
+      logger(`challenge: ${id} -> clean (${scripts.length} skripti, ${lažni} lažnih${correlationRisk ? ', korelacioni rizik' : ''})`);
+      return { phase: 'challenge', task: id, ok: true, verdict, revision, falsePositives: lažni, correlationRisk };
     }
 
-    // Reproduktivni nalaz: ne ide u produkcionu granu, vraća se autoru.
+    // Reproduktivni ili neizvršeni nalaz: ne ide u produkcionu granu.
     const attempts = (await store.get(id)).data.history.filter((h) => h.status === 'review').length;
     if (attempts > maxRevisions) {
       await store.transition(id, 'blocked', {
@@ -995,7 +1020,8 @@ export function createPipeline(config, options = {}) {
     // broj pokušaja (maxRevisions) se nikad ne potroši.
     const progressed = (a) => a.ok === true
       || a.phase === 'reclaim'
-      || (a.phase === 'verify' && a.verdict === 'fail');
+      || (a.phase === 'verify' && a.verdict === 'fail')
+      || (a.phase === 'challenge' && (a.verdict === 'reproducible' || a.verdict === 'unexecuted'));
 
     if (!only) {
       const reflected = await reflect();
