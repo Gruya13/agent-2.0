@@ -29,7 +29,11 @@ export function makeFinding(level, code, target, message) {
  * fajl koji se može izmeniti bez prijave.
  */
 export async function rawFiles(config) {
+  // Za `raw/` se ne preskače nijedan direktorijum osim `.git`: ni `.worktrees`,
+  // ni `.runtime`, ni `node_modules`. Fajl u preskočenom direktorijumu nikad ne
+  // uđe u manifest, pa bi se mogao izmeniti bez prijave.
   return walkFiles(config.paths.sources, {
+    skipDirs: ['.git'],
     filter: (rel) => !rel.split('/').includes('.git'),
   });
 }
