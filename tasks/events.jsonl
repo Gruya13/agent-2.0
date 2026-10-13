@@ -61,3 +61,9 @@
 {"ts":"2026-10-13T20:46:03.467Z","kind":"task.ingested","task":"TASK-102","source":"raw/arhitektura-asinhronog-multi-agentskog-sistema.md","actor":"operator"}
 {"ts":"2026-10-13T20:46:03.471Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
 {"ts":"2026-10-13T20:46:03.475Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T20:46:03.574Z","kind":"task.write","task":"TASK-102","actor":"researcher","status":"in_progress","phase":"active","moved":"inbox->active"}
+{"ts":"2026-10-13T20:46:03.609Z","kind":"phase.start","task":"TASK-102","phase":"research","role":"researcher","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-102-researcher","branch":"agent/researcher/TASK-102"}
+{"ts":"2026-10-13T20:46:03.642Z","kind":"task.write","task":"TASK-102","actor":"researcher","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T20:46:03.644Z","kind":"task.write","task":"TASK-102","actor":"researcher","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T20:46:03.649Z","kind":"task.write","task":"TASK-102","actor":"researcher","status":"review","phase":"review","moved":"active->review"}
+{"ts":"2026-10-13T20:46:03.649Z","kind":"phase.done","task":"TASK-102","phase":"research","role":"researcher","artifacts":["wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md"],"commit":"865f5c644db3ea7d3683748e5a4c816a4497ac70"}
