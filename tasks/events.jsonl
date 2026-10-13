@@ -147,3 +147,4 @@
 {"ts":"2026-10-13T22:55:24.661Z","kind":"task.write","task":"TASK-102","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T22:55:24.663Z","kind":"task.write","task":"TASK-102","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T22:55:24.665Z","kind":"task.write","task":"TASK-102","actor":"dsh","status":"review","phase":"review","moved":"active->review"}
+{"ts":"2026-10-13T22:55:24.707Z","kind":"phase.rejected","task":"TASK-102","phase":"challenge","role":"red-team","reproduced":["tasks/challenges/TASK-102/NALAZ-1.sh","tasks/challenges/TASK-102/NALAZ-2.sh","tasks/challenges/TASK-102/NALAZ-3.sh"],"attempts":1}
