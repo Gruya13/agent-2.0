@@ -128,3 +128,8 @@
 {"ts":"2026-10-13T22:42:31.951Z","kind":"task.ingested","task":"TASK-102","source":"raw/sest-uloga-i-dve-kapije.md","actor":"operator"}
 {"ts":"2026-10-13T22:42:31.953Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
 {"ts":"2026-10-13T22:42:31.955Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-13T22:42:35.705Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"in_progress","phase":"active","moved":"inbox->active"}
+{"ts":"2026-10-13T22:42:35.744Z","kind":"phase.start","task":"TASK-102","phase":"research","role":"researcher","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-102-researcher","branch":"agent/researcher/TASK-102"}
+{"ts":"2026-10-13T22:47:09.490Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T22:47:09.492Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-13T22:47:09.493Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"review","phase":"review","moved":"active->review"}
