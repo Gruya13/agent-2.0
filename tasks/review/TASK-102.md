@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: review
+status: verified
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T23:15:54.927Z
+updated: 2026-10-13T23:18:11.482Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -23,22 +23,20 @@ lease_expires_at: null
 artifacts:
   - wiki/drafts/Sest_uloga_i_dve_kapije.md
 verification:
-  verdict: fail
+  verdict: pass
   harness: dsh
-  at: 2026-10-13T23:12:13.104Z
-  commit: 64909f0fb9317672763b84ed7ccf52d830000d58
+  at: 2026-10-13T23:18:11.475Z
+  commit: a4a590fa61a27618b6f93673eece2a52a8d701d0
   summary: |-
-    Verifikacija završena. Revizorski trag je upisan u `tasks/reviews/TASK-102.md` (samo moja zona upisa; `wiki/`, `raw/` i nacrt nisu dirani).
-    - **Izvor je verodostojan:** `raw/sest-uloga-i-dve-kapije.md` je pod Gitom (blob `395bcabe`), a disk, blob i `.agents/raw-manifest.json` (red 18) daju isti SHA-256 `3baa723e…`.
-    - **Svih 6 nosivih tvrdnji** odgovara izvoru red-po-red (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27) — nijedan citat nije izmišljen.
-    - **Vikilinkovi** `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]` su validni; nema hipotetičkih veza.
-    - **Lint** prolazi: `grešaka: 0, upozorenja: 0`; zaglavlje nosi sva obavezna polja.
-    - **Reference na kod/ugovor** su proverene komandama (npr. `worktree.mjs` red 163, `pipeline.mjs` `falsePositives`, `agents.yml` redovi 35–36, `.agents/AGENTS.md` sekcija 5).
-    1. **N1 — misattribucija izvora (red 76):** otvoreno pitanje 1 tvrdi da su lista zona znanja i zabranjene putanje (`raw/`, `tools/`, `tests/`, `scripts/`, `.agents/`) u `.agents/AGENTS.md`, **sekcija 1**. Sekcija 1 (redovi 12–37) to ne sadrži; mandat i spisak su u **invarijanti 16** (redovi 96–99). Sama tvrdnja o putanjama je tačna — greška je u referenci.
-    2. **N2 — netočan broj produkcionih beležaka (red 71):** nacrt tvrdi da postoje „samo dve produkcione beleške", ali `wiki/` sadrži i `wiki/drafts/Sest_uloga_i_dve_kapije.md` (dakle tri `.md` fajla); tačno bi bilo „dve konsolidovane beleške (van `drafts/`)".
-    Oba nalaza su mehanički ispravljiva bez prepisivanja sadržaja, ali po pravilu verdikta `pass` nije dozvoljen dok postoje nalazi sa dokazom protiv nacrta.
-    VERDICT: fail
-    REASONS: 2
+    Verifikacija nacrta `wiki/drafts/Sest_uloga_i_dve_kapije.md` je završena; revizorski trag je upisan u `tasks/reviews/TASK-102.md` (jedina izmena u radnom stablu, `git status` pokazuje samo taj fajl; lint: 0 grešaka, 0 upozorenja).
+    **Šta je provereno i potvrđeno:**
+    - **Izvor je verodostojan:** disk `sha256 3baa723e…`, `.agents/raw-manifest.json` (red 18) i Git blob `395bcabe` se poklapaju.
+    - **Svh 6 nosivih tvrdnji** odgovara izvoru red-po-red (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27); svi direktni citati potvrđeni mašinski.
+    - **Vikilinkovi** `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]` su validni; nema markdown linkova ni hipotetičkih veza.
+    - **Reference na kod/ugovor** su tačne neposrednim čitanjem: `AGENTS.md` invarijanta 16 (96–99) i §5 (176–183), `worktree.mjs:163–165`, `pipeline.mjs:696,718` (+ `store.mjs:60–63` za tok događaja), `agents.yml:35–36`, `pipeline.mjs:680–693`, `KONSULTACIJA-ULOGA.md:103`.
+    - **Nema kontradikcije** sa `wiki/Operativni_vodic_asinhronog_sistema.md`; prethodna nalaza N1 (pogrešna atribucija) i N2 (broj produkcionih beležaka) su otklonjena u ovoj reviziji.
+    **Nalaza sa dokazom protiv nacrta: 0.** Zapažanja bez snage nalaza (dodata reč „sažimanja“ u tvrdnji 2, tumačenje u tvrdnji 6, preklapanje otvorenog pitanja 3, izraz „pokretljive skripte“, kontekst prethodne red-team runde) su dokumentovana u revizorskom tragu, bez izmene nacrta.
+    VERDICT: pass
   by: dsh
 challenge:
   verdict: reproducible
@@ -174,6 +172,21 @@ history:
     status: review
     actor: agy
     note: "nacrt spreman: wiki/drafts/Sest_uloga_i_dve_kapije.md"
+  - at: 2026-10-13T23:15:54.998Z
+    status: in_progress
+    actor: dsh
+  - at: 2026-10-13T23:18:11.476Z
+    status: in_progress
+    actor: dsh
+    note: "verdikt: pass"
+  - at: 2026-10-13T23:18:11.479Z
+    status: in_progress
+    actor: dsh
+    note: "faza verify: pass"
+  - at: 2026-10-13T23:18:11.482Z
+    status: verified
+    actor: dsh
+    note: verifikator dao pečat
 lock_token: null
 ---
 
@@ -410,4 +423,26 @@ REASONS: 2
 ### Provera ispravnosti i usaglašenosti
 
 Validacija invarija
+```
+
+### Faza verify (2026-10-13T23:18:11.478Z)
+
+- harnes: dsh
+- trajanje: 136413 ms
+- verdikt: pass
+- grana: agent/researcher/TASK-102 -> verifier @ a4a590fa61a27618b6f93673eece2a52a8d701d0
+
+```
+Verifikacija nacrta `wiki/drafts/Sest_uloga_i_dve_kapije.md` je završena; revizorski trag je upisan u `tasks/reviews/TASK-102.md` (jedina izmena u radnom stablu, `git status` pokazuje samo taj fajl; lint: 0 grešaka, 0 upozorenja).
+
+**Šta je provereno i potvrđeno:**
+- **Izvor je verodostojan:** disk `sha256 3baa723e…`, `.agents/raw-manifest.json` (red 18) i Git blob `395bcabe` se poklapaju.
+- **Svh 6 nosivih tvrdnji** odgovara izvoru red-po-red (L3–5, L7–10, L12–14, L16–19, L21–23, L25–27); svi direktni citati potvrđeni mašinski.
+- **Vikilinkovi** `[[Operativni_vodic_asinhronog_sistema]]` i `[[Index]]` su validni; nema markdown linkova ni hipotetičkih veza.
+- **Reference na kod/ugovor** su tačne neposrednim čitanjem: `AGENTS.md` invarijanta 16 (96–99) i §5 (176–183), `worktree.mjs:163–165`, `pipeline.mjs:696,718` (+ `store.mjs:60–63` za tok događaja), `agents.yml:35–36`, `pipeline.mjs:680–693`, `KONSULTACIJA-ULOGA.md:103`.
+- **Nema kontradikcije** sa `wiki/Operativni_vodic_asinhronog_sistema.md`; prethodna nalaza N1 (pogrešna atribucija) i N2 (broj produkcionih beležaka) su otklonjena u ovoj reviziji.
+
+**Nalaza sa dokazom protiv nacrta: 0.** Zapažanja bez snage nalaza (dodata reč „sažimanja“ u tvrdnji 2, tumačenje u tvrdnji 6, preklapanje otvorenog pitanja 3, izraz „pokretljive skripte“, kontekst prethodne red-team runde) su dokumentovana u revizorskom tragu, bez izmene nacrta.
+
+VERDICT: pass
 ```
