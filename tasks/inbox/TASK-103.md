@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
-status: verified
+status: blocked
 created: 2026-10-13T20:43:47.091Z
-updated: 2026-10-13T20:45:05.463Z
+updated: 2026-10-13T20:45:05.590Z
 source: raw/arhitektura-asinhronog-multi-agentskog-sistema.md
 priority: normal
 tags:
@@ -12,7 +12,7 @@ tags:
 depends_on: []
 authors:
   - researcher
-assignee: null
+assignee: consolidator
 lock_owner: null
 locked_at: null
 lease_expires_at: null
@@ -27,7 +27,7 @@ verification:
     MOCK verifier: pregledao wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md, 0 nalaza.
     VERDICT: pass
   by: verifier
-blocked_reason: null
+blocked_reason: "merge u main nije prošao: glavni repozitorijum nije registrovan kao radno stablo"
 history:
   - at: 2026-10-13T20:43:47.091Z
     status: proposed
@@ -80,6 +80,13 @@ history:
     status: verified
     actor: verifier
     note: verifikator dao pečat
+  - at: 2026-10-13T20:45:05.498Z
+    status: in_progress
+    actor: consolidator
+  - at: 2026-10-13T20:45:05.590Z
+    status: blocked
+    actor: agentctl
+    note: "merge u main nije prošao: glavni repozitorijum nije registrovan kao radno stablo"
 ---
 
 # Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
