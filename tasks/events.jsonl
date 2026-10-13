@@ -121,3 +121,4 @@
 {"ts":"2026-10-13T22:02:55.859Z","kind":"task.write","task":"TASK-101","actor":"consolidator","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-13T22:02:56.006Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"consolidated","phase":"completed","moved":"active->completed"}
 {"ts":"2026-10-13T22:02:56.009Z","kind":"task.write","task":"TASK-101","actor":"agentctl","status":"consolidated","phase":"completed","moved":null}
+{"ts":"2026-10-13T22:02:56.081Z","kind":"phase.done","task":"TASK-101","phase":"consolidate","role":"consolidator","merge":"a186fc8c195977f11beaea98ef40becef49c68aa","commit":"1c2ab9f99ea96797fc4645c0c5635f2268e80fdf"}
