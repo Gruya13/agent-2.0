@@ -79,3 +79,4 @@
 {"ts":"2026-10-13T20:46:03.815Z","kind":"phase.start","task":"TASK-102","phase":"consolidate","role":"consolidator","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-102-consolidator"}
 {"ts":"2026-10-13T20:46:03.959Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"consolidated","phase":"completed","moved":"active->completed"}
 {"ts":"2026-10-13T20:46:03.963Z","kind":"task.write","task":"TASK-102","actor":"agentctl","status":"consolidated","phase":"completed","moved":null}
+{"ts":"2026-10-13T20:46:04.023Z","kind":"phase.done","task":"TASK-102","phase":"consolidate","role":"consolidator","merge":"67560a389f693df3b533da778bccde9bd2eb4461","commit":"f180803b39c4153af3edb12c40e7d6544874520f"}
