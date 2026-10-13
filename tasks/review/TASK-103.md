@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
-status: ready
+status: review
 created: 2026-10-13T20:43:47.091Z
-updated: 2026-10-13T20:44:07.255Z
+updated: 2026-10-13T20:44:55.258Z
 source: raw/arhitektura-asinhronog-multi-agentskog-sistema.md
 priority: normal
 tags:
@@ -16,7 +16,8 @@ assignee: null
 lock_owner: null
 locked_at: null
 lease_expires_at: null
-artifacts: []
+artifacts:
+  - wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md
 verification: null
 blocked_reason: null
 history:
@@ -41,6 +42,21 @@ history:
     status: ready
     actor: researcher
     note: "neuspeh: nema artefakta (exit 0)"
+  - at: 2026-10-13T20:44:55.187Z
+    status: in_progress
+    actor: researcher
+  - at: 2026-10-13T20:44:55.254Z
+    status: in_progress
+    actor: researcher
+    note: "nacrt: wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md"
+  - at: 2026-10-13T20:44:55.256Z
+    status: in_progress
+    actor: researcher
+    note: faza research završena
+  - at: 2026-10-13T20:44:55.258Z
+    status: review
+    actor: researcher
+    note: "nacrt spreman: wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md"
 ---
 
 # Asinhroni multi-agentski sistem nad zajedničkom bazom znanja
@@ -54,6 +70,16 @@ _Operater nije ostavio opis; vidi `source`._
 _Prazno do prvog nalaza._
 
 ### Neuspešna faza research (2026-10-13T20:44:07.250Z)
+
+```
+MOCK researcher: nacrt upisan u wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md (2355 B, 1 veza).
+```
+
+### Faza research (2026-10-13T20:44:55.255Z)
+
+- harnes: mock
+- trajanje: 4 ms
+- grana: agent/researcher/TASK-103 @ 26cad82d1372bf127e3417f47f6ac56d30ec19d9
 
 ```
 MOCK researcher: nacrt upisan u wiki/drafts/Asinhroni_multi-agentski_sistem_nad_zajedničkom_bazom_znanja.md (2355 B, 1 veza).
