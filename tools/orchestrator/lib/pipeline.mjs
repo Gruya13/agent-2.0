@@ -967,6 +967,12 @@ export function createPipeline(config, options = {}) {
     await store.claim(id, owner);
     await store.emit('phase.start', { task: id, phase: 'consolidate', role, branch, kind: 'audit' });
 
+    try {
+      await oznaciDokaz(id, task.data);
+    } catch (error) {
+      await failPhase(id, role, { reason: error.message, toStatus: 'verified' });
+      return { phase: 'consolidate', task: id, ok: false, reason: 'dokaz nije sačuvan', kind: 'audit' };
+    }
     const merge = await mergeIntoMain(config, {
       branch,
       message: `agentctl(${id}): revizija baze (librarian+verifier)`,
@@ -983,7 +989,6 @@ export function createPipeline(config, options = {}) {
 
     await store.transition(id, 'consolidated', { actor: 'agentctl', note: `revizija spojena ${merge.sha.slice(0, 8)}` });
     await store.setAuthors(id, [ROLE_OF_PHASE.audit, verifyRole], { actor: 'agentctl' });
-    await oznaciDokaz(id, (await store.get(id)).data);
     await removeWorktreesForTask(config, id);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.audit}/${id}`);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.challenge}/${id}`);
@@ -1087,6 +1092,18 @@ export function createPipeline(config, options = {}) {
     const commit = await commitWorktreeSafe(config, id, role, `consolidator(${id}): konsolidacija u wiki/`, owner);
     // Grana se rebase-uje na aktuelni main, izvedeni artefakti (Index.md) se
     // poravnavaju, pa tek onda sledi eksplicitan merge commit.
+    // Dokaz se označava PRE merge-a: ako upis taga ne uspe, zadatak ostaje u
+    // stanju `verified` bez objavljivanja i može da se ponovi, a grane (jedine
+    // dosežne reference) nisu obrisane. Da je označavanje posle tranzicije,
+    // neuspeh bi ostavio zadatak `consolidated` bez dokaznih tagova i bez
+    // mogućnosti ponovnog pokušaja (nalaz nezavisne provere). Neuspeh se vraća
+    // kroz `failPhase`, koji otpušta zakup — inače bi zadatak ostao `in_progress`.
+    try {
+      await oznaciDokaz(id, task.data);
+    } catch (error) {
+      await failPhase(id, role, { reason: error.message, toStatus: 'verified' });
+      return { phase: 'consolidate', task: id, ok: false, reason: 'dokaz nije sačuvan' };
+    }
     const merge = await mergeIntoMain(config, {
       branch,
       message: `agentctl(${id}): konsolidacija (researcher+verifier+consolidator)`,
@@ -1133,8 +1150,6 @@ export function createPipeline(config, options = {}) {
     await store.setArtifacts(id, produced, { actor: owner, note: `konsolidovano: ${produced.join(', ')}` });
     await store.transition(id, 'consolidated', { actor: 'agentctl', note: `merge ${merge.sha.slice(0, 8)}` });
     await store.setAuthors(id, ['consolidator'], { actor: 'agentctl' });
-    // Dokaz mora da preživi brisanje grana (vidi oznaciDokaz).
-    await oznaciDokaz(id, (await store.get(id)).data);
     await removeWorktreesForTask(config, id);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.research}/${id}`);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.verify}/${id}`);

@@ -577,8 +577,8 @@ test('E2E: normalizeConsolidatedNote ne dopušta created posle updated', async (
   await vault.cleanup();
 });
 
-test('E2E: neuspešan upis dokaznog taga prekida fazu pre brisanja grana', async () => {
-  const { vault, pipeline } = await setup();
+test('E2E: neuspešan upis dokaznog taga ne objavljuje zadatak i može da se ponovi', async () => {
+  const { vault, store, pipeline } = await setup();
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Tag lock' });
   await pipeline.runResearch('TASK-101');
   await pipeline.runVerify('TASK-101');
@@ -590,12 +590,26 @@ test('E2E: neuspešan upis dokaznog taga prekida fazu pre brisanja grana', async
   const lock = path.join(refDir, 'TASK-101-verify.lock');
   await fs.writeFile(lock, '', 'utf8');
 
-  await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /dokaz nije sačuvan/);
-
-  // Dokazne grane nisu obrisane: dokaz ostaje dosežan.
+  const prvi = await pipeline.runConsolidate('TASK-101');
+  assert.equal(prvi.ok, false, 'faza mora da prijavi neuspeh');
+  assert.match(String(prvi.reason), /dokaz nije sačuvan/);
+  // Neuspeh ne sme da objavi zadatak: inače nema ispravnog ponovnog pokušaja.
+  assert.equal((await store.get('TASK-101')).data.status, 'verified', 'zadatak ostaje verified');
   const grane = await gitExec(vault.root, ['branch', '--list', 'agent/*TASK-101*']);
   assert.match(grane.stdout, /agent\/verifier\/TASK-101/, 'grana verifikatora mora ostati kao dokaz');
+
+  // Ponovni pokušaj posle uklanjanja smetnje: prolazi i dokaz putuje u svež klon.
   await fs.rm(lock, { force: true });
+  const ponovo = await pipeline.runConsolidate('TASK-101');
+  assert.equal(ponovo.ok, true, JSON.stringify(ponovo));
+  const t = await store.get('TASK-101');
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-klon2-'));
+  const klon = path.join(tmp, 'repo');
+  await gitExec(tmp, ['clone', '--quiet', '--no-local', vault.root, klon]);
+  for (const sha of [t.data.verification?.commit, t.data.challenge?.revision]) {
+    await gitExec(klon, ['cat-file', '-e', `${sha}^{commit}`]);
+  }
+  await fs.rm(tmp, { recursive: true, force: true });
   await vault.cleanup();
 });
 test('E2E: red-team ne sme da menja van svoje zone', async () => {
