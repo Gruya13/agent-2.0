@@ -206,3 +206,4 @@
 {"ts":"2026-10-14T08:25:07.279Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:25:07.281Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:25:07.283Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"review","phase":"review","moved":"active->review"}
+{"ts":"2026-10-14T08:25:07.322Z","kind":"phase.done","task":"TASK-103","phase":"research","role":"researcher","artifacts":["wiki/drafts/Flatpak.md"],"commit":"8d55e494b968e617f7740b948aec70bffc1586e6"}
