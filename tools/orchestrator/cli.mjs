@@ -15,7 +15,7 @@ import { createWorktree as _createWorktree, ensureMainBranch, listWorktrees, rem
 import { formatFindings, lintVault, updateRawManifest, RAW_MANIFEST } from './lib/lint.mjs';
 import { renderIndex } from './lib/vault.mjs';
 import { exists } from './lib/fsx.mjs';
-import { git, log as gitLog, isGitRepo } from './lib/git.mjs';
+import { commitPaths, git, log as gitLog, isGitRepo } from './lib/git.mjs';
 import { HARNESS_COMMANDS } from './lib/agents/index.mjs';
 
 const require = createRequire(import.meta.url);
@@ -139,6 +139,17 @@ const COMMANDS = {
     await ensureMainBranch(config);
     const manifest = await updateRawManifest(config);
     const reflect = await pipeline.reflect();
+    // Radna stabla se prave iz Gita: šta nije komitovano, u worktree-u ne
+    // postoji. Bez ovog komita radna stabla nemaju `.gitignore` (pa
+    // `.runtime/task-context.json` izgleda kao tuđa izmena i challenge faza
+    // pada) ni `.agents/AGENTS.md` (pa MCP preskoči sloj zadatka i zakupa).
+    // Dokazano na tri čista vault-a pripremljena samo sa `agentctl init`.
+    await commitPaths(
+      config.root,
+      ['.gitignore', '.agents', 'tools', 'package.json'],
+      'agentctl: init (ugovor i alati u git)',
+      { actor: 'agentctl' },
+    );
     out(`init: vault=${config.root}`);
     out(`manifest: ${manifest.total} zapisa (${RAW_MANIFEST})`);
     out(`index: ${reflect.notes} belešaka`);

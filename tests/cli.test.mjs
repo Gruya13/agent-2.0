@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
-import { makeVault, runCli } from './helpers/vault.mjs';
+import { gitExec, makeVault, runCli } from './helpers/vault.mjs';
 import { PACKAGE_ROOT } from '../tools/orchestrator/lib/config.mjs';
 
 test('CLI: init uspostavlja topologiju, main granu, manifest i indeks', async () => {
@@ -19,6 +19,16 @@ test('CLI: init uspostavlja topologiju, main granu, manifest i indeks', async ()
   await vault.cleanup();
 });
 
+
+test('CLI: init komituje ugovor i alate (radna stabla ih moraju imati)', async () => {
+  const vault = await makeVault({ initGit: false });
+  const result = await runCli(vault.root, ['init']);
+  assert.equal(result.code, 0, result.stderr);
+  const tracked = await gitExec(vault.root, ['ls-files', '.gitignore', '.agents/AGENTS.md']);
+  assert.match(tracked.stdout, /^\.gitignore$/m, '.gitignore mora biti u git-u da bi ga radna stabla imala');
+  assert.match(tracked.stdout, /^\.agents\/AGENTS\.md$/m, 'ugovor mora biti u git-u');
+  await vault.cleanup();
+});
 test('CLI: ingest -> run -> status, list, show prikazuju konsolidovan zadatak', async () => {
   const vault = await makeVault();
   const init = await runCli(vault.root, ['init']);
