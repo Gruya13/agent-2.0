@@ -339,6 +339,30 @@ test('fajl-lock: trka pri preuzimanju mrtvog locka ne pušta dva vlasnika', asyn
     }
   }
 });
+
+test('fajl-lock: marker živog preuzimaoca se ne evakuiše po starosti', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-lock4-'));
+  const lock = path.join(dir, 'mrtav.lock');
+  const marker = lock + '.reclaim';
+
+  // Lock je mrtav, ali marker drži ŽIV proces (ovaj test) — samo je fajl star.
+  const mrtav = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
+  const pid = mrtav.pid;
+  await new Promise((resolve) => mrtav.on('close', resolve));
+  await fs.writeFile(lock, JSON.stringify({ pid, at: new Date().toISOString() }), 'utf8');
+  await fs.writeFile(marker, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), 'utf8');
+  const staro = new Date(Date.now() - 10_000);
+  await fs.utimes(marker, staro, staro);
+
+  // Živ preuzimač je u toku: lock se ne sme preuzeti, ni posle isteka starosti.
+  await assert.rejects(
+    () => withFileLock(lock, async () => {}, { staleMs: 1, retryMs: 5, timeoutMs: 500 }),
+    /nije moguće zaključati/,
+    'živ preuzimač drži marker; tuđi lock se ne sme smeniti po starosti markera',
+  );
+  assert.match(await fs.readFile(lock, 'utf8'), new RegExp(String(pid)), 'tuđi lock nije smenjen');
+  await fs.rm(dir, { recursive: true, force: true });
+});
 async function listDir(dir) {
   return { files: (await fs.readdir(dir)).sort() };
 }

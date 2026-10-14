@@ -242,6 +242,15 @@ export async function withFileLock(lockFile, fn, options = {}) {
               dozvoli = Date.now() - stat.mtimeMs > staleMs;
             } catch { dozvoli = false; }
           }
+          // Poslednja provera neposredno pre uklanjanja: ovaj proces je mogao
+          // biti pauziran između odluke i brisanja, pa je lock u međuvremenu
+          // mogao preuzeti živ vlasnik (dokazano scenarijem „pauziran
+          // preuzimač“). Ako je trenutni vlasnik živ, ne uklanja se ništa.
+          if (dozvoli) {
+            let potvrda = null;
+            try { potvrda = JSON.parse(await fs.readFile(lockFile, 'utf8')); } catch { potvrda = null; }
+            if (potvrda && potvrda.pid && isProcessAlive(potvrda.pid)) dozvoli = false;
+          }
           if (dozvoli) await fs.rm(lockFile, { force: true }).catch(() => {});
         }
       } finally {
@@ -249,16 +258,35 @@ export async function withFileLock(lockFile, fn, options = {}) {
       }
       return true;
     }
-    // Marker drži drugi čekalac; ako je i on zaglavljen, očisti ga posle roka.
-    try {
-      const stat = await fs.stat(marker);
-      if (Date.now() - stat.mtimeMs > 5_000) await fs.rm(marker, { force: true }).catch(() => {});
-    } catch { /* marker je već nestao */ }
+    // Marker drži drugi čekalac. Uklanja se samo ako mu je vlasnik MRTAV:
+    // starost sama nije dovoljna — živ (npr. pauziran) preuzimač bi posle
+    // buđenja obrisao lock na osnovu zastarelog čitanja i ušao zajedno sa
+    // novim vlasnikom (dokazano scenarijem „pauziran preuzimač“). Ako je
+    // vlasnik živ, ovaj čekalac čeka — to je bezbedniji ishod od dvostrukog
+    // vlasnika.
+    let markInfo = null;
+    try { markInfo = JSON.parse(await fs.readFile(marker, 'utf8')); } catch { markInfo = null; }
+    if (markInfo && markInfo.pid) {
+      if (!isProcessAlive(markInfo.pid)) await fs.rm(marker, { force: true }).catch(() => {});
+    } else {
+      // Nečitljiv/nestao marker: jedini oslonac je starost.
+      try {
+        const stat = await fs.stat(marker);
+        if (Date.now() - stat.mtimeMs > staleMs) await fs.rm(marker, { force: true }).catch(() => {});
+      } catch { /* marker je već nestao */ }
+    }
     return false;
   };
 
+  const prekoracio = () => Date.now() > deadline;
+  const greskaRoka = () => new Error(`nije moguće zaključati ${path.basename(lockFile)} u zadatom roku`);
+
   for (;;) {
     if (await tryAcquire()) break;
+    // Rok se proverava na ulazu u svaku iteraciju, pa i kada je lock zastareo:
+    // grana za preuzimanje inače vrti petlju bez izlaza (dokazano testom sa
+    // živim markerom — withFileLock je visio umesto da prijavi istek roka).
+    if (prekoracio()) throw greskaRoka();
     let stale = false;
     try {
       const info = JSON.parse(await fs.readFile(lockFile, 'utf8'));

@@ -242,3 +242,51 @@ istovremeno držala kritičnu sekciju:
   **pada** sa `fsx.mjs` iz `ad46d0d`, a prolazi sa ispravkom (4 uzastopna
   izvođenja bez flaka).
 - Skup posle ispravke: **138 prolazi, 0 padova**, dva uzastopna izvođenja.
+
+## 13. Druga runda nezavisne verifikacije (nad `f1f9c05`)
+
+| Tvrdnja | Ishod | Dokaz |
+|---|---|---|
+| M1 novi test trke prolazi na `f1f9c05`, pada na `ad46d0d` | **POTVRĐENO** | `pass 1 / fail 0`; na `ad46d0d` `fail 1` sa ispisom dva intervala koja se preklapaju |
+| M2 scenario sa 12 procesa i barijerom | **POTVRĐENO** | na `f1f9c05` preklapanja `[0,0,0,0,0,0,0,0]`; na `ad46d0d` `[0,2,1,0,7,0,11,1]` |
+| M3 bez regresije | **POTVRĐENO** | `npm test` 138/138; lock, heartbeat i dva `agy` poziva (razmak 20 ms, bez preklapanja) |
+
+**Nov kontraprimer (M4): „pauziran preuzimač“.** Verifikator je instrumentirao
+proces tako da se zaustavi (SIGSTOP) posle čitanja mrtvog vlasnika, sačekao da
+drugi proces evakuiše marker po starosti, pa pustio prvi da nastavi — i izmerio
+**250 ms preklapanja**. Uzrok: marker se evakuisao posle 5 s **bez provere
+živosti** svog vlasnika, a preuzimač je brisao lock na osnovu čitanja koje je u
+međuvremenu postalo zastarelo.
+
+## 14. Ispravke po drugoj rundi
+
+1. Marker se evakuiše **samo ako mu je vlasnik mrtav**; starost je oslonac samo za
+   nečitljiv/zaglavljen marker. Živ (i samo pauziran) preuzimač zadržava marker.
+2. Neposredno pre uklanjanja locka radi se **završna provera** trenutnog sadržaja:
+   ako je vlasnik živ, ne uklanja se ništa.
+3. Uočeno sopstvenim testom i popravljeno: grana za zastareli lock vraćala se u
+   petlju **bez provere roka**, pa je `withFileLock` mogao da visi zauvek umesto
+   da prijavi istek. Rok se sada proverava na ulazu u svaku iteraciju.
+
+Merenje scenarija „pauziran preuzimač“ na fiksiranom kodu:
+
+```text
+novi {"A":[1791965155671,179196515921],"B":[1791965155922,1791965156176],"preklapanjeMs":0}
+```
+
+Regresioni test `fajl-lock: marker živog preuzimaoca se ne evakuiše po starosti`
+(temelji se na istom pravilu, bez SIGSTOP instrumentacije): **pada** sa
+`fsx.mjs` iz `f1f9c05`, prolazi sa ispravkom. Skup posle ispravke: **139
+prolazi, 0 padova**, dva uzastopna izvođenja.
+
+## 15. Preostalo ograničenje mehanizma
+
+- Uklanjanje locka nije atomski uslovljeno sadržajem (fajl-sistem ne daje
+  compare-and-swap). Ostaje teoretski prozor između završne provere i `rm`;
+  da bi se iskoristio, proces mora biti zaustavljen tačno u tom mikrosekundnom
+  intervalu. Potpuno zatvaranje bi zahtevalo OS-level primitiv (`flock` ili unix
+  socket koji jezgro sam otpušta), što je nova mehanika i van je obima ove faze.
+- Zato je međusobno isključivanje u podržanom režimu (jedna mašina, jedan vault,
+  realni hici bez veštačkog zaustavljanja procesa) dokazano trima nezavisnim
+  scenarijima: živ vlasnik, mrtav vlasnik pod trkom i pauziran preuzimač.
+
