@@ -1,7 +1,7 @@
 ---
 title: Operativni vodic asinhronog sistema
 created: 2026-10-13T21:44:35.592Z
-updated: 2026-10-13T22:03:38.710Z
+updated: 2026-10-14T08:42:30.879Z
 authors:
   - researcher
   - verifier

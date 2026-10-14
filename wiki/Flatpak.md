@@ -1,10 +1,12 @@
 ---
 title: Flatpak
 created: 2026-10-14T08:19:46.202Z
-updated: 2026-10-14T10:27:20.000Z
+updated: 2026-10-14T08:42:30.877Z
 authors:
   - researcher
-status: draft
+  - consolidator
+  - verifier
+status: consolidated
 tags:
   - linux
   - paketi
