@@ -2,150 +2,109 @@
 
 [Dokumentacija](README.md) · [Predlog posle koraka 4](../Agent-2.0-Predlog-za-dsh-posle-koraka-4.md) · [K1](DOKAZI-KORAK-1.md) · [K2](DOKAZI-KORAK-2.md) · [K3](DOKAZI-KORAK-3.md) · [K4](DOKAZI-KORAK-4.md)
 
-Datum: 14. oktobar 2026.
-Zamrznuta revizija: `b4d7fbe609b2aa7b420dfe8b4db86eefd91db142` (posle ispravke
-artefakata i ispravke `init`-a).
-Izvor: `raw/flatpak.md`, sha256 `e75f3f1ac30c2bdaa785b5be06006cf11b47e8c9085416ec461fca03f095be6d`
-(isti kao u Koraku 3). Referentna lista: [K3-REFERENCA.md](K3-REFERENCA.md).
+Datum: 14/15. oktobar 2026.
+Izvor (isti u svim prolazima): `raw/flatpak.md`, sha256
+`e75f3f1ac30c2bdaa785b5be06006cf11b47e8c9085416ec461fca03f095be6d`.
+Referentna lista: [K3-REFERENCA.md](K3-REFERENCA.md).
 Konfiguracija: `tools/config/agents.real.yml` (agy / dsh / codex).
 
-**Kriterijum uspeha (iz predloga):** tri sadržajno prihvatljiva `consolidated`
-rezultata na istoj reviziji, u odvojenim vault-ima, bez ručnog podešavanja
-stanja, sa ispravnim artefaktima i očuvanim granicama upisa.
+**Kriterijum:** tri sadržajno prihvatljiva `consolidated` rezultata na istoj
+reviziji, u odvojenim vault-ima, bez ručnog podešavanja stanja, sa ispravnim
+artefaktima i očuvanim granicama upisa.
 
-**Ishod: kriterijum NIJE ispunjen.** Nijedan od tri prolaza nije stigao do
-`consolidated`; sva tri su završila u `blocked` posle trećeg reproduktivnog
-nalaza red-teama. Uzrok je dijagnostikovan i naveden ispod.
+**Ishod: 2 od 3.** Vault 1 i vault 3 su `consolidated`; vault 2 je `blocked`
+posle reproduktivnog nalaza red-teama. Kriterijum u celini **nije** ispunjen —
+tačan dokaz koji nedostaje naveden je u odeljku 5.
 
-## 1. Ispravka potvrđene greške artefakata
+## 1. Šta je ispravljeno pre ove runde
 
-Potvrđeno je šire dejstvo greške N14 iz Koraka 3:
+1. **Evidencija na zamrznutoj reviziji** (`6735b6c`). Red-team je u prethodnoj
+   rundi obarao *evidenciju*, ne sadržaj: grana nosi snimak `tasks/` iz trenutka
+   nastanka, pa je zapis mogao da tvrdi verifikaciju na nedosežnoj reviziji,
+   skripte kojih u reviziji nema, ili stari status i verdikt. Sada se pre
+   zamrzavanja u radno stablo prenosi aktuelni zapis zadatka (bez polja
+   `challenge`, koje pripada prethodnom pokušaju i ostaje u istoriji tela), a
+   provera zone se meri od te revizije. Dokaz lokalnim testom:
+   `E2E: red-team dobija usklađen zapis zadatka na zamrznutoj reviziji` — pada
+   bez ispravke, prolazi sa njom.
+2. **`created` u objavljenoj belešci** (`0700160`). Vault 3 je objavio belešku sa
+   `created: 2026-10-15T00:15:00.000Z` dok je `updated` bio `2026-10-14T22:23` —
+   vreme posle sopstvenog izvora; isti razred je u vault-u 2 blokirao zadatak.
+   `normalizeConsolidatedNote` je verovao modelu; sada `created` dolazi iz zapisa
+   zadatka. Test: `E2E: objavljena beleška nosi created iz evidencije zadatka`.
+3. **Povremeni pad testa trke** (`c9b8264`). Pod opterećenjem celog skupa ne
+   pokrene se svih 10 dece, pa je test padao bez veze sa lockom. Sada se traži
+   bar 10 od 12 procesa i nema preklapanja; kod pre ispravke trke i dalje pada
+   (4/4), a skup je stabilan.
 
-- `detectArtifacts` je za ulogu `consolidator` vraćao **sve** beleške u `wiki/`;
-  `normalizeConsolidatedNote` je zato prepisivao i tuđe beleške, a
-  `setArtifacts` (pre merge-a) ih je upisivao u `artifacts` zadatka.
-- Kapija čita `artifacts` kao **dozvoljene produkcione mete**
-  (`zonePolicyFor`). Zato je u ponovljenom pokušaju `TASK-103` tuđa beleška
-  postala deklarisan artefakt i njena izmena je **ušla u `main`**
-  (`git show --stat 3f3cca0` → `wiki/Operativni_vodic_asinhronog_sistema.md | 2 +-`;
-  polje `updated` i lista autora).
+## 2. Tri prolaza (revizija `6735b6c`, jedan po jedan)
 
-Popravke (revizija `35d60b2`):
+| # | Vault | ID | Poziva | Trajanje | `verify` odbijanja | `challenge` | Ručne intervencije | Status | Artefakti |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `k7-vault-1` | TASK-101 | 12 | 39 min | 1 (pokušaj 1) | 2 reproduktivna, pa **čist** | **nema** | **consolidated** (`b0d205c2`) | `wiki/Flatpak.md` |
+| 2 | `k7-vault-2` | TASK-101 | 10 | 33 min | 2 | 1 reproduktivan, pa **blokada** | **nema** | `blocked` | `wiki/drafts/Flatpak.md` |
+| 3 | `k7-vault-3` | TASK-101 | 12 | 37 min | 1 | 2 reproduktivna, pa **čist** | **nema** | **consolidated** (`b790f1b7`) | `wiki/Flatpak.md` |
 
-1. snimak `before` pre poziva harnesa u fazama `research`, `extract` i
-   `consolidate`, pa `detectArtifacts` vraća samo ono što je **taj** zadatak
-   proizveo;
-2. `setArtifacts` se upisuje tek **posle uspešnog** merge-a;
-3. odbijen pokušaj ostavlja predložene putanje u **istoriji zadatka** (telo), ne u
-   `artifacts`;
-4. regresioni scenario `E2E: odbijena konsolidacija ne upisuje tuđu putanju u
-   artifacts (retry je ne prihvata)` — pada bez ispravke, prolazi sa njom;
-5. neovlašćena izmena tuđe beleške u `main` vraćena je kontrolisanom odlukom
-   (dokaz ostaje u git istoriji i u ovom dokumentu).
+Pozivi po vault-u (1 i 3): 4 `agy` (istraživač), 4 `dsh` (verifikator), 3 `dsh`
+(red-team), 1 `codex` (konsolidator). Vault 2: 4 + 4 + 2 (bez konsolidatora).
 
-Dodatna greška nađena pri pripremi čistih vault-ova (revizija `b4d7fbe`):
-`agentctl init` nije komitovao `.gitignore` ni `.agents/`, pa ih **radna stabla
-nisu imala** (prave se iz Gita). Posledica: `.runtime/task-context.json` je
-izgledao kao tuđa izmena i faza `challenge` je padala, a MCP bi preskočio sloj
-zadatka i zakupa. `init` sada komituje ugovor i alate; regresioni test u
-`tests/cli.test.mjs`.
+Petlja je u svim prolazima prošla pun ciklus ispravke: posle **svakog** nalaza
+istraživač dobija novi posao (ispravka iz Koraka 4 radi u stvarnom toku).
+Nijedan prolaz nije tražio ručno vraćanje stanja, podešavanje polja ni override.
 
-## 2. Tri prolaza
+## 3. Pregled sadržaja
 
-| # | Revizija | Vault | ID | Poziva | Trajanje | `verify` odbijanja | `challenge` nalaza | Ručne intervencije | Završni status | Artefakti |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | `b4d7fbe` | `k6-vault-1` | TASK-101 | 11 (4 agy, 4 dsh, 3 dsh) | 44 min | 1 | 3 | **nema** | `blocked` | `wiki/drafts/Flatpak.md` |
-| 2 | `b4d7fbe` | `k6-vault-2` | TASK-101 | 11 (4 agy, 4 dsh, 3 dsh) | 48 min | 1 | 3 | **nema** | `blocked` | `wiki/drafts/Flatpak.md` |
-| 3 | `b4d7fbe` | `k6-vault-3` | TASK-101 | 11 (4 agy, 4 dsh, 3 dsh) | 38 min | 1 | 3 | **nema** | `blocked` | `wiki/drafts/Flatpak.md` |
+- **Vault 1** (`wiki/Flatpak.md`, 60 redova): svih 13 referentnih tvrdnji
+  prisutno, broj **700.000** očuvan, WSL/ChromeOS i uslov „uz Bubblewrap i
+  OSTree“ tačni, neizvesnost označena. `created` = vreme zadatka.
+- **Vault 3** (`wiki/Flatpak.md`): sve ključne tvrdnje i brojevi prisutni,
+  neizvesnost označena, indeks sadrži `[[Flatpak]]`, zadatak `consolidated`,
+  nema aktivnog zakupa. **Ali** `created` je bio netačan (vreme posle `updated`) —
+  to je nalaz iz odeljka 1.2 i on je popravljen posle ovih prolaza.
+- **Vault 2**: nema objavljene beleške. Završni nalaz red-teama: „lažan
+  `created` u zaglavlju nacrta“ (isti razred). Artefakti ostaju na nacrtu —
+  ispravka iz Koraka 3/4 radi: kapija nije pustila ništa u `main`.
 
-- Sva tri vault-a su pripremljena samo postojećim alatima
-  (`agentctl init` + `agentctl ingest`), sa istim izvorom (isti sha256), bez
-  starih zadataka, zakupa, artefakata i tuđeg manifesta.
-- Sve tri petlje su prošle **identičan** put:
-  `research → verify fail (pokušaj 1) → research → verify pass → challenge
-  reproducible → research → verify pass → challenge reproducible → research →
-  verify pass → challenge reproducible (3. nalaz) → blocked`.
-- Ručnih intervencija **nije bilo**: ni prepravljanja sadržaja, ni podešavanja
-  `verification`/`challenge` polja, ni `override`.
-- Artefakti su u sva tri slučaja tačno `["wiki/drafts/Flatpak.md"]` — ispravka iz
-  odeljka 1 radi u stvarnom toku. Lint: 0 grešaka, 0 upozorenja u svima.
+## 4. Ograničenja zapažena pri radu
 
-## 3. Dijagnoza: zašto nijedan prolaz nije završen
+- Poruka blokade u vault-u 2 glasi „red-team je reprodukovao nalaz **1** put(a)
+  (dozvoljeno 3)“ iako je zadatak blokiran po **brojaču** ulazaka u `review`
+  (N17 iz Koraka 4). Poruka navodi broj nalaza iz tog prolaza, a ne vrednost
+  brojača koja je odlučila; to je zbunjujuće, ali ne menja ponašanje.
+- Red-team i verifikator dele vendor (`dsh`); korelacioni rizik je zabeležen u
+  svakom prolazu.
 
-Red-team je u svakom prolazu dokazao **tri reproduktivna nalaza** (skript u svežem
-klonu, exit 0, `OBORENO`). Nalazi su stvarni — nisu lažni i nisu tautologije
-(red-team je radio i negativnu kontrolu). Dve klase nalaza se ponavljaju:
+## 5. Šta nedostaje (precizno)
 
-**(A) Nacrt tvrdi više od izvora, a verifikator to propusti.**
-- Vault 1, NALAZ-1: revizija tvrdi „nema izmišljenih tvrdnji“, a nacrt uvodi
-  „hardverske resurse“ kojih izvor nema.
-- Vault 1, NALAZ-2: tvrdnja „jedini broj je 700.000“ je netačna.
-- Vault 3, NALAZ-2/NALAZ-3: „mehanizam granularnih dozvola“, „komponenta“
-  (Bubblewrap), „tehnologija“ (PipeWire) — reči kojih izvor ne sadrži, uz
-  izjavu revizije „0 nalaza“.
+1. **Treći `consolidated` rezultat** na istoj reviziji. Vault 2 je blokiran
+   nalazom koji je red-team dokazao skriptom; autor je ispravljao nacrt dva puta,
+   ali zadatak je dostigao dozvoljeni broj pokušaja. Da bi kriterijum bio
+   ispunjen, potreban je prolaz u kome nijedan reproduktivni nalaz ne ostane
+   posle dozvoljenog broja ispravki.
+2. **Potvrda ispravke `created`** na novoj reviziji (`0700160`): tri prolaza su
+   izvršena na `6735b6c`, pre te ispravke. Prolazi se **ne smeju** spajati u
+   tvrdnju „tri prolaza na istoj reviziji“ sa novom revizijom.
+3. **Ponovljivost na novoj reviziji** nije izmerena; prva dva prolaza i treći
+   pokazuju da je ishod zavisan od sadržaja koji modeli proizvedu (klasa A), a ne
+   od kontrolnog sloja.
 
-**(B) Zapis zadatka na zamrznutoj reviziji nije u skladu sa stvarnošću.**
-- Vault 2, NALAZ-1: `verification.commit`/`challenge.revision` pokazuju na
-  reviziju koja **nije dosežna** iz zamrznute revizije (postoji samo kao
-  *dangling* objekat u deljenom object store-u, pa je svež `git clone --no-local`
-  ne prenosi), a `verification.summary` opisuje drugi blob nacrta.
-- Vault 2, NALAZ-2: zapis tvrdi reprodukovane skripte kojih u zamrznutoj reviziji
-  nema.
-- Vault 2, NALAZ-3 / Vault 3, NALAZ-1: revizija netačno citira mesto pravila
-  (`.agents/roles/researcher.md:4` umesto 16–17).
-- Vault 3, NALAZ-4: uz `verdict: pass`, zapis na istoj reviziji još nosi
-  `status: ready` i `verification.verdict: fail` iz prethodnog pokušaja.
+## 6. Zaključak
 
-**Koren klase (B)** je u kontrolnom sloju: faza `challenge` zamrzava **granu
-verifikatora**, a fajl zadatka u toj grani je snimak crne table iz trenutka kada
-je grana nastala. Invarijanta 11 („grana se pre spajanja rebase-uje na `main`“)
-rešava to za merge, ali **ne** za red-team, koji radi pre rebase-a. Zato red-team
-dobija reviziju na kojoj `tasks/inbox/TASK-101.md` i stvarno stanje ne moraju da
-se poklope — i to dokazuje skriptom.
+- Kontrolni sloj sada **samostalno** dovodi zadatak od `raw` izvora do
+  `consolidated` produkcione beleške sa stvarnim modelima, bez ručnih
+  intervencija (vaultovi 1 i 3), uz tačne artefakte i očuvane granice upisa.
+- Kada sadržaj ne zadovolji kapiju, zadatak se **blokira** i ništa ne ulazi u
+  `main` (vault 2) — kapija je radila tri puta u tri prolaza.
+- Ponovljivost u smislu „tri od tri“ **nije dokazana**; dokaz koji nedostaje je
+  naveden u odeljku 5.
 
-Za klasu (B) autor (istraživač) **ne može** da ispravi ništa: to nije sadržaj
-nacrta nego evidencija kontrolnog sloja. Zato petlja ne može da se izvuče:
-istraživač menja nacrt, verifikator daje `pass`, red-team ponovo obara evidenciju,
-i posle `maxRevisions` zadatak ide u `blocked`.
+## 7. Istorijski kontekst (prethodna runda, revizija `b4d7fbe`)
 
-## 4. Šta je potvrđeno, a šta nedostaje
+Na reviziji pre ispravke evidencije, sva tri prolaza su bila `blocked` (11
+poziva svaki), jer je red-team obarao zapis zadatka, a ne sadržaj: nedosežna
+revizija u `verification.commit`, skripte kojih u reviziji nema, stari status i
+verdikt. Logovi te runde: [k6-1](K6-tok-1.log) · [k6-2](K6-tok-2.log) ·
+[k6-3](K6-tok-3.log). Ta runda je i dovela do ispravke iz odeljka 1.1.
 
-**Potvrđeno:**
-- kapija stvarno blokira neispravan sadržaj i neispravnu evidenciju (sva tri
-  prolaza; nalazi su reprodukovani skriptom);
-- ispravka artefakata radi u stvarnom toku (artefakti su čisti u sva tri vault-a);
-- ispravka iz Koraka 4 radi u stvarnom toku: posle **svakog** nalaza istraživač
-  dobija novi posao (4 `agy` poziva po vault-u);
-- `init` sada ostavlja ugovor u Gitu, pa radna stabla imaju `.gitignore` i
-  `.agents/AGENTS.md`.
-
-**Nedostaje (precizno):**
-1. **Nijedan `consolidated` rezultat** — dakle nema dokaza o ponovljivosti
-   objavljivanja na ovoj reviziji. Sadržajni pregled iz odeljka 4 predloga nije
-   primenljiv jer nijedna beleška nije objavljena.
-2. **Tri prolaza na istoj reviziji nisu dovršena** u smislu kriterijuma; sva tri
-   su prekinuta istim pravilom (`maxRevisions`).
-3. **Nije dokazano** da bi ispravka klase (B) — sinhronizacija crne table pre
-   zamrzavanja red-team revizije — dovela do `consolidated` rezultata; to je
-   sledeći eksperiment, sa novom revizijom.
-
-## 5. Šta bi bila minimalna sledeća korekcija (predlog, nije izvršena)
-
-Pre zamrzavanja revizije za red-team, crna tabla (`tasks/`) u toj reviziji mora
-biti aktuelna: npr. rebase verifikatorove grane na `main` **pre** faze
-`challenge`, ili prosleđivanje red-teamu kontrolnog korena koji nije snimak
-grane. Time bi nalazi klase (B) prestali da budu mogući, a klasa (A) ostaje
-posao modela.
-
-Ovo **nije izvršeno** u ovom zadatku: menja kontrolni tok i zahteva nove stvarne
-provere, a zadatak je tražio minimalnu korekciju potvrđene greške **artefakata**.
-
-## 6. Skup i regresije
-
-- `npm test`: **143 prolaza, 0 padova**, dva uzastopna izvođenja na reviziji
-  `b4d7fbe` (posle ispravke artefakata i `init`-a).
-- Regresioni testovi dodati u ovom zadatku:
-  `E2E: odbijena konsolidacija ne upisuje tuđu putanju u artifacts (retry je ne
-  prihvata)` i `CLI: init komituje ugovor i alate (radna stabla ih moraju imati)`.
-- Logovi tri prolaza: [k6-run-1](K6-tok-1.log) · [k6-run-2](K6-tok-2.log) ·
-  [k6-run-3](K6-tok-3.log).
+Logovi završne runde: [k7-1](K7-tok-1.log) · [k7-2](K7-tok-2.log) ·
+[k7-3](K7-tok-3.log).
