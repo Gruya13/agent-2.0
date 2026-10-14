@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Flatpak
-status: review
+status: ready
 created: 2026-10-14T08:19:46.202Z
-updated: 2026-10-14T08:25:07.282Z
+updated: 2026-10-14T08:27:16.622Z
 kind: ingest
 source: raw/flatpak.md
 audit_scope: []
@@ -23,7 +23,23 @@ locked_at: null
 lease_expires_at: null
 artifacts:
   - wiki/drafts/Flatpak.md
-verification: null
+verification:
+  verdict: fail
+  harness: dsh
+  at: 2026-10-14T08:27:16.616Z
+  commit: 716f3bdc8ffda0778995127a2eea08d248c7a22e
+  summary: |-
+    Revizija je završena. Trag je upisan u `tasks/reviews/TASK-103.md` (jedina izmena u radnom stablu; `git status` pokazuje samo taj fajl, `raw/`, `wiki/` i nacrt nisu dirani).
+    - **Izvor je verodostojan i nepromenjen:** disk `sha256 e75f3f1a…be6d`, `.agents/raw-manifest.json` i Git blob `56470cc` daju isti otisak; `raw/flatpak.md` je pod verzionom kontrolom.
+    - **Svih 7 citata red-po-red odgovara izvoru** (L7, L9, L11, L13, L15, L17, L19) — nijedan citat nije izmišljen.
+    - **Vikilinkovi:** samo `[[Index]]` (2 pojave); `wiki/Index.md` postoji, `obsidian_backlinks` ga potvrđuje, nema markdown linkova.
+    - **Lint:** `agentctl lint` i `obsidian_lint_vault` → 0 grešaka, 0 upozorenja; zaglavlje nosi sva obavezna polja.
+    1. **N1 (red 18):** nacrt tvrdi da je „evidentiran u centralnom indeksu baze znanja [[Index]]“, ali `grep -n "Flatpak" wiki/Index.md` nema pogodaka, a indeks (generisan 2026-10-13) sadrži tačno jednu konsolidovanu belešku. Po invarijanti 10 indeks obuhvata samo konsolidovane beleške posle merge-a.
+    2. **N2 (red 23):** tvrdnja o pokretanju aplikacija „u potpunoj izolaciji“ jača je od izvora (L7: „in isolation“) i protivreči tvrdnji 2 istog nacrta (red 27) o dozvolama za pristup Bluetooth-u, zvuku, mreži i datotekama.
+    Zapažanja bez snage nalaza (dodata tačna precizacija: „znatno“, „de facto primarni“, „potpuno odvojeni“, OSTree „verzionisanje“, Bubblewrap mehanizam; „razvojni inženjeri“) dokumentovana su tekstom, bez izmene nacrta.
+    VERDICT: fail
+    REASONS: 2
+  by: dsh
 challenge: null
 blocked_reason: null
 history:
@@ -52,6 +68,21 @@ history:
     status: review
     actor: agy
     note: "nacrt spreman: wiki/drafts/Flatpak.md"
+  - at: 2026-10-14T08:25:07.372Z
+    status: in_progress
+    actor: dsh
+  - at: 2026-10-14T08:27:16.617Z
+    status: in_progress
+    actor: dsh
+    note: "verdikt: fail"
+  - at: 2026-10-14T08:27:16.620Z
+    status: in_progress
+    actor: dsh
+    note: "faza verify: fail"
+  - at: 2026-10-14T08:27:16.622Z
+    status: ready
+    actor: dsh
+    note: odbijen nacrt (pokušaj 1); vraćeno istraživaču
 lock_token: null
 ---
 
@@ -92,4 +123,32 @@ I am awaiting the completion of the test suite.
   2. *Bezbednosni model i revizija paketa na Flathub repozitorijumu*: Izvor [`raw/flatpak.md#L15`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L15) navodi doprinose administratora i developera, ali ne specifikuje proces verifikacije koda, odobravanje osetljivih sistemskih dozvola niti postupak u slučaju kompromitovanog softvera (`nepotvrđeno u izvoru`).
   3. *Tehnički protokol za nezavisne repozitorijume*: Izvor [`raw/flatpak.md#L17`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L17) konstatuje mogućnost nezavisnih repozitorijuma, ali ne opisuje tehničke protokole, distribuciju ključeva za potpisivanje niti format metapodataka (`nepotvrđeno u izvoru`).
   4. *Metodologija statistike preuzimanja*: Izvor [`raw/flatpak.md#L15`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L15) navodi više od 700.0
+```
+
+### Faza verify (2026-10-14T08:27:16.619Z)
+
+- harnes: dsh
+- trajanje: 129185 ms
+- verdikt: fail
+- grana: agent/researcher/TASK-103 -> verifier @ 716f3bdc8ffda0778995127a2eea08d248c7a22e
+
+```
+Revizija je završena. Trag je upisan u `tasks/reviews/TASK-103.md` (jedina izmena u radnom stablu; `git status` pokazuje samo taj fajl, `raw/`, `wiki/` i nacrt nisu dirani).
+
+## Šta je potvrđeno
+
+- **Izvor je verodostojan i nepromenjen:** disk `sha256 e75f3f1a…be6d`, `.agents/raw-manifest.json` i Git blob `56470cc` daju isti otisak; `raw/flatpak.md` je pod verzionom kontrolom.
+- **Svih 7 citata red-po-red odgovara izvoru** (L7, L9, L11, L13, L15, L17, L19) — nijedan citat nije izmišljen.
+- **Vikilinkovi:** samo `[[Index]]` (2 pojave); `wiki/Index.md` postoji, `obsidian_backlinks` ga potvrđuje, nema markdown linkova.
+- **Lint:** `agentctl lint` i `obsidian_lint_vault` → 0 grešaka, 0 upozorenja; zaglavlje nosi sva obavezna polja.
+
+## Nalazi protiv nacrta (2, oba sa dokazom)
+
+1. **N1 (red 18):** nacrt tvrdi da je „evidentiran u centralnom indeksu baze znanja [[Index]]“, ali `grep -n "Flatpak" wiki/Index.md` nema pogodaka, a indeks (generisan 2026-10-13) sadrži tačno jednu konsolidovanu belešku. Po invarijanti 10 indeks obuhvata samo konsolidovane beleške posle merge-a.
+2. **N2 (red 23):** tvrdnja o pokretanju aplikacija „u potpunoj izolaciji“ jača je od izvora (L7: „in isolation“) i protivreči tvrdnji 2 istog nacrta (red 27) o dozvolama za pristup Bluetooth-u, zvuku, mreži i datotekama.
+
+Zapažanja bez snage nalaza (dodata tačna precizacija: „znatno“, „de facto primarni“, „potpuno odvojeni“, OSTree „verzionisanje“, Bubblewrap mehanizam; „razvojni inženjeri“) dokumentovana su tekstom, bez izmene nacrta.
+
+VERDICT: fail
+REASONS: 2
 ```
