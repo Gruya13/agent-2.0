@@ -133,3 +133,29 @@ test('reprodukcija: skript koji sam ispiše „bwrap:" je izvršen, ne neizvrše
   await vault.cleanup();
 });
 
+test('reprodukcija: skript koji se ne učitava (sintaksna greška) je neizvršena provera', async () => {
+  const { vault, skripte, revision } = await pripremi();
+  // Kontraprimer iz nezavisne verifikacije: interpreter startuje, ali telo
+  // provere nikad ne dobija kontrolu — to ne sme da se broji kao lažni nalaz.
+  await fs.writeFile(path.join(skripte, 'NALAZ-1.py'), 'if True print("NIKAD")\n');
+  const [rezultat] = await runReproductionScripts({
+    repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.py'], timeoutMs: 30_000,
+  });
+  assert.equal(rezultat.executed, false, 'skript se nije učitao, pa provera nije izvršena');
+  assert.equal(rezultat.reproduced, false);
+  await vault.cleanup();
+});
+
+test('reprodukcija: skript koji izađe preko os._exit je i dalje izvršen', async () => {
+  const { vault, skripte, revision } = await pripremi();
+  // Kontraprimer iz nezavisne verifikacije: izlazak bez pražnjenja bafera ne
+  // sme da obriše dokaz da je provera pokrenuta.
+  await fs.writeFile(path.join(skripte, 'NALAZ-1.py'), 'import os\nos.write(2, b"TELO_IZVRSENO\\n")\nos._exit(1)\n');
+  const [rezultat] = await runReproductionScripts({
+    repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.py'], timeoutMs: 30_000,
+  });
+  assert.equal(rezultat.executed, true, 'telo skripta se izvršilo pre izlaska');
+  assert.equal(rezultat.reproduced, false);
+  await vault.cleanup();
+});
+

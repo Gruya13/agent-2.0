@@ -48,10 +48,19 @@ const POKRENUT = '__AGENT2_INTERPRETER_POKRENUT__';
  * skript koji sam ispiše `bwrap: …` nije neizvršena provera.
  */
 function pokretac(interpreter, ime) {
+  // Marker se ispisuje tek kad je telo skripta uspesno ucitano (Python: compile
+  // pre markera; bash: `bash -n` pre markera). Sintaksna greska u skriptu tako
+  // ostaje NEIZVRSENA provera, a ne "lazni nalaz" koji otvara kapiju.
+  // Marker se sastavlja u izvršavanju, a ne stoji kao literal u izvoru: inače
+  // bi ga traceback (npr. Python SyntaxError) ispisao i lažno dokazao da je
+  // provera pokrenuta.
   if (interpreter === 'python3') {
-    return ['python3', '-c', `import sys; print("${POKRENUT}"); exec(compile(open(sys.argv[1]).read(), sys.argv[1], "exec"))`, ime];
+    return ['python3', '-c',
+      "import sys; src = open(sys.argv[1], 'rb').read(); code = compile(src, sys.argv[1], 'exec'); "
+        + `print('__AGENT2' '_INTERPRETER' '_POKRENUT__', flush=True); exec(code)`,
+      ime];
   }
-  return ['bash', '-c', `printf '%s\\n' ${POKRENUT}; . "$0"`, ime];
+  return ['bash', '-c', `bash -n "$0" || exit 2; M='__AGENT2''_INTERPRETER''_POKRENUT__'; printf '%s\\n' "$M"; . "$0"`, ime];
 }
 
 function omotaj(bwrap, klon, ime, interpreter) {
