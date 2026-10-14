@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Flatpak
-status: ready
+status: review
 created: 2026-10-14T08:19:46.202Z
-updated: 2026-10-14T08:27:16.622Z
+updated: 2026-10-14T08:31:03.721Z
 kind: ingest
 source: raw/flatpak.md
 audit_scope: []
@@ -83,6 +83,21 @@ history:
     status: ready
     actor: dsh
     note: odbijen nacrt (pokušaj 1); vraćeno istraživaču
+  - at: 2026-10-14T08:27:16.713Z
+    status: in_progress
+    actor: agy
+  - at: 2026-10-14T08:31:03.718Z
+    status: in_progress
+    actor: agy
+    note: "nacrt: wiki/drafts/Flatpak.md"
+  - at: 2026-10-14T08:31:03.720Z
+    status: in_progress
+    actor: agy
+    note: faza research završena
+  - at: 2026-10-14T08:31:03.721Z
+    status: review
+    actor: agy
+    note: "nacrt spreman: wiki/drafts/Flatpak.md"
 lock_token: null
 ---
 
@@ -151,4 +166,32 @@ Zapažanja bez snage nalaza (dodata tačna precizacija: „znatno“, „de fact
 
 VERDICT: fail
 REASONS: 2
+```
+
+### Faza research (2026-10-14T08:31:03.719Z)
+
+- harnes: agy
+- trajanje: 226938 ms
+- grana: agent/researcher/TASK-103 @ 4ad155a04152b525371905bdf73012f9e9ad0c19
+
+```
+### Izveštaj istraživača (`researcher`) za zadatak TASK-103
+
+- **Putanja nacrta**: [`wiki/drafts/Flatpak.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/wiki/drafts/Flatpak.md)
+- **Broj ključnih tvrdnji**: 7
+  1. *Namena i peščanik (sandbox)*: uslužni program za distribuciju i upravljanje paketima na Linuxu; izvršavanje aplikacija u izolaciji od ostatka sistema ([`raw/flatpak.md#L7`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L7)).
+  2. *Sistem dozvola i pristup resursima*: dozvole za pristup resursima (Bluetooth, PipeWire zvuk, mreža, datoteke) koje konfiguriše održavalac, a korisnici mogu menjati ([`raw/flatpak.md#L9`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L9)).
+  3. *Direktna isporuka ažuriranja*: nezavisnost od ciklusa pakovanja i testiranja pojedinačnih Linux distribucija ([`raw/flatpak.md#L11`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L11)).
+  4. *Potrošnja prostora i deduplikacija (OSTree)*: korišćenje ABI-stabilnih biblioteka uz OSTree deduplikaciju podudarnih datoteka za efikasnije skladištenje sa većim brojem paketa ([`raw/flatpak.md#L13`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L13)).
+  5. *Flathub kao centralizovani de facto standard*: `flathub.org` kao centralni repozitorijum (udaljeni izvor / *remote source*), uloga administratora i autora, uz preko 700.000 preuzimanja dnevno do 2023. godine ([`raw/flatpak.md#L15`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L15)).
+  6. *Podrška za nezavisne repozitorijume*: mogućnost hostovanja Flatpak repozitorijuma nezavisnih od Flathub-a ([`raw/flatpak.md#L17`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L17)).
+  7. *Prenosivost i sistemski preduslovi (Bubblewrap, OSTree)*: teorijska instalacija na postojećim i budućim Linux distribucijama, WSL sloju i ChromeOS sistemima uz prisustvo Bubblewrap i OSTree alata ([`raw/flatpak.md#L19`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L19)).
+
+- **Spisak novih Vikilinkova**: Nema novih Vikilinkova (0). U produkcionom direktorijumu `wiki/` trenutno ne postoje konsolidovane beleške o konceptima pomenutim u tekstu (Linux, paketi, sandbox, OSTree, Bubblewrap, PipeWire, Flathub, WSL); u skladu sa ugovorom ([`AGENTS.md`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/.agents/AGENTS.md)), semantičke veze ka nepostojećim beleškama i veštačke veze ka indeksu nisu dodavane.
+
+- **Spisak otvorenih pitanja**:
+  1. *Praktična ograničenja i performanse na WSL i ChromeOS*: Izvor navodi teorijsku prenosivost uz Bubblewrap i OSTree, ali ne sadrži podatke o GUI performansama, hardverskoj akceleraciji niti ograničenjima sandbox okruženja (`nepotvrđeno u izvoru`, [`raw/flatpak.md#L19`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L19)).
+  2. *Bezbednosni model i kontrola paketa na Flathub-u*: Izvor navodi doprinose administratora i programera, ali ne precizira postupak verifikacije koda, odobravanje osetljivih sistemskih dozvola niti mehanizme za postupanje sa ranjivim paketima (`nepotvrđeno u izvoru`, [`raw/flatpak.md#L15`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L15)).
+  3. *Tehnički protokol za nezavisne repozitorijume*: Izvor konstatuje mogućnost postavljanja nezavisnih repozitorijuma, ali ne specifikuje mrežni protokol, strukturu metapodataka niti distribuciju kriptografskih ključeva (`nepotvrđeno u izvoru`, [`raw/flatpak.md#L17`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L17)).
+  4. *Metodologija statistike preuzimanja*: Izvor beleži preko 700.000 preuzimanja dnevno do 2023. godine, ali ne precizira da li se metrika odnosi na cele aplikacije, inkrementalna ažuriranja deljenih biblioteka ili u
 ```
