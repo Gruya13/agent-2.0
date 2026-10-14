@@ -148,6 +148,7 @@ librarian  tasks/audits/Izvestaj.md           stari sablon: ODBIJENO | posle isp
 | N9 | Lock se pravio ne-atomski (`open('wx')` pa `write`), pa je drugi proces mogao da pročita prazan lock | gubitak integriteta | **popravljeno** |
 | N10 | Zakup nije obnavljan tokom poziva dužeg od TTL-a; drugi proces je preuzimao zadatak usred rada | sprečava dogovoreni scenario | **popravljeno** (heartbeat) |
 | N11 | Šabloni MCP registracije fiksiraju prvu ulogu vendora, pa druga uloga ne može da piše | sprečava dogovoreni scenario | **popravljeno** (konfiguracija) |
+| N12 | Preuzimanje locka mrtvog vlasnika nije bilo atomsko: dva živa procesa mogla su istovremeno da drže kritičnu sekciju | gubitak međusobnog isključivanja | **popravljeno** |
 
 ## 8. Ograničenje na jednu kontrolnu petlju (zapisano)
 
@@ -193,3 +194,51 @@ librarian  tasks/audits/Izvestaj.md           stari sablon: ODBIJENO | posle isp
 5. `docs/KONFIGURACIJA.md`, `README.md` — uloga se ne fiksira u konfiguraciji.
 
 Obim sistema nije menjan: nema novih uloga, servisa, posrednika, baza ni API-ja.
+
+
+## 11. Nezavisna verifikacija Koraka 2 (codex, `verify` nit)
+
+Nezavisni verifikator je nad revizijom `ad46d0d` potvrdio K1–K5:
+
+| Tvrdnja | Ishod | Dokaz |
+|---|---|---|
+| K1 skup prolazi (137/137) | **POTVRĐENO** | `npm test` → `tests 137 / pass 137 / fail 0` |
+| K2 dva lock testa padaju na `3563fcb` | **POTVRĐENO** | `pass 0 / fail 2`; poruke: „lock je preuzet dok je vlasnik živ“, „lock fajl je bio prazan … 200 !== 0“ |
+| K3 heartbeat test pada na `3563fcb` | **POTVRĐENO** | `fail 1` → „zakup je morao biti obnovljen tokom poziva“ |
+| K4 dva `agy` poziva se ne preklapaju | **POTVRĐENO** | na `ad46d0d` razmak 18 ms bez preklapanja; na `3563fcb` preklapanje 9998 ms |
+| K5 šabloni MCP uloge | **POTVRĐENO** | kroz stvarni MCP CLI: na `3563fcb` sa `{...parentEnv, ...config.env}` efektivna uloga je bila `researcher`/`verifier`/`consolidator` i upis je odbijen (kod 1); na `ad46d0d` efektivna uloga je `extractor`/`red-team`/`librarian` i upis prolazi |
+
+**Ali verifikator je našao i nov kontraprimer (klasa A):** trka pri preuzimanju
+locka mrtvog vlasnika. Sa 12 procesa nad lockom mrtvog PID-a, dva procesa su
+istovremeno držala kritičnu sekciju:
+
+```text
+{"pid":596000,"kind":"start","at":1791964341916}
+{"pid":596040,"kind":"start","at":1791964341916}
+{"pid":596000,"kind":"end","at":1791964342036}
+{"pid":596040,"kind":"end","at":1791964342037}
+```
+
+## 12. Ispravka trke pri preuzimanju (po verifikaciji)
+
+- Mehanizam je izmeren, ne pretpostavljen: izabrani preuzimač je posle uklanjanja
+  mrtvog locka **ponovo čitao** lock fajl; ako je u tom trenutku fajl bio odsutan
+  (jer ga je drugi proces već preuzeo), čitanje je bacilo grešku, stanje je
+  tretirano kao „nema vlasnika“ i **tuđi svež lock je brisan**.
+- Ispravka u `tools/orchestrator/lib/fsx.mjs`:
+  1. preuzimanje zastarelog locka radi **samo jedan** čekalac, izabran atomski
+     preko `link`-a na marker `<lock>.reclaim`;
+  2. ako je lock u međuvremenu **nestao**, ne uklanja se ništa;
+  3. nečitljiv zapis se uklanja samo ako je fajl stariji od `staleMs`.
+- Merenje (isti scenario, 12 procesa, startna barijera, `staleMs = 1`, 8 scenarija):
+
+| Kod | Preklapanja po scenariju |
+|---|---|
+| `ad46d0d` (posle prve ispravke) | 0, 2, 0, 0, 0, 5, 2, 3 |
+| posle ispravke | 0, 0, 0, 0, 0, 0, 0, 0 |
+
+- Regresioni test `fajl-lock: trka pri preuzimanju mrtvog locka ne pušta dva
+  vlasnika` (3 scenarija, 10 procesa, startna barijera, `staleMs: 1`):
+  **pada** sa `fsx.mjs` iz `ad46d0d`, a prolazi sa ispravkom (4 uzastopna
+  izvođenja bez flaka).
+- Skup posle ispravke: **138 prolazi, 0 padova**, dva uzastopna izvođenja.

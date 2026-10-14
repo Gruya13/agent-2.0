@@ -202,6 +202,61 @@ export async function withFileLock(lockFile, fn, options = {}) {
     }
   };
 
+  // Preuzimanje zastarelog locka sme da uradi SAMO JEDAN čekalac: ako više njih
+  // uklanja lock, jedan može da obriše lock koji je drugi upravo preuzeo
+  // (dokazano trkom: 12 procesa nad lockom mrtvog PID-a, dva su istovremeno
+  // držala kritičnu sekciju). Izbor se pravi atomski preko `link`-a na marker.
+  const reclaimStale = async () => {
+    const marker = `${lockFile}.reclaim`;
+    const tmp = `${marker}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
+    await fs.writeFile(tmp, payload, 'utf8');
+    let pobednik = false;
+    try {
+      await fs.link(tmp, marker);
+      pobednik = true;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    } finally {
+      await fs.rm(tmp, { force: true }).catch(() => {});
+    }
+
+    if (pobednik) {
+      try {
+        // Ponovo proveri vlasnika pre uklanjanja. Ako je lock u međuvremenu
+        // NESTAO, ne diraj ništa: drugi čekalac ga je već preuzeo i brisanje
+        // tuđeg svežeg locka pušta dva vlasnika (dokazano trkom sa 12 procesa).
+        let tekst = null;
+        try {
+          tekst = await fs.readFile(lockFile, 'utf8');
+        } catch (error) {
+          if (error.code !== 'ENOENT') tekst = null;
+        }
+        if (tekst !== null) {
+          let info = null;
+          try { info = JSON.parse(tekst); } catch { info = null; }
+          let dozvoli = info && info.pid ? !isProcessAlive(info.pid) : true;
+          if (!info) {
+            // Nečitljiv zapis: dozvoli uklanjanje samo ako je fajl stariji od roka.
+            try {
+              const stat = await fs.stat(lockFile);
+              dozvoli = Date.now() - stat.mtimeMs > staleMs;
+            } catch { dozvoli = false; }
+          }
+          if (dozvoli) await fs.rm(lockFile, { force: true }).catch(() => {});
+        }
+      } finally {
+        await fs.rm(marker, { force: true }).catch(() => {});
+      }
+      return true;
+    }
+    // Marker drži drugi čekalac; ako je i on zaglavljen, očisti ga posle roka.
+    try {
+      const stat = await fs.stat(marker);
+      if (Date.now() - stat.mtimeMs > 5_000) await fs.rm(marker, { force: true }).catch(() => {});
+    } catch { /* marker je već nestao */ }
+    return false;
+  };
+
   for (;;) {
     if (await tryAcquire()) break;
     let stale = false;
@@ -221,7 +276,8 @@ export async function withFileLock(lockFile, fn, options = {}) {
       }
     }
     if (stale) {
-      await fs.rm(lockFile, { force: true }).catch(() => {});
+      const preuzeto = await reclaimStale();
+      if (!preuzeto) await new Promise((resolve) => setTimeout(resolve, retryMs));
       continue;
     }
     if (Date.now() > deadline) {

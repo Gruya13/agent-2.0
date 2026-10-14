@@ -288,6 +288,57 @@ test('fajl-lock: lock nikad nije prazan (nema trke sa čitanjem)', async () => {
   assert.equal(prazan, 0, 'lock fajl je bio prazan tokom držanja');
   await fs.rm(dir, { recursive: true, force: true });
 });
+
+test('fajl-lock: trka pri preuzimanju mrtvog locka ne pušta dva vlasnika', async () => {
+  const fsxUrl = JSON.stringify(path.join(PACKAGE_ROOT, 'tools', 'orchestrator', 'lib', 'fsx.mjs'));
+  const scenariji = [];
+  // Tri scenarija sa startnom barijerom: svi procesi krenu u isti milisekund,
+  // pa se prozor između odluke 'zastareo' i uklanjanja locka stvarno pogodi.
+  for (let s = 0; s < 3; s += 1) {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-lock3-'));
+    const lock = path.join(dir, 'mrtav.lock');
+    const barijera = path.join(dir, 'start');
+    const mrtav = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
+    const pid = mrtav.pid;
+    await new Promise((resolve) => mrtav.on('close', resolve));
+    await fs.writeFile(lock, JSON.stringify({ pid, at: new Date().toISOString() }), 'utf8');
+
+    const skript = [
+      "import { promises as fs } from 'node:fs';",
+      'import { withFileLock } from ' + fsxUrl + ';',
+      'const barijera = ' + JSON.stringify(barijera) + ';',
+      'while (true) { try { await fs.access(barijera); break; } catch { await new Promise((r) => setTimeout(r, 1)); } }',
+      'await withFileLock(' + JSON.stringify(lock) + ', async () => {',
+      "  console.log('S ' + Date.now());",
+      '  await new Promise((r) => setTimeout(r, 60));',
+      "  console.log('E ' + Date.now());",
+      '}, { staleMs: 1, retryMs: 2, timeoutMs: 30000 });',
+    ].join(String.fromCharCode(10));
+
+    const deca = Array.from({ length: 10 }, () => spawn(process.execPath, ['--input-type=module', '-e', skript], { stdio: ['ignore', 'pipe', 'pipe'] }));
+    const skupi = Promise.all(deca.map((d) => new Promise((resolve) => {
+      let out = '';
+      d.stdout.on('data', (c) => { out += c.toString(); });
+      d.on('close', () => resolve(out));
+    })));
+    await new Promise((r) => setTimeout(r, 700));
+    await fs.writeFile(barijera, 'x', 'utf8');
+    const izlazi = await skupi;
+    scenariji.push(izlazi
+      .map((o) => /S (\d+)[\s\S]*E (\d+)/.exec(o))
+      .filter(Boolean)
+      .map((m) => [Number(m[1]), Number(m[2])])
+      .sort((a, b) => a[0] - b[0]));
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+
+  for (const intervali of scenariji) {
+    assert.equal(intervali.length, 10, 'svih 10 procesa je moralo da uđe');
+    for (let i = 1; i < intervali.length; i += 1) {
+      assert.ok(intervali[i][0] >= intervali[i - 1][1], 'dva procesa su istovremeno držala lock: ' + JSON.stringify(intervali));
+    }
+  }
+});
 async function listDir(dir) {
   return { files: (await fs.readdir(dir)).sort() };
 }
