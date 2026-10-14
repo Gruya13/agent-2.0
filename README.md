@@ -14,6 +14,10 @@ node tools/orchestrator/cli.mjs status     # stanje sistema u ovom repozitorijum
 node tools/orchestrator/cli.mjs doctor     # provera okruženja i harnesa
 ```
 
+## Kompletna dokumentacija projekta
+
+Povezana tehnička i operativna dokumentacija nalazi se u [`docs/README.md`](docs/README.md): instalacija, korišćenje, arhitektura, sve CLI komande, konfiguracija, model podataka, MCP alati, bezbednost, održavanje i razvoj. Dokumentacija opisuje implementaciju i beleži njena trenutna ograničenja.
+
 ## Šta je implementirano
 
 | Sloj | Fajl | Šta radi |
@@ -323,9 +327,10 @@ MCP server beleški je registrovan kod sva tri harnesa i proveren živim pozivom
 | `codex` | `~/.codex/config.toml` → `[mcp_servers.obsidian]` | `codex mcp list` → `obsidian enabled`; živi poziv `obsidian_vault_info` kroz `codex exec` |
 | `dsh` | `~/.dsh/profiles/headless/cordis.patch.yml` | `dsh --profile headless --dump-config` → `obsidian-mcp`; živi poziv kroz `dsh headless` |
 
-Konfiguracije nose **samo identitet** (`OBSIDIAN_AGENT`, `OBSIDIAN_ROLE`);
-`OBSIDIAN_VAULT`, `OBSIDIAN_TASK` i `OBSIDIAN_TASK_ROOT` dolaze po pozivu, jer
-statična `env` tabela pobjeđuje nasleđeno okruženje. Backup pre izmena:
+Konfiguracije nose **samo identitet vendora** (`OBSIDIAN_AGENT`); `OBSIDIAN_ROLE`
+dolazi po pozivu zajedno sa `OBSIDIAN_VAULT`, `OBSIDIAN_TASK` i
+`OBSIDIAN_TASK_ROOT`, jer statična `env` tabela pobjeđuje nasleđeno okruženje
+(fiksirana uloga bi onemogućila drugu ulogu istog vendora). Backup pre izmena:
 `~/.dsh/config-backup-<datum>/`.
 
 ## Ograničenja koja treba znati

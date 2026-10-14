@@ -182,38 +182,57 @@ export async function withFileLock(lockFile, fn, options = {}) {
   const { staleMs = 30_000, retryMs = 25, timeoutMs = 10_000 } = options;
   const deadline = Date.now() + timeoutMs;
   await fs.mkdir(path.dirname(lockFile), { recursive: true });
+  const payload = JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
 
-  let handle;
-  for (;;) {
+  // Atomsko preuzimanje: sadržaj se prvo upiše u jedinstven temp fajl, pa se
+  // `link`-uje na ime locka. `link` pada sa EEXIST ako lock postoji, a lock
+  // nikad nije prazan — za razliku od `open('wx')` pa `write`, gde drugi proces
+  // može da pročita prazan fajl i proglasi ga zastarelim.
+  const tryAcquire = async () => {
+    const tmp = `${lockFile}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
+    await fs.writeFile(tmp, payload, 'utf8');
     try {
-      handle = await fs.open(lockFile, 'wx');
-      await handle.writeFile(JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), 'utf8');
-      break;
+      await fs.link(tmp, lockFile);
+      return true;
     } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      let stale = false;
-      try {
-        const info = JSON.parse(await fs.readFile(lockFile, 'utf8'));
-        const age = Date.now() - Date.parse(info.at ?? 0);
-        stale = (Number.isFinite(age) && age > staleMs) || !isProcessAlive(info.pid);
-      } catch {
-        stale = true;
-      }
-      if (stale) {
-        await fs.rm(lockFile, { force: true });
-        continue;
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`nije moguće zaključati ${path.basename(lockFile)} u zadatom roku`);
-      }
-      await new Promise((resolve) => setTimeout(resolve, retryMs));
+      if (error.code === 'EEXIST') return false;
+      throw error;
+    } finally {
+      await fs.rm(tmp, { force: true }).catch(() => {});
     }
+  };
+
+  for (;;) {
+    if (await tryAcquire()) break;
+    let stale = false;
+    try {
+      const info = JSON.parse(await fs.readFile(lockFile, 'utf8'));
+      // ŽIV vlasnik drži lock bez obzira na starost. `staleMs` nije dozvola da
+      // se tuđi živ lock preuzme — inače dva harnesa uđu u kritičnu sekciju
+      // (dokazano: dva `agy` poziva su se preklopila posle 30 s).
+      stale = !isProcessAlive(info.pid);
+    } catch {
+      // Nečitljiv zapis (npr. prekinut upis): jedini oslonac je starost fajla.
+      try {
+        const stat = await fs.stat(lockFile);
+        stale = Date.now() - stat.mtimeMs > staleMs;
+      } catch {
+        stale = false;
+      }
+    }
+    if (stale) {
+      await fs.rm(lockFile, { force: true }).catch(() => {});
+      continue;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`nije moguće zaključati ${path.basename(lockFile)} u zadatom roku`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, retryMs));
   }
 
   try {
     return await fn();
   } finally {
-    await handle.close().catch(() => {});
     await fs.rm(lockFile, { force: true }).catch(() => {});
   }
 }

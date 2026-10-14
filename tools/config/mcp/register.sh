@@ -35,9 +35,9 @@ case "$MODE" in
     command -v agy >/dev/null || { echo "agy nije instaliran" >&2; exit 1; }
     agy mcp add \
       --env OBSIDIAN_AGENT=agy \
-      --env OBSIDIAN_ROLE=researcher \
       obsidian node "$SERVER"
-    echo "napomena: OBSIDIAN_VAULT i OBSIDIAN_TASK dolaze iz okruženja po pozivu" >&2
+    echo "napomena: OBSIDIAN_ROLE, OBSIDIAN_VAULT i OBSIDIAN_TASK dolaze iz okruženja po pozivu;" >&2
+    echo "statična OBSIDIAN_ROLE bi pobeđivala po-call ulogu, pa se ne upisuje." >&2
     agy mcp list
     ;;
   --check)

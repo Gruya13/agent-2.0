@@ -1,16 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { makeVault } from './helpers/vault.mjs';
-import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
+import { PACKAGE_ROOT, loadConfig } from '../tools/orchestrator/lib/config.mjs';
 import { createStore } from '../tools/orchestrator/lib/store.mjs';
 import {
   TRANSITIONS, TaskError, assertTransition, canTransition, defaultBody, formatTask,
   newTaskData, nextTaskId, parseTaskText, phaseFor, validateTaskData, writeTaskFile,
 } from '../tools/orchestrator/lib/task.mjs';
 import { clearLease, isLeaseLive, leaseExpired, leaseInfo, newLease } from '../tools/orchestrator/lib/lease.mjs';
-import { readJsonl } from '../tools/orchestrator/lib/fsx.mjs';
+import { readJsonl, withFileLock } from '../tools/orchestrator/lib/fsx.mjs';
 
 async function setup() {
   const vault = await makeVault();
@@ -220,6 +222,72 @@ test('store: zakup važi i kad se fajl prebaci u drugu fazu', async () => {
   await vault.cleanup();
 });
 
+
+test('fajl-lock: živ vlasnik ne predaje lock, mrtav se preuzima', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-lock-'));
+  const lock = path.join(dir, 'proba.lock');
+  const fsxUrl = JSON.stringify(path.join(PACKAGE_ROOT, 'tools', 'orchestrator', 'lib', 'fsx.mjs'));
+
+  // Dete drži lock 1200 ms. `staleMs` je 150 ms, pa bi pravilo po starosti
+  // preuzelo lock dok je vlasnik još živ (nalaz K2: dva `agy` poziva su se
+  // preklopila posle 30 s).
+  const skript = [
+    'import { withFileLock } from ' + fsxUrl + ';',
+    'await withFileLock(' + JSON.stringify(lock) + ', async () => {',
+    "  console.log('USAO ' + Date.now());",
+    '  await new Promise((r) => setTimeout(r, 1200));',
+    "  console.log('IZASAO ' + Date.now());",
+    '}, { staleMs: 150, retryMs: 20, timeoutMs: 10000 });',
+  ].join(String.fromCharCode(10));
+
+  const dete = spawn(process.execPath, ['--input-type=module', '-e', skript], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let izlaz = '';
+  dete.stdout.on('data', (c) => { izlaz += c.toString(); });
+  const kraj = new Promise((resolve) => dete.on('close', resolve));
+  while (!izlaz.includes('USAO')) await new Promise((r) => setTimeout(r, 10));
+
+  let usao = null;
+  await withFileLock(lock, async () => { usao = Date.now(); }, { staleMs: 150, retryMs: 20, timeoutMs: 10_000 });
+  await kraj;
+  const izasaoDete = Number((/IZASAO (\d+)/.exec(izlaz) ?? [])[1] ?? -1);
+
+  assert.ok(usao !== null, 'drugi proces je morao da uđe posle deteta');
+  assert.ok(
+    usao >= izasaoDete,
+    'lock je preuzet dok je vlasnik živ: vlasnik je izašao u ' + izasaoDete + ', drugi je ušao u ' + usao,
+  );
+
+  // Mrtav vlasnik: lock se preuzima odmah, bez čekanja starosti.
+  const mrtav = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
+  const pid = mrtav.pid;
+  await new Promise((resolve) => mrtav.on('close', resolve));
+  await fs.writeFile(lock, JSON.stringify({ pid, at: new Date().toISOString() }), 'utf8');
+  const tMrtav = Date.now();
+  await withFileLock(lock, async () => {}, { staleMs: 10 * 60 * 1000, retryMs: 20, timeoutMs: 5_000 });
+  assert.ok(Date.now() - tMrtav < 2_000, 'lock mrtvog procesa se preuzima odmah');
+  await fs.rm(dir, { recursive: true, force: true });
+});
+
+test('fajl-lock: lock nikad nije prazan (nema trke sa čitanjem)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-lock2-'));
+  const lock = path.join(dir, 'proba.lock');
+  let prazan = 0;
+  let citaj = true;
+  const citac = (async () => {
+    while (citaj) {
+      try {
+        const text = await fs.readFile(lock, 'utf8');
+        if (!text.trim()) prazan += 1;
+      } catch { /* još ne postoji */ }
+    }
+  })();
+  // 200 preuzimanja: dovoljno ciklusa da se prozor starog upisa uhvati.
+  for (let i = 0; i < 200; i += 1) await withFileLock(lock, async () => {}, { retryMs: 1, timeoutMs: 5_000 });
+  citaj = false;
+  await citac;
+  assert.equal(prazan, 0, 'lock fajl je bio prazan tokom držanja');
+  await fs.rm(dir, { recursive: true, force: true });
+});
 async function listDir(dir) {
   return { files: (await fs.readdir(dir)).sort() };
 }

@@ -60,6 +60,32 @@ export function createPipeline(config, options = {}) {
    */
   const leaseTokens = new Map();
 
+  /**
+   * Poziv harnesa uz održavanje zakupa. `lease.heartbeatMs` je do sada postojao
+   * samo u konfiguraciji, pa je poziv duži od `lease.ttlMs` gubio zakup usred
+   * rada i drugi proces je mogao da preuzme zadatak (dokazano probom: TTL 2 s,
+   * poziv 6 s → zakup istekao posle 3 s, preuzet od drugog procesa).
+   *
+   * Obnova ide iz ISTOG procesa i sa ISTIM tokenom, pa je ne može izvesti tuđi
+   * proces; ako obnova ne uspe, to se prijavljuje, a faza će ionako pasti na
+   * otpuštanju zakupa.
+   */
+  async function runAgentDrzeciZakup(id, owner, args) {
+    const token = leaseTokens.get(id);
+    const period = Math.max(50, config.lease?.heartbeatMs ?? 120_000);
+    const timer = setInterval(() => {
+      store.renew(id, owner, { token }).catch((error) => {
+        logger(`obnova zakupa nije uspela za ${id}: ${error.message}`);
+      });
+    }, period);
+    timer.unref?.();
+    try {
+      return await runAgent(config, args);
+    } finally {
+      clearInterval(timer);
+    }
+  }
+
   const now = () => clock().toISOString();
 
   /**
@@ -309,7 +335,7 @@ export function createPipeline(config, options = {}) {
 
     let result;
     try {
-      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+      result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
       await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
       throw error;
@@ -393,7 +419,7 @@ export function createPipeline(config, options = {}) {
 
     let result;
     try {
-      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+      result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
       await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
       throw error;
@@ -489,7 +515,7 @@ export function createPipeline(config, options = {}) {
 
     let result;
     try {
-      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+      result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
       await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
       throw error;
@@ -589,7 +615,7 @@ export function createPipeline(config, options = {}) {
 
     let result;
     try {
-      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+      result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
       await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}`, toStatus: 'review' });
       throw error;
@@ -706,7 +732,7 @@ export function createPipeline(config, options = {}) {
 
     let result;
     try {
-      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+      result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
       await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}`, toStatus: 'verified' });
       throw error;
@@ -925,7 +951,7 @@ export function createPipeline(config, options = {}) {
 
     let result;
     try {
-      result = await runAgent(config, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
+      result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
       await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}`, toStatus: 'review' });
       throw error;

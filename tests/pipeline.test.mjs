@@ -505,6 +505,40 @@ test('E2E: greška izvršavanja reprodukcije nije „čist nalaz" (kapija ostaje
   }
 });
 
+test('E2E: zakup se obnavlja tokom poziva dužeg od TTL-a', async () => {
+  const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-agy-'));
+  await fs.writeFile(path.join(bin, 'agy'), '#!/usr/bin/env bash\nsleep 1\nexit 0\n');
+  await fs.chmod(path.join(bin, 'agy'), 0o755);
+  const stariPath = process.env.PATH;
+  process.env.PATH = `${bin}:${stariPath}`;
+
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  config.lease.ttlMs = 300;
+  config.lease.heartbeatMs = 100;
+  config.pipeline.agentTimeoutMs = 5_000;
+  config.agents.researcher = { harness: 'agy', adapter: 'harness', model: null, timeoutMs: 5_000 };
+  const store = createStore(config);
+  const pipeline = createPipeline(config, { store });
+  try {
+    await pipeline.ingest({ source: 'raw/dokument.md', title: 'Obnova zakupa' });
+    const tok = pipeline.runResearch('TASK-101').catch((e) => ({ greska: e.message }));
+    await new Promise((r) => setTimeout(r, 600));
+
+    const mid = await store.get('TASK-101');
+    assert.ok(
+      Date.parse(mid.data.lease_expires_at) > Date.now(),
+      'zakup je morao biti obnovljen tokom poziva duzeg od TTL-a',
+    );
+    // Tuđi proces istog identiteta ne sme da preuzme zadatak dok prvi radi.
+    await assert.rejects(() => store.claim('TASK-101', 'agy'), /drugi proces istog identiteta/);
+    await tok;
+  } finally {
+    process.env.PATH = stariPath;
+    await vault.cleanup();
+  }
+});
+
 test('E2E: korelacioni rizik se beleži kada verifikator i red-team dele vendor', async () => {
   const { vault, store, pipeline } = await setup();
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Korelacioni rizik' });

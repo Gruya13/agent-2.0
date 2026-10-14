@@ -17,6 +17,8 @@ tool_timeout_sec = 60
 # "MCP tool call requires approval, but approval policy is never".
 default_tools_approval_mode = "approve"
 
+# OBSIDIAN_ROLE se NE fiksira ovde: env iz konfiguracije pobeđuje nasleđeno
+# okruženje, pa bi codex uvek bio "consolidator" i bibliotekar (kind: audit) ne
+# bi mogao da piše. Ulogu po zadatku postavlja kontrolni sloj (agentEnv).
 [mcp_servers.obsidian.env]
 OBSIDIAN_AGENT = "codex"
-OBSIDIAN_ROLE = "consolidator"

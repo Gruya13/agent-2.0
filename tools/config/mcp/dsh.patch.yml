@@ -22,9 +22,11 @@
         command: node
         args:
           - __VAULT__/tools/mcp/obsidian-mcp.mjs
+        # OBSIDIAN_ROLE se NE fiksira: statična vrednost pobeđuje nasleđenu
+        # (buildChildEnv = {...parentEnv, ...config.env}), pa bi dsh uvek bio
+        # "verifier" i red-team ne bi mogao da piše nalaze. Ulogu po zadatku
+        # postavlja kontrolni sloj (agentEnv).
         env:
           OBSIDIAN_AGENT: dsh
-          # DeepSeek je u ovom sistemu logički arbitar: čita sve, piše revizije.
-          OBSIDIAN_ROLE: verifier
         toolCallTimeoutMs: 15000
         failOnStartupError: true
