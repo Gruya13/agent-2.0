@@ -245,3 +245,4 @@
 {"ts":"2026-10-14T08:38:27.072Z","kind":"phase.start","task":"TASK-103","phase":"consolidate","role":"consolidator","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-103-consolidator"}
 {"ts":"2026-10-14T08:39:48.780Z","kind":"task.write","task":"TASK-103","actor":"codex","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:39:48.821Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"blocked","phase":"inbox","moved":"active->inbox"}
+{"ts":"2026-10-14T08:39:48.863Z","kind":"phase.failed","task":"TASK-103","phase":"consolidate","reason":"grana menja zone van dozvole: wiki/Operativni_vodic_asinhronog_sistema.md","conflict":false}
