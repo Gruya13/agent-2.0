@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Flatpak
-status: review
+status: verified
 created: 2026-10-14T08:19:46.202Z
-updated: 2026-10-14T08:31:03.721Z
+updated: 2026-10-14T08:34:19.579Z
 kind: ingest
 source: raw/flatpak.md
 audit_scope: []
@@ -24,21 +24,21 @@ lease_expires_at: null
 artifacts:
   - wiki/drafts/Flatpak.md
 verification:
-  verdict: fail
+  verdict: pass
   harness: dsh
-  at: 2026-10-14T08:27:16.616Z
-  commit: 716f3bdc8ffda0778995127a2eea08d248c7a22e
+  at: 2026-10-14T08:34:19.574Z
+  commit: e926c2408b63ba2ece86a1e848c7863c16be1978
   summary: |-
-    Revizija je završena. Trag je upisan u `tasks/reviews/TASK-103.md` (jedina izmena u radnom stablu; `git status` pokazuje samo taj fajl, `raw/`, `wiki/` i nacrt nisu dirani).
-    - **Izvor je verodostojan i nepromenjen:** disk `sha256 e75f3f1a…be6d`, `.agents/raw-manifest.json` i Git blob `56470cc` daju isti otisak; `raw/flatpak.md` je pod verzionom kontrolom.
-    - **Svih 7 citata red-po-red odgovara izvoru** (L7, L9, L11, L13, L15, L17, L19) — nijedan citat nije izmišljen.
-    - **Vikilinkovi:** samo `[[Index]]` (2 pojave); `wiki/Index.md` postoji, `obsidian_backlinks` ga potvrđuje, nema markdown linkova.
-    - **Lint:** `agentctl lint` i `obsidian_lint_vault` → 0 grešaka, 0 upozorenja; zaglavlje nosi sva obavezna polja.
-    1. **N1 (red 18):** nacrt tvrdi da je „evidentiran u centralnom indeksu baze znanja [[Index]]“, ali `grep -n "Flatpak" wiki/Index.md` nema pogodaka, a indeks (generisan 2026-10-13) sadrži tačno jednu konsolidovanu belešku. Po invarijanti 10 indeks obuhvata samo konsolidovane beleške posle merge-a.
-    2. **N2 (red 23):** tvrdnja o pokretanju aplikacija „u potpunoj izolaciji“ jača je od izvora (L7: „in isolation“) i protivreči tvrdnji 2 istog nacrta (red 27) o dozvolama za pristup Bluetooth-u, zvuku, mreži i datotekama.
-    Zapažanja bez snage nalaza (dodata tačna precizacija: „znatno“, „de facto primarni“, „potpuno odvojeni“, OSTree „verzionisanje“, Bubblewrap mehanizam; „razvojni inženjeri“) dokumentovana su tekstom, bez izmene nacrta.
-    VERDICT: fail
-    REASONS: 2
+    Revizija je završena. Trag je upisan u `tasks/reviews/TASK-103.md` (jedina izmena u radnom stablu: `git status --porcelain` → samo `?? tasks/reviews/TASK-103.md`; nacrt, `wiki/` i `raw/` nisu dirani).
+    - **Izvor je verodostojan i nepromenjen:** `sha256 e75f3f1a…be6d` na disku, u Git blobu (`HEAD:raw/flatpak.md`) i u `.agents/raw-manifest.json` — isti otisak.
+    - **Svih 7 citata (L7, L9, L11, L13, L15, L17, L19) red-po-red odgovara izvoru**, uključujući numeriku (`2016`, `2023`, `700,000`) i uslov `so long as Bubblewrap and OSTree are available`.
+    - **Linkovi:** `grep '\[\['` i `grepE '\]\([^)]*\)'` → nema pogodaka; produkcija `wiki/` ne pominje Flatpak ni srodne koncepte, pa nema ni nevalidnog linka.
+    - **Prethodna nalaza N1/N2 su otklonjena:** nema više tvrdnje o evidenciji u `[[Index]]` (`grep -c 'Flatpak' wiki/Index.md` → 0), a „potpuna izolacija“ je zamenjena vernim „u izolaciji“.
+    - **Lint:** `agentctl lint` i `obsidian_lint_vault` → 0 grešaka, 0 upozorenja.
+    Tri informativna zapažanja (nisu nalazi, nemaju snagu obaranja): `updated` nosi lokalno vreme sa sufiksom `Z` (~2 h ispred sopstvenog commita); pravilo o vezama je pripisano `AGENTS.md` iako potiče iz `roles/researcher.md`; otvoreno pitanje 1 spaja uslov iz dve rečenice izvora. Nijedno ne obara nijednu tvrdnju nacrta.
+    ```
+    VERDICT: pass
+    ```
   by: dsh
 challenge: null
 blocked_reason: null
@@ -98,6 +98,21 @@ history:
     status: review
     actor: agy
     note: "nacrt spreman: wiki/drafts/Flatpak.md"
+  - at: 2026-10-14T08:31:03.803Z
+    status: in_progress
+    actor: dsh
+  - at: 2026-10-14T08:34:19.575Z
+    status: in_progress
+    actor: dsh
+    note: "verdikt: pass"
+  - at: 2026-10-14T08:34:19.577Z
+    status: in_progress
+    actor: dsh
+    note: "faza verify: pass"
+  - at: 2026-10-14T08:34:19.579Z
+    status: verified
+    actor: dsh
+    note: verifikator dao pečat
 lock_token: null
 ---
 
@@ -194,4 +209,31 @@ REASONS: 2
   2. *Bezbednosni model i kontrola paketa na Flathub-u*: Izvor navodi doprinose administratora i programera, ali ne precizira postupak verifikacije koda, odobravanje osetljivih sistemskih dozvola niti mehanizme za postupanje sa ranjivim paketima (`nepotvrđeno u izvoru`, [`raw/flatpak.md#L15`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L15)).
   3. *Tehnički protokol za nezavisne repozitorijume*: Izvor konstatuje mogućnost postavljanja nezavisnih repozitorijuma, ali ne specifikuje mrežni protokol, strukturu metapodataka niti distribuciju kriptografskih ključeva (`nepotvrđeno u izvoru`, [`raw/flatpak.md#L17`](file:///home/gru/Projects/Agent%202.0/.worktrees/TASK-103-researcher/raw/flatpak.md#L17)).
   4. *Metodologija statistike preuzimanja*: Izvor beleži preko 700.000 preuzimanja dnevno do 2023. godine, ali ne precizira da li se metrika odnosi na cele aplikacije, inkrementalna ažuriranja deljenih biblioteka ili u
+```
+
+### Faza verify (2026-10-14T08:34:19.576Z)
+
+- harnes: dsh
+- trajanje: 195706 ms
+- verdikt: pass
+- grana: agent/researcher/TASK-103 -> verifier @ e926c2408b63ba2ece86a1e848c7863c16be1978
+
+```
+Revizija je završena. Trag je upisan u `tasks/reviews/TASK-103.md` (jedina izmena u radnom stablu: `git status --porcelain` → samo `?? tasks/reviews/TASK-103.md`; nacrt, `wiki/` i `raw/` nisu dirani).
+
+## Šta je potvrđeno (dokazi)
+
+- **Izvor je verodostojan i nepromenjen:** `sha256 e75f3f1a…be6d` na disku, u Git blobu (`HEAD:raw/flatpak.md`) i u `.agents/raw-manifest.json` — isti otisak.
+- **Svih 7 citata (L7, L9, L11, L13, L15, L17, L19) red-po-red odgovara izvoru**, uključujući numeriku (`2016`, `2023`, `700,000`) i uslov `so long as Bubblewrap and OSTree are available`.
+- **Linkovi:** `grep '\[\['` i `grepE '\]\([^)]*\)'` → nema pogodaka; produkcija `wiki/` ne pominje Flatpak ni srodne koncepte, pa nema ni nevalidnog linka.
+- **Prethodna nalaza N1/N2 su otklonjena:** nema više tvrdnje o evidenciji u `[[Index]]` (`grep -c 'Flatpak' wiki/Index.md` → 0), a „potpuna izolacija“ je zamenjena vernim „u izolaciji“.
+- **Lint:** `agentctl lint` i `obsidian_lint_vault` → 0 grešaka, 0 upozorenja.
+
+## Nalazi protiv nacrta: 0
+
+Tri informativna zapažanja (nisu nalazi, nemaju snagu obaranja): `updated` nosi lokalno vreme sa sufiksom `Z` (~2 h ispred sopstvenog commita); pravilo o vezama je pripisano `AGENTS.md` iako potiče iz `roles/researcher.md`; otvoreno pitanje 1 spaja uslov iz dve rečenice izvora. Nijedno ne obara nijednu tvrdnju nacrta.
+
+```
+VERDICT: pass
+```
 ```
