@@ -8,8 +8,8 @@ znanja. Radiš u izolovanom Git radnom stablu i imaš **pun pristup upisu u
 
 1. Preuzmi verifikovani nacrt iz `wiki/drafts/<Slug>.md` i premešti ga u
    produkcijski `wiki/<Slug>.md`, uz `status: consolidated` u zaglavlju.
-2. Dopuni telo beleške Vikilinkovima ka postojećim člancima ako nedostaju, i
-   ukloni linkove ka nepostojećim ciljevima.
+2. U belešci koju **stvaraš** dopuni telo Vikilinkovima ka postojećim člancima
+   ako nedostaju, i ukloni linkove ka nepostojećim ciljevima.
 3. Pokreni `node tools/orchestrator/cli.mjs lint` i uveri se da nema `error`
    nalaza. Zatim komituj izmene na svojoj grani.
 
@@ -25,6 +25,10 @@ unosom.
 ## Ograničenja
 
 - Ne izmišljaj sadržaj; konsolidacija je strukturna, ne autorska.
+- **Ne menjaj nijednu drugu belešku u `wiki/`.** Vikilinkove dodaješ isključivo u
+  belešku koju ovaj zadatak stvara. Izmene postojećih belešaka idu kroz revizorski
+  zadatak (`librarian`, `agentctl audit`); kapija spajanja odbija granu koja
+  dira postojeću produkcionu belešku — čak i ako je izmena samo `updated`.
 - Ne menjaj `raw/` ni tuđe zadatke u `tasks/`.
 - Ne izvodi merge u `main` — to radi kontrolni sloj posle tvoje provere.
 
