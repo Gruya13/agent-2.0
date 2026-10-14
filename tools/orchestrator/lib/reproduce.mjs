@@ -38,8 +38,25 @@ export function isReproductionScript(rel) {
  * prostor (samo klon upisiv, mreža isključena). Bez njega se skript izvršava kao
  * običan proces u klonu — i to je u dokumentaciji označeno kao rizik.
  */
+/** Marker koji ispisuje sam interpreter, pre nego što pokrene skript. */
+const POKRENUT = '__AGENT2_INTERPRETER_POKRENUT__';
+
+/**
+ * Naredba koja pokreće skript tako da se iz izlaza vidi da li je interpreter
+ * uopšte startovao. Bez markera se "sandbox je pukao pre skripta" ne razlikuje
+ * od "skript je izašao bez nalaza", a pogadjanje po tekstu izlaza je pogrešno:
+ * skript koji sam ispiše `bwrap: …` nije neizvršena provera.
+ */
+function pokretac(interpreter, ime) {
+  if (interpreter === 'python3') {
+    return ['python3', '-c', `import sys; print("${POKRENUT}"); exec(compile(open(sys.argv[1]).read(), sys.argv[1], "exec"))`, ime];
+  }
+  return ['bash', '-c', `printf '%s\\n' ${POKRENUT}; . "$0"`, ime];
+}
+
 function omotaj(bwrap, klon, ime, interpreter) {
-  if (!bwrap) return { command: interpreter, args: [ime] };
+  const payload = pokretac(interpreter, ime);
+  if (!bwrap) return { command: payload[0], args: payload.slice(1) };
   return {
     command: 'bwrap',
     args: [
@@ -52,7 +69,7 @@ function omotaj(bwrap, klon, ime, interpreter) {
       '--bind', klon, klon,
       '--chdir', klon,
       '--unshare-pid', '--unshare-net', '--die-with-parent',
-      '--', interpreter, ime,
+      '--', ...payload,
     ],
   };
 }
@@ -129,10 +146,10 @@ export async function runReproductionScripts({
       const izlaz = `${r.stdout}\n${r.stderr}`.trim();
       const prijavio = /OBORENO/i.test(r.stdout);
       // Sandbox koji je pukao nije „lažni nalaz": bwrap se prekida pre nego što
-      // pokrene skript (npr. zabranjen AF_NETLINK socket), pa izlaz nije sud o
-      // tvrdnji. Takav rezultat je NEIZVRŠENA provera (invarijanta 24).
-      const sandboxPukao = r.code !== 0 && /(^|\n)\s*bwrap: /.test(izlaz);
-      const izvrsen = r.failed !== true && r.code !== null && !sandboxPukao;
+      // pokrene interpreter (npr. zabranjen AF_NETLINK socket), pa izlaz nije
+      // sud o tvrdnji. Takav rezultat je NEIZVRŠENA provera (invarijanta 24).
+      // Odluka se ne donosi po tekstu izlaza, nego po markeru interpreterа.
+      const izvrsen = r.failed !== true && r.code !== null && !r.timedOut && izlaz.includes(POKRENUT);
       rezultati.push({
         script: rel,
         exitCode: r.code,
@@ -144,7 +161,7 @@ export async function runReproductionScripts({
         // sme da blokira spajanje.
         reproduced: r.code === 0 && !r.timedOut && prijavio,
         reported: prijavio,
-        output: izlaz.slice(-2000),
+        output: izlaz.replace(POKRENUT, '').trim().slice(-2000),
       });
     } catch (error) {
       // Ni klon ni skript nisu napravljeni: neizvršena provera, ne lažni nalaz.

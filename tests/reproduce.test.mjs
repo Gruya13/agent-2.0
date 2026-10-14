@@ -120,3 +120,16 @@ test('reprodukcija: pukao sandbox nije „lažni nalaz" nego neizvršena provera
   }
 });
 
+test('reprodukcija: skript koji sam ispiše „bwrap:" je izvršen, ne neizvršen', async () => {
+  const { vault, skripte, revision } = await pripremi();
+  // Kontraprimer iz nezavisne verifikacije (T4): tekst izlaza ne sme da
+  // odlučuje o tome da li je provera izvršena.
+  await fs.writeFile(path.join(skripte, 'NALAZ-1.sh'), '#!/usr/bin/env bash\necho "bwrap: poruka samog skripta" >&2\nexit 1\n');
+  const [rezultat] = await runReproductionScripts({
+    repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.sh'], timeoutMs: 30_000,
+  });
+  assert.equal(rezultat.executed, true, 'skript se stvarno izvršio, pa nije neizvršena provera');
+  assert.equal(rezultat.reproduced, false, 'skript koji nije oborio tvrdnju je lažni nalaz');
+  await vault.cleanup();
+});
+
