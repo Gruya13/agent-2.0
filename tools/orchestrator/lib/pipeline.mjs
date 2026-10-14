@@ -380,6 +380,28 @@ export function createPipeline(config, options = {}) {
   }
 
   /**
+   * Sačuvaj dokazne revizije kao TAGOVE pre brisanja grana.
+   *
+   * Posle konsolidacije grane verifikatora i red-teama se brišu, pa
+   * `verification.commit` i `challenge.revision` ostaju samo kao nedosežni
+   * objekti u object store-u izvornog vault-a — svež `git clone --no-local` ih
+   * ne prenosi (nezavisna provera, nalaz 1). Tagovi se, za razliku od
+   * `refs/evidence/*`, kloniraju po defaultu, pa dokaz ostaje proverljiv.
+   */
+  async function oznaciDokaz(id, data) {
+    const oznaceni = [];
+    for (const [oznaka, sha] of [
+      ['verify', data?.verification?.commit],
+      ['challenge', data?.challenge?.revision],
+    ]) {
+      if (!sha || !/^[0-9a-f]{40}$/.test(String(sha))) continue;
+      await git(config.root, ['tag', '-f', `dokaz/${id}-${oznaka}`, String(sha)], { actor: 'agentctl', allowFailure: true });
+      oznaceni.push(`dokaz/${id}-${oznaka}`);
+    }
+    return oznaceni;
+  }
+
+  /**
    * Prenesi AKTUELAN zapis zadatka u radno stablo koje se zamrzava.
    *
    * Grana se pravi iz Gita, pa njen `tasks/<faza>/<id>.md` ostaje snimak crne
@@ -950,6 +972,7 @@ export function createPipeline(config, options = {}) {
 
     await store.transition(id, 'consolidated', { actor: 'agentctl', note: `revizija spojena ${merge.sha.slice(0, 8)}` });
     await store.setAuthors(id, [ROLE_OF_PHASE.audit, verifyRole], { actor: 'agentctl' });
+    await oznaciDokaz(id, (await store.get(id)).data);
     await removeWorktreesForTask(config, id);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.audit}/${id}`);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.challenge}/${id}`);
@@ -1099,6 +1122,8 @@ export function createPipeline(config, options = {}) {
     await store.setArtifacts(id, produced, { actor: owner, note: `konsolidovano: ${produced.join(', ')}` });
     await store.transition(id, 'consolidated', { actor: 'agentctl', note: `merge ${merge.sha.slice(0, 8)}` });
     await store.setAuthors(id, ['consolidator'], { actor: 'agentctl' });
+    // Dokaz mora da preživi brisanje grana (vidi oznaciDokaz).
+    await oznaciDokaz(id, (await store.get(id)).data);
     await removeWorktreesForTask(config, id);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.research}/${id}`);
     await deleteBranch(config, `agent/${ROLE_OF_PHASE.verify}/${id}`);

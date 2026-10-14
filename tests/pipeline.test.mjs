@@ -10,7 +10,7 @@ import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
 import { lintVault, updateRawManifest } from '../tools/orchestrator/lib/lint.mjs';
 import { listWorktrees } from '../tools/orchestrator/lib/worktree.mjs';
 import { log as gitLog } from '../tools/orchestrator/lib/git.mjs';
-import { listNotes, readNote } from '../tools/orchestrator/lib/vault.mjs';
+import { listNotes, normalizeConsolidatedNote, readNote, writeNote } from '../tools/orchestrator/lib/vault.mjs';
 import { readJsonl, sha256 } from '../tools/orchestrator/lib/fsx.mjs';
 
 async function setup(options = {}) {
@@ -535,6 +535,45 @@ test('E2E: objavljena beleška nosi `created` iz evidencije zadatka, ne iz nacrt
 
   const beleska = await readNote(vault.root, 'wiki/Provera_created.md');
   assert.equal(beleska.frontmatter.created, createdZadatka, 'created mora biti vreme nastanka zadatka');
+  await vault.cleanup();
+});
+
+test('E2E: dokaz posle konsolidacije je dostupan u svežem klonu (tagovi)', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Dokaz u klonu' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  await pipeline.runChallenge('TASK-101');
+  const konsolidacija = await pipeline.runConsolidate('TASK-101');
+  assert.equal(konsolidacija.ok, true, JSON.stringify(konsolidacija));
+
+  const t = await store.get('TASK-101');
+  const dokazi = [t.data.verification?.commit, t.data.challenge?.revision];
+  for (const sha of dokazi) assert.match(String(sha), /^[0-9a-f]{40}$/, 'zapis mora da nosi dokaznu reviziju');
+
+  // Svež klon bez `--local` ne prenosi nedosežne objekte: dokaz mora da putuje.
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-klon-'));
+  const klon = path.join(tmp, 'repo');
+  await gitExec(tmp, ['clone', '--quiet', '--no-local', vault.root, klon]);
+  for (const sha of dokazi) await gitExec(klon, ['cat-file', '-e', `${sha}^{commit}`]);
+  await fs.rm(tmp, { recursive: true, force: true });
+  await vault.cleanup();
+});
+
+test('E2E: normalizeConsolidatedNote ne dopušta created posle updated', async () => {
+  const vault = await makeVault();
+  const buducnost = '2099-01-01T00:00:00.000Z';
+  await writeNote(vault.root, 'wiki/Test.md', {
+    frontmatter: { title: 'Test', created: buducnost, updated: buducnost, authors: ['researcher'], status: 'draft', tags: [] },
+    body: '# Test\n',
+  });
+  const sada = '2025-01-01T00:00:00.000Z';
+  await normalizeConsolidatedNote(vault.root, 'wiki/Test.md', { authors: ['verifier'], now: sada });
+  const beleska = await readNote(vault.root, 'wiki/Test.md');
+  assert.ok(
+    Date.parse(beleska.frontmatter.created) <= Date.parse(beleska.frontmatter.updated),
+    'created ne sme biti posle updated: ' + beleska.frontmatter.created + ' > ' + beleska.frontmatter.updated,
+  );
   await vault.cleanup();
 });
 test('E2E: red-team ne sme da menja van svoje zone', async () => {

@@ -151,13 +151,16 @@ export async function findBacklinks(vaultRoot, target, { dirs = ['wiki'] } = {})
 export async function normalizeConsolidatedNote(vaultRoot, rel, { authors = [], now = new Date().toISOString(), created = null } = {}) {
   const note = await readNote(vaultRoot, rel);
   const merged = [...new Set([...(note.frontmatter?.authors ?? []).map(String), ...authors.map(String)])];
+  // `created` je knjigovodstvo, ne autorstvo: model ga često pogrešno upiše
+  // (npr. zaokruženo ili u budućnost). Kada ga kontrolni sloj prosledi iz
+  // evidencije zadatka, on pobeđuje; i tada se poredak proverava — vraćen sat
+  // ne sme da proizvede `created > updated`.
+  const predlozeno = created ?? note.frontmatter?.created ?? now;
+  const kreirano = Date.parse(predlozeno) > Date.parse(now) ? now : predlozeno;
   const frontmatter = {
     ...(note.frontmatter ?? {}),
     title: note.frontmatter?.title ?? noteName(rel),
-    // `created` je knjigovodstvo, ne autorstvo: model ga često pogrešno upiše
-    // (npr. vreme posle `updated`, ili zaokruženo). Kada ga kontrolni sloj
-    // prosledi iz evidencije zadatka, on pobeđuje.
-    created: created ?? note.frontmatter?.created ?? now,
+    created: kreirano,
     updated: now,
     authors: merged,
     status: 'consolidated',
