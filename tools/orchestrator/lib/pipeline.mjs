@@ -395,8 +395,19 @@ export function createPipeline(config, options = {}) {
       ['challenge', data?.challenge?.revision],
     ]) {
       if (!sha || !/^[0-9a-f]{40}$/.test(String(sha))) continue;
-      await git(config.root, ['tag', '-f', `dokaz/${id}-${oznaka}`, String(sha)], { actor: 'agentctl', allowFailure: true });
-      oznaceni.push(`dokaz/${id}-${oznaka}`);
+      const ime = `dokaz/${id}-${oznaka}`;
+      await git(config.root, ['tag', '-f', ime, String(sha)], { actor: 'agentctl', allowFailure: true });
+      // Neuspeh upisa se NE ignorise: bez taga dokaz ne putuje u svež klon, a
+      // grane se posle ovoga brišu. Ako tag nije nastao, faza se prekida PRE
+      // brisanja grana (dokaz ostaje dosežan), a neuspeh je vidljiv.
+      const provera = await git(config.root, ['rev-parse', '-q', '--verify', `refs/tags/${ime}`], { allowFailure: true });
+      if (provera.code !== 0) {
+        throw new PipelineError(
+          `dokaz nije sačuvan: tag ${ime} za ${sha} nije nastao; grane zadatka ${id} nisu obrisane`,
+          'EVIDENCE_TAG',
+        );
+      }
+      oznaceni.push(ime);
     }
     return oznaceni;
   }

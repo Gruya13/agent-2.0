@@ -576,6 +576,28 @@ test('E2E: normalizeConsolidatedNote ne dopušta created posle updated', async (
   );
   await vault.cleanup();
 });
+
+test('E2E: neuspešan upis dokaznog taga prekida fazu pre brisanja grana', async () => {
+  const { vault, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Tag lock' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  await pipeline.runChallenge('TASK-101');
+
+  // Zauzet/zaostao Git ref lock: upis taga mora da padne, pa i faza.
+  const refDir = path.join(vault.root, '.git', 'refs', 'tags', 'dokaz');
+  await fs.mkdir(refDir, { recursive: true });
+  const lock = path.join(refDir, 'TASK-101-verify.lock');
+  await fs.writeFile(lock, '', 'utf8');
+
+  await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /dokaz nije sačuvan/);
+
+  // Dokazne grane nisu obrisane: dokaz ostaje dosežan.
+  const grane = await gitExec(vault.root, ['branch', '--list', 'agent/*TASK-101*']);
+  assert.match(grane.stdout, /agent\/verifier\/TASK-101/, 'grana verifikatora mora ostati kao dokaz');
+  await fs.rm(lock, { force: true });
+  await vault.cleanup();
+});
 test('E2E: red-team ne sme da menja van svoje zone', async () => {
   const { vault, store, pipeline } = await setup();
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Van zone' });
