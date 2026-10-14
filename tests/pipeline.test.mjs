@@ -314,6 +314,41 @@ test('E2E: revizija baze (librarian) prolazi kroz audit -> verify -> merge', asy
   await vault.cleanup();
 });
 
+
+test('E2E: neuspeh dokaznog taga u revizorskom toku otpušta zakup i dopušta ponovni pokušaj', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  const store = createStore(config);
+  const pipeline = createPipeline(config, { store });
+  const T = '2025-01-01T00:00:00.000Z';
+  await vault.write('wiki/Alfa.md', ['---', 'title: Alfa', `created: ${T}`, `updated: ${T}`, 'authors: [researcher]', 'status: consolidated', 'tags: [x]', '---', '', '# Alfa', '', 'Vidi [[Beta]].', ''].join('\n'));
+  await vault.write('wiki/Beta.md', ['---', 'title: Beta', `created: ${T}`, `updated: ${T}`, 'authors: [researcher]', 'status: consolidated', 'tags: [x]', '---', '', '# Beta', '', 'Vidi [[Alfa]].', ''].join('\n'));
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'add', '-A']);
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'commit', '-q', '-m', 'baza']);
+  await updateRawManifest(config);
+
+  await pipeline.audit({ title: 'Revizija', scope: ['wiki/*.md'] });
+  await pipeline.runAudit('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  await pipeline.runChallenge('TASK-101');
+
+  const refDir = path.join(vault.root, '.git', 'refs', 'tags', 'dokaz');
+  await fs.mkdir(refDir, { recursive: true });
+  const lock = path.join(refDir, 'TASK-101-verify.lock');
+  await fs.writeFile(lock, '', 'utf8');
+
+  const prvi = await pipeline.runConsolidate('TASK-101');
+  assert.equal(prvi.ok, false, 'faza mora da prijavi neuspeh');
+  const posle = await store.get('TASK-101');
+  assert.equal(posle.data.status, 'verified', 'revizorski zadatak se vraća u verified');
+  assert.equal(posle.data.lock_owner, null, 'zakup mora biti otpušten (token se pamti)');
+
+  await fs.rm(lock, { force: true });
+  const ponovo = await pipeline.runConsolidate('TASK-101');
+  assert.equal(ponovo.ok, true, JSON.stringify(ponovo));
+  assert.equal((await store.get('TASK-101')).data.status, 'consolidated');
+  await vault.cleanup();
+});
 test('E2E: revizija van opsega se zaustavlja pre grane', async () => {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);

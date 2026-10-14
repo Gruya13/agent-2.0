@@ -964,7 +964,11 @@ export function createPipeline(config, options = {}) {
     const owner = identityFor(config, role);
     const verifyRole = ROLE_OF_PHASE.verify;
     const branch = `agent/${verifyRole}/${id}`;
-    await store.claim(id, owner);
+    // Token zakupa se MORA zapamtiti: bez njega `failPhase` ne može da otpusti
+    // zakup (release traži isti token), pa zadatak ostaje `in_progress` i nema
+    // ispravnog ponovnog pokušaja (nalaz nezavisne provere).
+    const claimResult = await store.claim(id, owner);
+    leaseTokens.set(id, claimResult.leaseToken);
     await store.emit('phase.start', { task: id, phase: 'consolidate', role, branch, kind: 'audit' });
 
     try {
