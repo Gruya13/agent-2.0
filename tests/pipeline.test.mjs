@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { makeVault, gitExec } from './helpers/vault.mjs';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
@@ -462,6 +463,43 @@ test('E2E: nalaz iza granice challengeMaxScripts se ne odbacuje tiho', async () 
     await store.transition('TASK-101', 'verified', { actor: 'test', note: 'preskočena faza' });
     await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
   } finally {
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+    await vault.cleanup();
+  }
+});
+
+
+test('E2E: greška izvršavanja reprodukcije nije „čist nalaz" (kapija ostaje zatvorena)', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Pad sandboxa' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+
+  // Kontrolisana greška okruženja: bwrap se prekida pre nego što pokrene skript.
+  const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-bin-'));
+  await fs.writeFile(path.join(bin, 'bwrap'), '#!/usr/bin/env bash\necho "bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted" >&2\nexit 1\n');
+  await fs.chmod(path.join(bin, 'bwrap'), 0o755);
+
+  const stariPath = process.env.PATH;
+  process.env.PATH = `${bin}:${stariPath}`;
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'fail';
+  try {
+    const challenge = await pipeline.runChallenge('TASK-101');
+    assert.equal(challenge.ok, false, 'greška izvršavanja ne sme da otvori kapiju');
+    assert.equal(challenge.verdict, 'unexecuted');
+    const task = await store.get('TASK-101');
+    assert.equal(task.data.challenge.verdict, 'unexecuted');
+    assert.equal(task.data.challenge.falsePositives, 0, 'neizvršen skript nije lažni nalaz');
+    assert.deepEqual(
+      task.data.challenge.executionFailures.map((f) => f.script),
+      ['tasks/challenges/TASK-101/NALAZ-1.sh'],
+    );
+    assert.equal(task.data.status, 'review', 'zadatak se vraća autoru, ne ide u main');
+    await store.transition('TASK-101', 'verified', { actor: 'test', note: 'preskočena faza' });
+    await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
+    assert.equal(await vault.exists('wiki/drafts/Pad_sandboxa.md'), false, 'ništa nije otišlo u main');
+  } finally {
+    process.env.PATH = stariPath;
     delete process.env.AGENT_2_0_MOCK_CHALLENGE;
     await vault.cleanup();
   }

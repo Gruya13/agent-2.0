@@ -94,6 +94,11 @@ export async function runCli(vaultRoot, args, { env = {} } = {}) {
     });
     return { code: 0, stdout, stderr };
   } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? String(error.message) };
+    // Nikad tiho prazan izlaz: ako je proces ubijen pre nego što je nešto
+    // napisao, uzrok (signal) mora da se vidi u poruci. Istorijski pad na
+    // a0dc5c8 prijavljivao je prazne stdout/stderr bez ijednog traga o uzroku.
+    const signal = error.signal ? `signal ${error.signal}` : null;
+    const stderr = (error.stderr ?? '').trim() || [error.message, signal].filter(Boolean).join(' | ');
+    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr };
   }
 }

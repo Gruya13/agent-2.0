@@ -88,7 +88,9 @@ function runProcess(command, args, { cwd, timeoutMs, env }) {
     child.stderr.on('data', (c) => { stderr += c.toString(); });
     child.on('error', (error) => {
       clearTimeout(timer);
-      resolve({ code: null, stdout, stderr: `${stderr}\n${error.message}`, timedOut, durationMs: Date.now() - started });
+      // Proces nije ni pokrenut (nema izvršnog fajla ili sandboxa): to nije
+      // isto kao skript koji je izašao bez nalaza.
+      resolve({ code: null, failed: true, stdout, stderr: `${stderr}\n${error.message}`, timedOut, durationMs: Date.now() - started });
     });
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -126,9 +128,15 @@ export async function runReproductionScripts({
       });
       const izlaz = `${r.stdout}\n${r.stderr}`.trim();
       const prijavio = /OBORENO/i.test(r.stdout);
+      // Sandbox koji je pukao nije „lažni nalaz": bwrap se prekida pre nego što
+      // pokrene skript (npr. zabranjen AF_NETLINK socket), pa izlaz nije sud o
+      // tvrdnji. Takav rezultat je NEIZVRŠENA provera (invarijanta 24).
+      const sandboxPukao = r.code !== 0 && /(^|\n)\s*bwrap: /.test(izlaz);
+      const izvrsen = r.failed !== true && r.code !== null && !sandboxPukao;
       rezultati.push({
         script: rel,
         exitCode: r.code,
+        executed: izvrsen,
         timedOut: r.timedOut,
         durationMs: r.durationMs,
         // Reprodukovano = skript je oborio tvrdnju I to napisao. Sam izlazni kod
@@ -139,7 +147,8 @@ export async function runReproductionScripts({
         output: izlaz.slice(-2000),
       });
     } catch (error) {
-      rezultati.push({ script: rel, reproduced: false, error: error.message, output: '' });
+      // Ni klon ni skript nisu napravljeni: neizvršena provera, ne lažni nalaz.
+      rezultati.push({ script: rel, reproduced: false, reported: false, executed: false, error: error.message, output: '' });
     } finally {
       await fs.rm(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
     }

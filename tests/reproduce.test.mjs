@@ -86,3 +86,37 @@ test('reprodukcija: poštuje maksimalan broj skripti', async () => {
   assert.equal(rezultati.length, 2);
   await vault.cleanup();
 });
+
+test('reprodukcija: pukao sandbox nije „lažni nalaz" nego neizvršena provera', async () => {
+  const { vault, skripte, revision } = await pripremi();
+  await fs.writeFile(path.join(skripte, 'NALAZ-1.sh'), '#!/usr/bin/env bash\necho "OBORENO: proba"\nexit 0\n');
+
+  // Kontrola: sa ispravnim sandboxom isti skript je izvršen i nalaz je priznat.
+  const [kontrola] = await runReproductionScripts({
+    repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.sh'], timeoutMs: 30_000,
+  });
+  assert.equal(kontrola.executed, true, 'ispravan sandbox mora da izvrši skript');
+
+  // Kontrolisana greška okruženja: bwrap se prekida pre nego što pokrene skript
+  // (isti tekst koji je istorijski prijavljen na a0dc5c8).
+  const bin = path.join(vault.root, '.probni-bin');
+  await fs.mkdir(bin, { recursive: true });
+  const lazniBwrap = path.join(bin, 'bwrap');
+  await fs.writeFile(lazniBwrap, '#!/usr/bin/env bash\necho "bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted" >&2\nexit 1\n');
+  await fs.chmod(lazniBwrap, 0o755);
+
+  const stariPath = process.env.PATH;
+  process.env.PATH = `${bin}:${stariPath}`;
+  try {
+    const [rezultat] = await runReproductionScripts({
+      repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.sh'], timeoutMs: 30_000,
+    });
+    assert.equal(rezultat.reproduced, false);
+    assert.equal(rezultat.executed, false, 'sandbox koji nije pokrenuo skript je neizvršena provera, ne lažni nalaz');
+    assert.match(rezultat.output, /NETLINK_ROUTE/);
+  } finally {
+    process.env.PATH = stariPath;
+    await vault.cleanup();
+  }
+});
+

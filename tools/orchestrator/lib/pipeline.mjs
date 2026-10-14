@@ -750,12 +750,20 @@ export function createPipeline(config, options = {}) {
     }
     const reprodukovani = rezultati.filter((r) => r.reproduced === true);
     const istekli = rezultati.filter((r) => r.timedOut === true).length;
-    const lažni = rezultati.filter((r) => r.reproduced === false && r.timedOut !== true).length;
+    // Skript koji nije ni pokrenut (sandbox je pukao, interpreter ne postoji,
+    // klon nije napravljen) nije lazni nalaz: to je neizvrsena provera i po
+    // invarijanti 24 blokira spajanje. Bez ove provere greska okruzenja tiho
+    // otvara kapiju — dokazano eksperimentom na a0dc5c8: kada je AF_NETLINK
+    // zabranjen, bwrap se prekida, reproduktivni nalaz je brojan kao lazni,
+    // verdikt je bio 'clean' i merge je prosao.
+    const neizvrseniIzvršavanjem = rezultati.filter((r) => r.executed === false);
+    const lažni = rezultati.filter((r) => r.reproduced === false && r.timedOut !== true && r.executed !== false).length;
+    const neizvrseniSvi = [...neizvrseni, ...neizvrseniIzvršavanjem.map((r) => r.script)];
     // Verdikt: reproduktivni nalaz blokira; neizvršeni i ISTEKLI skripti se ne
     // smeju tumačiti kao „nema nalaza" (dokazano skriptom NALAZ-5 i sumnjom 2),
     // pa su i oni nalaz.
     const verdict = reprodukovani.length ? 'reproducible'
-      : (neizvrseni.length || istekli) ? 'unexecuted'
+      : (neizvrseniSvi.length || istekli) ? 'unexecuted'
         : 'clean';
     // Kada verifikator i red-team dele identitet, njihove slepe tačke su
     // korelisane — to se u zadatku beleži, a ne prećutkuje.
@@ -775,7 +783,12 @@ export function createPipeline(config, options = {}) {
         reproduced: reprodukovani.map((r) => r.script),
         falsePositives: lažni,
         timedOut: istekli,
-        unexecuted: neizvrseni,
+        unexecuted: neizvrseniSvi,
+        executionFailures: neizvrseniIzvršavanjem.map((r) => ({
+          script: r.script,
+          exitCode: r.exitCode ?? null,
+          reason: r.error ?? 'sandbox nije pokrenuo skript',
+        })),
         executed: izvrsavanje,
         correlationRisk,
         by: owner,
@@ -790,7 +803,7 @@ export function createPipeline(config, options = {}) {
         `- harnes: ${result.harness}`,
         `- zamrznuta revizija: ${revision}`,
         `- verdikt: ${verdict}`,
-        `- skripti: ${scripts.length}, reprodukovano: ${reprodukovani.length}, lažnih: ${lažni}, neizvršenih: ${neizvrseni.length} (izvršavanje: ${izvrsavanje})`,
+        `- skripti: ${scripts.length}, reprodukovano: ${reprodukovani.length}, lažnih: ${lažni}, neizvršenih: ${neizvrseniSvi.length} (izvršavanje: ${izvrsavanje})`,
         `- korelacioni rizik (isti vendor kao verifikator): ${correlationRisk ? 'DA' : 'ne'}`,
         `- izveštaj: ${changed.includes(izvestaj) ? izvestaj : '(nije napisan)'}`,
         '',
@@ -833,7 +846,7 @@ export function createPipeline(config, options = {}) {
       reproduced: reprodukovani.map((r) => r.script),
       falsePositives: lažni,
       timedOut: istekli,
-      unexecuted: neizvrseni,
+      unexecuted: neizvrseniSvi,
       attempts,
     });
     logger(`challenge: ${id} -> reproducible (${reprodukovani.length} nalaza)`);
