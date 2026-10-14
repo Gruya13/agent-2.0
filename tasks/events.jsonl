@@ -256,3 +256,5 @@
 {"ts":"2026-10-14T08:42:31.051Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"consolidated","phase":"completed","moved":"active->completed"}
 {"ts":"2026-10-14T08:42:31.053Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"consolidated","phase":"completed","moved":null}
 {"ts":"2026-10-14T08:42:31.116Z","kind":"bookkeeping.foreign-change","task":null,"actor":"agentctl","files":[".agents/roles/consolidator.md"],"note":"izmena u zoni crne table koja nije knjigovodstvena; nije komitovana"}
+{"ts":"2026-10-14T08:42:31.152Z","kind":"phase.done","task":"TASK-103","phase":"consolidate","role":"consolidator","merge":"3f3cca03d1afc80419dfaec07da63fa81873f05d","commit":"9fc48d2b05d893994100ad34432b45e0a8f9f6e2"}
+{"ts":"2026-10-14T08:42:53.478Z","kind":"bookkeeping.foreign-change","task":null,"actor":"agentctl","files":[".agents/roles/consolidator.md"],"note":"izmena u zoni crne table koja nije knjigovodstvena; nije komitovana"}
