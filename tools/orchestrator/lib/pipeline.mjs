@@ -864,8 +864,12 @@ export function createPipeline(config, options = {}) {
       await store.emit('phase.failed', { task: id, phase: 'challenge', role, reason: 'reproduktivni nalazi' });
       return { phase: 'challenge', task: id, ok: false, verdict, blocked: true };
     }
-    await store.release(id, owner, { toStatus: 'review', token: leaseTokens.get(id), note: `red-team oborio ${reprodukovani.length} tvrdnji; vraćeno autoru` });
-    await commitBookkeeping(`agentctl: ${id} -> review (red-team nalaz)`);
+    // Nalaz se vraća AUTORU, a autor (istraživač) radi samo iz stanja `ready`.
+    // Vraćanje u `review` je značilo da zadatak ulazi u verifikatorov red i da
+    // se isti nacrt samo ponovo verifikuje — istraživač nikad ne dobije priliku
+    // da ispravi (dokazano petljom: research se posle nalaza nijednom ne pokrene).
+    await store.release(id, owner, { toStatus: 'ready', token: leaseTokens.get(id), note: `red-team oborio ${reprodukovani.length} tvrdnji; vraćeno autoru na ispravku` });
+    await commitBookkeeping(`agentctl: ${id} -> ready (red-team nalaz)`);
     await removeWorktree(config, id, { role });
     await store.emit('phase.rejected', {
       task: id, phase: 'challenge', role,

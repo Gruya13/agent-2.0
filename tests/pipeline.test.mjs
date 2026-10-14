@@ -358,7 +358,7 @@ test('E2E: red-team sa reproduktivnim nalazom blokira spajanje i vraća zadatak 
     assert.deepEqual(challenge.reproduced, ['tasks/challenges/TASK-101/NALAZ-1.sh']);
 
     const task = await store.get('TASK-101');
-    assert.equal(task.data.status, 'review', 'reproduktivni nalaz vraća zadatak u review');
+    assert.equal(task.data.status, 'ready', 'reproduktivni nalaz vraća zadatak autoru (ready), ne verifikatoru');
     assert.equal(task.data.challenge.verdict, 'reproducible');
     assert.deepEqual(task.data.challenge.reproduced, ['tasks/challenges/TASK-101/NALAZ-1.sh']);
     assert.equal(task.data.challenge.executed, 'izvršeno', 'skript je izvršen u svežem klonu revizije');
@@ -366,9 +366,10 @@ test('E2E: red-team sa reproduktivnim nalazom blokira spajanje i vraća zadatak 
     assert.equal(await vault.exists('wiki/drafts/Nalaz_red-teama.md'), false, 'ništa nije otišlo u main');
 
     // Konsolidacija je zabranjena dok je nalaz reproduktivan. (Zadatak je u
-    // `review`, pa se gejt proverava tako što se stanje vrati na `verified` —
+    // `ready`, pa se gejt proverava tako što se stanje vrati na `verified` —
     // kao da je neko preskočio fazu.)
     await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije u stanju verified/);
+    await store.claim('TASK-101', 'dsh');
     await store.transition('TASK-101', 'verified', { actor: 'test', note: 'preskočena faza' });
     await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
   } finally {
@@ -394,6 +395,33 @@ test('E2E: lažni nalaz red-teama se broji i ne blokira spajanje', async () => {
     assert.equal(task.data.challenge.falsePositives, 1);
     assert.deepEqual(task.data.challenge.reproduced, []);
     assert.equal((await pipeline.runConsolidate('TASK-101')).ok, true);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+    await vault.cleanup();
+  }
+});
+
+test('E2E: posle red-team nalaza autor dobija priliku da ispravi nacrt', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Ispravka posle nalaza' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'fail';
+  try {
+    const challenge = await pipeline.runChallenge('TASK-101');
+    assert.equal(challenge.verdict, 'reproducible');
+    assert.equal(
+      (await store.get('TASK-101')).data.status, 'ready',
+      'nalaz se vraca autoru (ready), a ne u verifikatorov red (review)',
+    );
+    const research = await pipeline.runResearch('TASK-101');
+    assert.equal(research.ok, true, 'istrazivac mora moci da ispravi nacrt posle nalaza');
+    const krugovi = await pipeline.run({ rounds: 6 });
+    const akcije = krugovi.flatMap((k) => k.actions);
+    assert.ok(
+      akcije.some((a) => a.phase === 'research'),
+      'kontrolna petlja mora da ukljuci ispravku, a ne samo verify/challenge: ' + JSON.stringify(akcije.map((a) => a.phase)),
+    );
   } finally {
     delete process.env.AGENT_2_0_MOCK_CHALLENGE;
     await vault.cleanup();
@@ -459,7 +487,8 @@ test('E2E: nalaz iza granice challengeMaxScripts se ne odbacuje tiho', async () 
     const task = await store.get('TASK-101');
     assert.equal(task.data.challenge.verdict, 'unexecuted');
     assert.deepEqual(task.data.challenge.unexecuted, ['tasks/challenges/TASK-101/NALAZ-4.sh']);
-    assert.equal(task.data.status, 'review', 'nalaz iza limita se ne prihvata kao clean');
+    assert.equal(task.data.status, 'ready', 'nalaz iza limita se ne prihvata kao clean i vraca se autoru');
+    await store.claim('TASK-101', 'dsh');
     await store.transition('TASK-101', 'verified', { actor: 'test', note: 'preskočena faza' });
     await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
   } finally {
@@ -494,7 +523,8 @@ test('E2E: greška izvršavanja reprodukcije nije „čist nalaz" (kapija ostaje
       task.data.challenge.executionFailures.map((f) => f.script),
       ['tasks/challenges/TASK-101/NALAZ-1.sh'],
     );
-    assert.equal(task.data.status, 'review', 'zadatak se vraća autoru, ne ide u main');
+    assert.equal(task.data.status, 'ready', 'zadatak se vraća autoru, ne ide u main');
+    await store.claim('TASK-101', 'dsh');
     await store.transition('TASK-101', 'verified', { actor: 'test', note: 'preskočena faza' });
     await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
     assert.equal(await vault.exists('wiki/drafts/Pad_sandboxa.md'), false, 'ništa nije otišlo u main');
@@ -585,10 +615,11 @@ test('E2E: override je svesna, zabeležena odluka čoveka', async () => {
   process.env.AGENT_2_0_MOCK_CHALLENGE = 'fail';
   const challenge = await pipeline.runChallenge('TASK-101');
   assert.equal(challenge.verdict, 'reproducible');
-  assert.equal((await store.get('TASK-101')).data.status, 'review');
+  assert.equal((await store.get('TASK-101')).data.status, 'ready');
   delete process.env.AGENT_2_0_MOCK_CHALLENGE;
 
   // Bez override-a kapija stoji.
+  await store.claim('TASK-101', 'dsh');
   await store.transition('TASK-101', 'verified', { actor: 'test', note: 'vraćeno na pečat' });
   await assert.rejects(() => pipeline.runConsolidate('TASK-101'), /nije prošao red-team/);
 
