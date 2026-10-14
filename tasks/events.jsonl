@@ -196,3 +196,13 @@
 {"ts":"2026-10-14T08:19:46.203Z","kind":"task.ingested","task":"TASK-103","source":"raw/flatpak.md","actor":"operator"}
 {"ts":"2026-10-14T08:19:46.208Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
 {"ts":"2026-10-14T08:19:46.210Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-14T08:19:46.336Z","kind":"task.write","task":"TASK-102","actor":"agy","status":"in_progress","phase":"active","moved":"inbox->active"}
+{"ts":"2026-10-14T08:19:46.390Z","kind":"phase.start","task":"TASK-102","phase":"research","role":"researcher","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-102-researcher","branch":"agent/researcher/TASK-102"}
+{"ts":"2026-10-14T08:20:18.027Z","kind":"task.write","task":"TASK-102","actor":"operator","status":"blocked","phase":"inbox","moved":"active->inbox"}
+{"ts":"2026-10-14T08:20:23.138Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"in_progress","phase":"active","moved":"inbox->active"}
+{"ts":"2026-10-14T08:20:23.188Z","kind":"phase.start","task":"TASK-103","phase":"research","role":"researcher","worktree":"/home/gru/Projects/Agent 2.0/.worktrees/TASK-103-researcher","branch":"agent/researcher/TASK-103"}
+{"ts":"2026-10-14T08:22:23.193Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-14T08:24:23.198Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-14T08:25:07.279Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-14T08:25:07.281Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"in_progress","phase":"active","moved":null}
+{"ts":"2026-10-14T08:25:07.283Z","kind":"task.write","task":"TASK-103","actor":"agy","status":"review","phase":"review","moved":"active->review"}

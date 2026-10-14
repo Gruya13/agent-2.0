@@ -1,9 +1,9 @@
 ---
 id: TASK-102
 title: Sest uloga i dve kapije
-status: ready
+status: blocked
 created: 2026-10-13T22:42:31.949Z
-updated: 2026-10-13T23:42:47.784Z
+updated: 2026-10-14T08:20:18.024Z
 kind: ingest
 source: raw/sest-uloga-i-dve-kapije.md
 audit_scope: []
@@ -16,7 +16,7 @@ tags:
 depends_on: []
 authors:
   - researcher
-assignee: dsh
+assignee: agy
 lock_owner: null
 locked_at: null
 lease_expires_at: null
@@ -55,7 +55,7 @@ challenge:
   correlationRisk: true
   by: dsh
   at: 2026-10-13T23:32:06.499Z
-blocked_reason: null
+blocked_reason: "parkiran tokom K3: izvor opisuje sam sistem, a fokus je na spoljnom dokumentu"
 history:
   - at: 2026-10-13T22:42:31.949Z
     status: proposed
@@ -206,6 +206,13 @@ history:
     status: ready
     actor: operator
     note: sistem je popravljen posle nalaza red-teama; vracam zadatak da autor prepravi nacrt
+  - at: 2026-10-14T08:19:46.333Z
+    status: in_progress
+    actor: agy
+  - at: 2026-10-14T08:20:18.024Z
+    status: blocked
+    actor: operator
+    note: "parkiran tokom K3: izvor opisuje sam sistem, a fokus je na spoljnom dokumentu"
 lock_token: null
 ---
 
