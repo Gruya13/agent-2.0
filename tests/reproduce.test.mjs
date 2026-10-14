@@ -159,3 +159,22 @@ test('reprodukcija: skript koji izađe preko os._exit je i dalje izvršen', asyn
   await vault.cleanup();
 });
 
+test('reprodukcija: skript koji koristi __file__ radi isto kao pri direktnom pokretanju', async () => {
+  const { vault, skripte, revision } = await pripremi();
+  // Kontraprimer iz treće nezavisne verifikacije: pokretač ne sme da menja
+  // uslove izvršavanja skripta (__file__, __name__, sys.argv).
+  await fs.writeFile(path.join(skripte, 'NALAZ-1.py'), [
+    'from pathlib import Path',
+    'assert __name__ == "__main__", __name__',
+    'if Path(__file__).is_file():',
+    '    print("OBORENO: provera izvrsena")',
+    '',
+  ].join('\n'));
+  const [rezultat] = await runReproductionScripts({
+    repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.py'], timeoutMs: 30_000,
+  });
+  assert.equal(rezultat.reproduced, true, rezultat.output);
+  assert.equal(rezultat.executed, true);
+  await vault.cleanup();
+});
+

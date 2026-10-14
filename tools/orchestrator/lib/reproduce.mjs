@@ -55,12 +55,21 @@ function pokretac(interpreter, ime) {
   // bi ga traceback (npr. Python SyntaxError) ispisao i lažno dokazao da je
   // provera pokrenuta.
   if (interpreter === 'python3') {
+    // `runpy.run_path` pokreće datoteku kao `__main__` sa tačnim `__file__`,
+    // `__name__` i `sys.argv`, dok `exec(code)` to ne postavlja — skript koji
+    // koristi `__file__` inače pukne i lažno se broji kao nalaz bez osnova.
     return ['python3', '-c',
-      "import sys; src = open(sys.argv[1], 'rb').read(); code = compile(src, sys.argv[1], 'exec'); "
-        + `print('__AGENT2' '_INTERPRETER' '_POKRENUT__', flush=True); exec(code)`,
+      "import sys, runpy; sys.argv = [sys.argv[1]]; "
+        + "compile(open(sys.argv[0], 'rb').read(), sys.argv[0], 'exec'); "
+        + "print('__AGENT2' '_INTERPRETER' '_POKRENUT__', flush=True); "
+        + "runpy.run_path(sys.argv[0], run_name='__main__')",
       ime];
   }
-  return ['bash', '-c', `bash -n "$0" || exit 2; M='__AGENT2''_INTERPRETER''_POKRENUT__'; printf '%s\\n' "$M"; . "$0"`, ime];
+  // Isto za bash: skript se pokreće kao datoteka (`exec bash "$0"`), pa je
+  // `$0` tačan; `bash -n` proverava sintaksu pre markera.
+  return ['bash', '-c',
+    `M='__AGENT2''_INTERPRETER''_POKRENUT__'; bash -n "$0" || exit 2; printf '%s\\n' "$M"; exec bash "$0"`,
+    ime];
 }
 
 function omotaj(bwrap, klon, ime, interpreter) {
