@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Flatpak
-status: verified
+status: blocked
 created: 2026-10-14T08:19:46.202Z
-updated: 2026-10-14T08:38:26.948Z
+updated: 2026-10-14T08:39:48.821Z
 kind: ingest
 source: raw/flatpak.md
 audit_scope: []
@@ -17,12 +17,13 @@ tags:
 depends_on: []
 authors:
   - researcher
-assignee: null
+assignee: codex
 lock_owner: null
 locked_at: null
 lease_expires_at: null
 artifacts:
-  - wiki/drafts/Flatpak.md
+  - wiki/Flatpak.md
+  - wiki/Operativni_vodic_asinhronog_sistema.md
 verification:
   verdict: pass
   harness: dsh
@@ -55,7 +56,7 @@ challenge:
   correlationRisk: true
   by: dsh
   at: 2026-10-14T08:38:26.942Z
-blocked_reason: null
+blocked_reason: "merge u main nije prošao: grana menja zone van dozvole: wiki/Operativni_vodic_asinhronog_sistema.md"
 history:
   - at: 2026-10-14T08:19:46.202Z
     status: proposed
@@ -142,6 +143,17 @@ history:
     status: verified
     actor: dsh
     note: red-team nije našao reproduktivni nalaz
+  - at: 2026-10-14T08:38:27.035Z
+    status: in_progress
+    actor: codex
+  - at: 2026-10-14T08:39:48.779Z
+    status: in_progress
+    actor: codex
+    note: "konsolidovano: wiki/Flatpak.md, wiki/Operativni_vodic_asinhronog_sistema.md"
+  - at: 2026-10-14T08:39:48.821Z
+    status: blocked
+    actor: agentctl
+    note: "merge u main nije prošao: grana menja zone van dozvole: wiki/Operativni_vodic_asinhronog_sistema.md"
 lock_token: null
 ---
 
