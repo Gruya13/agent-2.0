@@ -55,14 +55,21 @@ function pokretac(interpreter, ime) {
   // bi ga traceback (npr. Python SyntaxError) ispisao i lažno dokazao da je
   // provera pokrenuta.
   if (interpreter === 'python3') {
-    // `runpy.run_path` pokreće datoteku kao `__main__` sa tačnim `__file__`,
-    // `__name__` i `sys.argv`, dok `exec(code)` to ne postavlja — skript koji
-    // koristi `__file__` inače pukne i lažno se broji kao nalaz bez osnova.
+    // Skript se pokreće kao `python3 <ime>` iz klona: `sys.argv[0]` je ono što
+    // je zadato, a `__file__` je APSOLUTAN (Python >= 3.9). `exec` sa
+    // eksplicitnim globals-ima to postavlja tačno; `runpy.run_path` bi ostavio
+    // relativan `__file__`, pa skript koji ga koristi pada i greška se lažno
+    // broji kao nalaz bez osnova.
     return ['python3', '-c',
-      "import sys, runpy; sys.argv = [sys.argv[1]]; "
-        + "compile(open(sys.argv[0], 'rb').read(), sys.argv[0], 'exec'); "
-        + "print('__AGENT2' '_INTERPRETER' '_POKRENUT__', flush=True); "
-        + "runpy.run_path(sys.argv[0], run_name='__main__')",
+      [
+        'import os, sys',
+        'ime = sys.argv[1]',
+        'sys.argv = [ime]',
+        "src = open(ime, 'rb').read()",
+        "code = compile(src, ime, 'exec')",
+        "print('__AGENT2' '_INTERPRETER' '_POKRENUT__', flush=True)",
+        "exec(code, {'__name__': '__main__', '__file__': os.path.abspath(ime), 'builtins': __builtins__, '__builtins__': __builtins__, '__spec__': None, '__package__': None, '__cached__': None, '__loader__': None})",
+      ].join('\n'),
       ime];
   }
   // Isto za bash: skript se pokreće kao datoteka (`exec bash "$0"`), pa je

@@ -161,12 +161,14 @@ test('reprodukcija: skript koji izađe preko os._exit je i dalje izvršen', asyn
 
 test('reprodukcija: skript koji koristi __file__ radi isto kao pri direktnom pokretanju', async () => {
   const { vault, skripte, revision } = await pripremi();
-  // Kontraprimer iz treće nezavisne verifikacije: pokretač ne sme da menja
-  // uslove izvršavanja skripta (__file__, __name__, sys.argv).
+  // Kontraprimer iz nezavisne verifikacije: `python3 NALAZ-1.py` iz klona daje
+  // APSOLUTAN `__file__` (Python >= 3.9) i `sys.argv[0]` onako kako je zadat.
+  // Pokretač ne sme da menja te uslove.
   await fs.writeFile(path.join(skripte, 'NALAZ-1.py'), [
+    'import json, sys',
     'from pathlib import Path',
-    'assert __name__ == "__main__", __name__',
-    'if Path(__file__).is_file():',
+    'print(json.dumps({"absolute": Path(__file__).is_absolute(), "name": __name__, "argv0": sys.argv[0]}))',
+    'if Path(__file__).relative_to(Path.cwd()).is_file():',
     '    print("OBORENO: provera izvrsena")',
     '',
   ].join('\n'));
@@ -175,6 +177,9 @@ test('reprodukcija: skript koji koristi __file__ radi isto kao pri direktnom pok
   });
   assert.equal(rezultat.reproduced, true, rezultat.output);
   assert.equal(rezultat.executed, true);
+  assert.match(rezultat.output, /"absolute": true/, 'python3 iz klona daje apsolutan __file__');
+  assert.match(rezultat.output, /"name": "__main__"/);
+  assert.match(rezultat.output, /"argv0": "NALAZ-1.py"/, 'sys.argv[0] je ono što je zadato');
   await vault.cleanup();
 });
 
