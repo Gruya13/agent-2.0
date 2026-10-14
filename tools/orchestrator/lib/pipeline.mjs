@@ -16,7 +16,7 @@ import { promises as fs } from 'node:fs';
 import { loadConfig } from './config.mjs';
 import { createStore } from './store.mjs';
 import { exists, sha256File } from './fsx.mjs';
-import { commitPaths, headSha, log as gitLog, statusPorcelain } from './git.mjs';
+import { commitPaths, git, headSha, log as gitLog, statusPorcelain } from './git.mjs';
 import {
   changedFilesInWorktree, createWorktree, deleteBranch, ensureMainBranch, mergeIntoMain,
   removeWorktree, removeWorktreesForTask, worktreePath, MAIN_BRANCH,
@@ -26,7 +26,7 @@ import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
 import { isReproductionScript, runReproductionScripts } from './reproduce.mjs';
 import { matchesScope } from './scope.mjs';
 import { listNotes, normalizeConsolidatedNote, readNote, renderIndex } from './vault.mjs';
-import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
+import { defaultBody, dirForPhase, findTask, newTaskData, nextTaskId, phaseFor, writeTaskFile } from './task.mjs';
 
 export class PipelineError extends Error {
   constructor(message, code = 'PIPELINE_ERROR') {
@@ -379,6 +379,37 @@ export function createPipeline(config, options = {}) {
     return { phase: 'research', task: id, ok: true, artifacts: produced, commit: commit.sha, branch };
   }
 
+  /**
+   * Prenesi AKTUELAN zapis zadatka u radno stablo koje se zamrzava.
+   *
+   * Grana se pravi iz Gita, pa njen `tasks/<faza>/<id>.md` ostaje snimak crne
+   * table iz trenutka kada je grana nastala. Red-team tada čita zastareo zapis
+   * (stari status, pečat i nalaz PRETHODNOG pokušaja) i može da ga obori
+   * skriptom — a to nije nalaz o sadržaju, nego o evidenciji koju autor ne može
+   * da ispravi. Zato se aktuelni zapis prenosi u zamrznutu reviziju:
+   *   - polje `challenge` (nalaz prethodnog pokušaja) se u toj kopiji uklanja —
+   *     ono nije deo ove revizije, a istorija ga čuva u telu zadatka;
+   *   - ostala polja (status, zakup, pečat) su aktuelna, pa reference na
+   *     revizije razrešavaju iz same zamrznute revizije (grana verifikatora je
+   *     predak ove grane).
+   * Vraća hash komita sa usklađenim zapisom (to je zamrznuta revizija).
+   */
+  async function uskladiZapisZadatka(wt, wtConfig, id, claimed) {
+    const data = { ...claimed.data, challenge: null };
+    const target = path.join(dirForPhase(wtConfig, phaseFor(data.status)), `${id}.md`);
+    const postojeci = await findTask(wtConfig, id);
+    if (postojeci && postojeci.file !== target) await fs.rm(postojeci.file, { force: true });
+    await writeTaskFile(target, data, claimed.body);
+    await git(wt, ['add', 'tasks', '--all']);
+    await git(
+      wt,
+      ['-c', 'user.name=agentctl', '-c', 'user.email=agentctl@local', 'commit', '-q', '--allow-empty',
+        '-m', `agentctl: zapis ${id} usklađen sa kontrolnim korenom`],
+      { actor: 'agentctl', allowFailure: true },
+    );
+    return headSha(wt);
+  }
+
   // ------------------------------------------------------------- faza 1b
 
   /**
@@ -715,7 +746,8 @@ export function createPipeline(config, options = {}) {
     const { path: wt, config: wtConfig } = await prepareWorktree({
       id, role, base: izvorna, fresh: true, branch: `agent/${role}/${id}`,
     });
-    const revision = await headSha(wt);
+    // Zamrznuta revizija mora da nosi ISTU evidenciju koju red-team proverava.
+    const revision = await uskladiZapisZadatka(wt, wtConfig, id, claimed);
     await store.emit('phase.start', { task: id, phase: 'challenge', role, worktree: wt, revision });
 
     const izvestaj = `tasks/challenges/${id}.md`;
@@ -742,7 +774,9 @@ export function createPipeline(config, options = {}) {
       throw error;
     }
 
-    const changed = await changedFilesInWorktree(wt, izvorna);
+    // Osnova za proveru zone je zamrznuta revizija (sa usklađenim zapisom), ne
+    // stara grana: inače bi sam prenos zapisa izgledao kao izlazak iz zone.
+    const changed = await changedFilesInWorktree(wt, revision);
     const vanZone = changed.filter((rel) => !rel.startsWith('tasks/challenges/'));
     if (vanZone.length) {
       await failPhase(id, role, { reason: `red-team je menjao van svoje zone: ${vanZone.join(', ')}`, toStatus: 'verified' });

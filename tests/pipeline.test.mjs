@@ -480,6 +480,46 @@ test('E2E: odbijena konsolidacija ne upisuje tuđu putanju u artifacts (retry je
   assert.match(await vault.read('wiki/Postojeca.md'), /updated: 2025-01-01T00:00:00.000Z/, 'tuđa beleška nije dirana ni u retry-u');
   await vault.cleanup();
 });
+
+test('E2E: red-team dobija usklađen zapis zadatka na zamrznutoj reviziji', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Uskladjen zapis' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+
+  // Prvi challenge: reproduktivan nalaz ostavlja `challenge.verdict` i skriptu
+  // u zapisu zadatka — nalaz koji red-team sledećeg puta NE sme da zatekne kao
+  // deo revizije koju proverava.
+  process.env.AGENT_2_0_MOCK_CHALLENGE = 'fail';
+  const c1 = await pipeline.runChallenge('TASK-101');
+  assert.equal(c1.verdict, 'reproducible');
+  delete process.env.AGENT_2_0_MOCK_CHALLENGE;
+
+  // Autor ispravlja (stvarni tok posle ispravke iz Koraka 4), pa novi prolaz.
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  const c2 = await pipeline.runChallenge('TASK-101');
+  assert.equal(c2.verdict, 'clean');
+
+  const rev = (await store.get('TASK-101')).data.challenge.revision;
+  assert.match(rev, /^[0-9a-f]{40}$/, 'zamrznuta revizija je commit');
+
+  // Zapis NA ZAMRZNUTOJ REVIZIJI mora biti aktuelan i bez nalaza prethodnog pokušaja.
+  // Zapis se traži gde god je na toj reviziji — i sama putanja je dokaz da je
+  // snimak aktuelan (stara grana drži zapis u fazi iz koje je nastala).
+  const naReviziji = await gitExec(vault.root, ['ls-tree', '-r', '--name-only', rev, '--', 'tasks']);
+  const put = naReviziji.stdout.split('\n').find((rel) => rel.endsWith('/TASK-101.md'));
+  assert.equal(put, 'tasks/active/TASK-101.md', 'zapis na zamrznutoj reviziji mora biti u fazi koja odgovara aktuelnom statusu');
+  const zapis = await gitExec(vault.root, ['show', `${rev}:${put}`]);
+  assert.doesNotMatch(zapis.stdout, /verdict: reproducible/, 'nalaz prethodnog pokušaja ne sme da stoji u zamrznutoj reviziji');
+  assert.match(zapis.stdout, /status: in_progress/, 'status na zamrznutoj reviziji je aktuelan (zakup red-teama)');
+
+  // Reference iz zapisa moraju da se razreše iz same zamrznute revizije.
+  const commit = /commit: ([0-9a-f]{40})/.exec(zapis.stdout)?.[1];
+  assert.ok(commit, 'zapis mora da nosi verification.commit');
+  await gitExec(vault.root, ['cat-file', '-e', `${commit}^{commit}`]);
+  await vault.cleanup();
+});
 test('E2E: red-team ne sme da menja van svoje zone', async () => {
   const { vault, store, pipeline } = await setup();
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Van zone' });
