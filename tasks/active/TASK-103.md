@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Flatpak
-status: blocked
+status: in_progress
 created: 2026-10-14T08:19:46.202Z
-updated: 2026-10-14T08:39:48.821Z
+updated: 2026-10-14T08:42:30.881Z
 kind: ingest
 source: raw/flatpak.md
 audit_scope: []
@@ -18,9 +18,9 @@ depends_on: []
 authors:
   - researcher
 assignee: codex
-lock_owner: null
-locked_at: null
-lease_expires_at: null
+lock_owner: codex
+locked_at: 2026-10-14T08:41:11.635Z
+lease_expires_at: 2026-10-14T08:51:11.635Z
 artifacts:
   - wiki/Flatpak.md
   - wiki/Operativni_vodic_asinhronog_sistema.md
@@ -56,7 +56,7 @@ challenge:
   correlationRisk: true
   by: dsh
   at: 2026-10-14T08:38:26.942Z
-blocked_reason: "merge u main nije prošao: grana menja zone van dozvole: wiki/Operativni_vodic_asinhronog_sistema.md"
+blocked_reason: null
 history:
   - at: 2026-10-14T08:19:46.202Z
     status: proposed
@@ -154,7 +154,25 @@ history:
     status: blocked
     actor: agentctl
     note: "merge u main nije prošao: grana menja zone van dozvole: wiki/Operativni_vodic_asinhronog_sistema.md"
-lock_token: null
+  - at: 2026-10-14T08:40:59.925Z
+    status: ready
+    actor: operator
+    note: "rucna intervencija operatera posle K3: konsolidacija odbijena zbog izmene postojece beleske; faza se ponavlja sa ispravljenim brief-om konsolidatora"
+  - at: 2026-10-14T08:41:07.888Z
+    status: in_progress
+    actor: codex
+  - at: 2026-10-14T08:41:07.893Z
+    status: verified
+    actor: operator
+    note: "rucna intervencija operatera posle K3: konsolidacija odbijena zbog izmene postojece beleske; faza se ponavlja sa ispravljenim brief-om konsolidatora"
+  - at: 2026-10-14T08:41:11.635Z
+    status: in_progress
+    actor: codex
+  - at: 2026-10-14T08:42:30.881Z
+    status: in_progress
+    actor: codex
+    note: "konsolidovano: wiki/Flatpak.md, wiki/Operativni_vodic_asinhronog_sistema.md"
+lock_token: 7c81710d-951b-49a2-a222-cca4c9e26072
 ---
 
 # Flatpak
