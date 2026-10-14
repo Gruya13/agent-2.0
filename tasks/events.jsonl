@@ -230,3 +230,4 @@
 {"ts":"2026-10-14T08:34:19.576Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:34:19.578Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:34:19.580Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"verified","phase":"review","moved":"active->review"}
+{"ts":"2026-10-14T08:34:19.614Z","kind":"phase.done","task":"TASK-103","phase":"verify","role":"verifier","verdict":"pass"}
