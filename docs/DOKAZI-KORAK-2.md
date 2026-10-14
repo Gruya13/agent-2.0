@@ -279,6 +279,42 @@ Regresioni test `fajl-lock: marker živog preuzimaoca se ne evakuiše po starost
 `fsx.mjs` iz `f1f9c05`, prolazi sa ispravkom. Skup posle ispravke: **139
 prolazi, 0 padova**, dva uzastopna izvođenja.
 
+
+## 16. Treća runda nezavisne verifikacije i ispravke
+
+Nad `57cedd4` potvrđeni su P1–P3 (marker test, scenario „pauziran preuzimač“ sa
+preklapanjem 0, skup 139/139). Verifikator je zatim našao **dva preostala
+kontraprimerа**, od kojih prvi ne zahteva nikakvu instrumentaciju:
+
+**P4a — rok se nije strogo poštovao.** Vlasnik drži lock 200 ms, čekalac ima
+`{ timeoutMs: 50, retryMs: 1000 }`. Očekivano: istek roka. Dobijeno: ulaz u
+~1004 ms. Izmereno ponovo, pre/posle ispravke:
+
+```text
+57cedd4: {"timeoutMs":50,"retryMs":1000,"elapsedMs":1003,"entered":true}
+posle:   {"timeoutMs":50,"retryMs":1000,"elapsedMs":51,"entered":false,"result":"nije moguće zaključati x.lock u zadatom roku"}
+```
+
+Uzrok: rok se proveravao posle `tryAcquire`, a čekanje nije bilo skraćeno na
+preostalo vreme. Ispravka: rok se proverava **pre** svakog pokušaja (osim prvog,
+da `timeoutMs: 0` znači „probaj jednom“), a svako čekanje je
+`min(retryMs, preostalo)`. Regresioni test `fajl-lock: rok se poštuje i kada je
+retryMs veći od preostalog vremena`.
+
+**P4b — zakazani raspored sa dva vlasnika (250 ms preklapanja).** Instrumentacija
+je zaustavljala procese u sledećem rasporedu: B pročita mrtvog vlasnika markera i
+pauzira se; A ukloni stari marker, postavi svoj i pauzira se posle završnog
+čitanja locka; B nastavi, obriše A-ov marker na osnovu stare informacije i uđe; A
+nastavi i obriše B-ov lock na osnovu svoje pre-pauzne provere.
+
+Ispravka: pre svakog uklanjanja (i locka i markera) proverava se **identitet
+fajla (inode)** — ako je fajl u međuvremenu zamenjen, ne uklanja se ništa.
+Preostali prozor je između `stat` i `rm` (mikrosekunde, bez mogućnosti pauze bez
+nove instrumentacije); potpuno zatvaranje zahteva OS-level primitiv, što je van
+obima ove faze.
+
+Skup posle obe ispravke: **140 prolazi, 0 padova**.
+
 ## 15. Preostalo ograničenje mehanizma
 
 - Uklanjanje locka nije atomski uslovljeno sadržajem (fajl-sistem ne daje

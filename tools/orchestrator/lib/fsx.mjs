@@ -242,14 +242,21 @@ export async function withFileLock(lockFile, fn, options = {}) {
               dozvoli = Date.now() - stat.mtimeMs > staleMs;
             } catch { dozvoli = false; }
           }
-          // Poslednja provera neposredno pre uklanjanja: ovaj proces je mogao
-          // biti pauziran između odluke i brisanja, pa je lock u međuvremenu
-          // mogao preuzeti živ vlasnik (dokazano scenarijem „pauziran
-          // preuzimač“). Ako je trenutni vlasnik živ, ne uklanja se ništa.
+          // Pre uklanjanja se proverava IDENTITET fajla (inode): ako je lock u
+          // međuvremenu zamenjen novim, ne uklanja se. Bez toga je pauziran
+          // preuzimač brisao svež lock na osnovu čitanja iz prošlosti
+          // (dokazano scenarijima „pauziran preuzimač“ i „zakazani raspored“).
           if (dozvoli) {
-            let potvrda = null;
-            try { potvrda = JSON.parse(await fs.readFile(lockFile, 'utf8')); } catch { potvrda = null; }
-            if (potvrda && potvrda.pid && isProcessAlive(potvrda.pid)) dozvoli = false;
+            let pre = null;
+            let posle = null;
+            try {
+              pre = await fs.stat(lockFile);
+              let potvrda = null;
+              try { potvrda = JSON.parse(await fs.readFile(lockFile, 'utf8')); } catch { potvrda = null; }
+              posle = await fs.stat(lockFile);
+              if (potvrda && potvrda.pid && isProcessAlive(potvrda.pid)) dozvoli = false;
+            } catch { dozvoli = false; }
+            if (dozvoli && pre && posle && pre.ino !== posle.ino) dozvoli = false;
           }
           if (dozvoli) await fs.rm(lockFile, { force: true }).catch(() => {});
         }
@@ -265,9 +272,21 @@ export async function withFileLock(lockFile, fn, options = {}) {
     // vlasnik živ, ovaj čekalac čeka — to je bezbedniji ishod od dvostrukog
     // vlasnika.
     let markInfo = null;
-    try { markInfo = JSON.parse(await fs.readFile(marker, 'utf8')); } catch { markInfo = null; }
+    let preMark = null;
+    try {
+      preMark = await fs.stat(marker);
+      markInfo = JSON.parse(await fs.readFile(marker, 'utf8'));
+    } catch { markInfo = null; }
     if (markInfo && markInfo.pid) {
-      if (!isProcessAlive(markInfo.pid)) await fs.rm(marker, { force: true }).catch(() => {});
+      if (!isProcessAlive(markInfo.pid)) {
+        // Evakuacija samo ako je to ISTI marker (inode): posle pauze je marker
+        // mogao biti zamenjen tuđim, pa bi brisanje oborilo tuđ izbor.
+        let posleMark = null;
+        try { posleMark = await fs.stat(marker); } catch { posleMark = null; }
+        if (preMark && posleMark && preMark.ino === posleMark.ino) {
+          await fs.rm(marker, { force: true }).catch(() => {});
+        }
+      }
     } else {
       // Nečitljiv/nestao marker: jedini oslonac je starost.
       try {
@@ -281,12 +300,16 @@ export async function withFileLock(lockFile, fn, options = {}) {
   const prekoracio = () => Date.now() > deadline;
   const greskaRoka = () => new Error(`nije moguće zaključati ${path.basename(lockFile)} u zadatom roku`);
 
+  // Rok se proverava PRE svakog pokušaja (osim prvog, da `timeoutMs: 0` znači
+  // „probaj jednom"): inače čekalac može da uđe posle isteka roka ako je
+  // `retryMs` veći od preostalog vremena (dokazano: timeoutMs 50, retryMs 1000
+  // → ulaz u ~1004 ms). Grana za zastareli lock ne sme da vrti petlju bez
+  // provere roka — tada `withFileLock` visi umesto da prijavi istek.
+  let prvi = true;
   for (;;) {
+    if (!prvi && prekoracio()) throw greskaRoka();
+    prvi = false;
     if (await tryAcquire()) break;
-    // Rok se proverava na ulazu u svaku iteraciju, pa i kada je lock zastareo:
-    // grana za preuzimanje inače vrti petlju bez izlaza (dokazano testom sa
-    // živim markerom — withFileLock je visio umesto da prijavi istek roka).
-    if (prekoracio()) throw greskaRoka();
     let stale = false;
     try {
       const info = JSON.parse(await fs.readFile(lockFile, 'utf8'));
@@ -305,13 +328,11 @@ export async function withFileLock(lockFile, fn, options = {}) {
     }
     if (stale) {
       const preuzeto = await reclaimStale();
-      if (!preuzeto) await new Promise((resolve) => setTimeout(resolve, retryMs));
+      // Čekanje se skraćuje na preostalo vreme: ne sme da pređe rok.
+      if (!preuzeto) await new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.min(retryMs, deadline - Date.now()))));
       continue;
     }
-    if (Date.now() > deadline) {
-      throw new Error(`nije moguće zaključati ${path.basename(lockFile)} u zadatom roku`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, retryMs));
+    await new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.min(retryMs, deadline - Date.now()))));
   }
 
   try {

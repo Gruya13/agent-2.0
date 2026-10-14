@@ -363,6 +363,26 @@ test('fajl-lock: marker živog preuzimaoca se ne evakuiše po starosti', async (
   assert.match(await fs.readFile(lock, 'utf8'), new RegExp(String(pid)), 'tuđi lock nije smenjen');
   await fs.rm(dir, { recursive: true, force: true });
 });
+
+test('fajl-lock: rok se poštuje i kada je retryMs veći od preostalog vremena', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-lock5-'));
+  const lock = path.join(dir, 'proba.lock');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const vlasnik = withFileLock(lock, async () => { await sleep(600); }, { retryMs: 5 });
+  await sleep(50);
+  const t1 = Date.now();
+  let usao = false;
+  await assert.rejects(
+    () => withFileLock(lock, async () => { usao = true; }, { timeoutMs: 50, retryMs: 1000 }),
+    /nije moguće zaključati/,
+  );
+  const proteklo = Date.now() - t1;
+  assert.equal(usao, false, 'čekalac nije smeo da uđe posle isteka roka');
+  assert.ok(proteklo < 400, 'rok je morao biti ispoštovan, a ne retryMs: ' + proteklo + ' ms');
+  await vlasnik;
+  await fs.rm(dir, { recursive: true, force: true });
+});
 async function listDir(dir) {
   return { files: (await fs.readdir(dir)).sort() };
 }
