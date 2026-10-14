@@ -239,3 +239,4 @@
 {"ts":"2026-10-14T08:38:26.945Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:38:26.947Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:38:26.948Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"verified","phase":"review","moved":"active->review"}
+{"ts":"2026-10-14T08:38:26.987Z","kind":"phase.done","task":"TASK-103","phase":"challenge","role":"red-team","verdict":"clean","revision":"e926c2408b63ba2ece86a1e848c7863c16be1978","scripts":2,"falsePositives":2,"correlationRisk":true}
