@@ -214,3 +214,4 @@
 {"ts":"2026-10-14T08:27:16.619Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:27:16.620Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"in_progress","phase":"active","moved":null}
 {"ts":"2026-10-14T08:27:16.622Z","kind":"task.write","task":"TASK-103","actor":"dsh","status":"ready","phase":"inbox","moved":"active->inbox"}
+{"ts":"2026-10-14T08:27:16.667Z","kind":"phase.rejected","task":"TASK-103","role":"verifier","attempts":1}
