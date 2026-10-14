@@ -1,9 +1,9 @@
 ---
 id: TASK-103
 title: Flatpak
-status: in_progress
+status: consolidated
 created: 2026-10-14T08:19:46.202Z
-updated: 2026-10-14T08:42:30.881Z
+updated: 2026-10-14T08:42:31.052Z
 kind: ingest
 source: raw/flatpak.md
 audit_scope: []
@@ -17,10 +17,11 @@ tags:
 depends_on: []
 authors:
   - researcher
+  - consolidator
 assignee: codex
-lock_owner: codex
-locked_at: 2026-10-14T08:41:11.635Z
-lease_expires_at: 2026-10-14T08:51:11.635Z
+lock_owner: null
+locked_at: null
+lease_expires_at: null
 artifacts:
   - wiki/Flatpak.md
   - wiki/Operativni_vodic_asinhronog_sistema.md
@@ -172,7 +173,14 @@ history:
     status: in_progress
     actor: codex
     note: "konsolidovano: wiki/Flatpak.md, wiki/Operativni_vodic_asinhronog_sistema.md"
-lock_token: 7c81710d-951b-49a2-a222-cca4c9e26072
+  - at: 2026-10-14T08:42:31.049Z
+    status: consolidated
+    actor: agentctl
+    note: merge 3f3cca03
+  - at: 2026-10-14T08:42:31.052Z
+    status: consolidated
+    actor: agentctl
+lock_token: null
 ---
 
 # Flatpak
