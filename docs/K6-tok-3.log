@@ -1,0 +1,49 @@
+=== K6 vault 3: 2026-10-14T12:59:59+02:00 revizija b4d7fbe ===
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k6-vault-3/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/Flatpak.md (agy)
+[agentctl] krug 1/12: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k6-vault-3/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> fail (pokušaj 1)
+[agentctl] krug 2/12: 1 akcija, promena=true
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k6-vault-3/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/Flatpak.md (agy)
+[agentctl] krug 3/12: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k6-vault-3/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> pass
+[agentctl] krug 4/12: 1 akcija, promena=true
+[agentctl] poziv uloge red-team (harness:dsh) u /home/gru/k6-vault-3/.worktrees/TASK-101-red-team
+[agentctl] challenge: TASK-101 -> reproducible (3 nalaza)
+[agentctl] krug 5/12: 1 akcija, promena=true
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k6-vault-3/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/Flatpak.md (agy)
+[agentctl] krug 6/12: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k6-vault-3/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> pass
+[agentctl] krug 7/12: 1 akcija, promena=true
+[agentctl] poziv uloge red-team (harness:dsh) u /home/gru/k6-vault-3/.worktrees/TASK-101-red-team
+[agentctl] challenge: TASK-101 -> reproducible (2 nalaza)
+[agentctl] krug 8/12: 1 akcija, promena=true
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k6-vault-3/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/Flatpak.md (agy)
+[agentctl] krug 9/12: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k6-vault-3/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> pass
+[agentctl] krug 10/12: 1 akcija, promena=true
+[agentctl] poziv uloge red-team (harness:dsh) u /home/gru/k6-vault-3/.worktrees/TASK-101-red-team
+[agentctl] krug 11/12: 1 akcija, promena=true
+[agentctl] krug 12/12: 0 akcija, promena=false
+FAZA       ZADATAK   ISHOD  
+---------  --------  -------
+research   TASK-101  ok     
+verify     TASK-101  neuspeh
+research   TASK-101  ok     
+verify     TASK-101  ok     
+challenge  TASK-101  neuspeh
+research   TASK-101  ok     
+verify     TASK-101  ok     
+challenge  TASK-101  neuspeh
+research   TASK-101  ok     
+verify     TASK-101  ok     
+challenge  TASK-101  neuspeh
+krugova: 12, akcija: 11
+=== kraj: 2026-10-14T13:37:24+02:00 ===
