@@ -19,7 +19,13 @@
       "bytes": true,
       "size": 1443,
       "registeredAt": "2026-10-13T22:42:31.947Z"
+    },
+    "flatpak.md": {
+      "sha256": "e75f3f1ac30c2bdaa785b5be06006cf11b47e8c9085416ec461fca03f095be6d",
+      "bytes": true,
+      "size": 2205,
+      "registeredAt": "2026-10-14T08:19:46.199Z"
     }
   },
-  "updated": "2026-10-13T23:32:06.586Z"
+  "updated": "2026-10-14T08:19:46.200Z"
 }

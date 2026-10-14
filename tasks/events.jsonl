@@ -193,3 +193,6 @@
 {"ts":"2026-10-13T23:32:06.582Z","kind":"phase.done","task":null,"phase":"reflect","notes":1,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":3,"commit":"768d5b7dd3269ec0d00a33a5df89a1702d41c1e5"}
 {"ts":"2026-10-13T23:32:06.619Z","kind":"phase.done","task":null,"phase":"reflect","notes":1,"indexChanged":true,"rawManifestAdded":0,"rawManifestTotal":3,"commit":"725fcfa5b086eab508365d6b9a61c84a394579f8"}
 {"ts":"2026-10-13T23:42:47.788Z","kind":"task.write","task":"TASK-102","actor":"operator","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-14T08:19:46.203Z","kind":"task.ingested","task":"TASK-103","source":"raw/flatpak.md","actor":"operator"}
+{"ts":"2026-10-14T08:19:46.208Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
+{"ts":"2026-10-14T08:19:46.210Z","kind":"task.write","task":"TASK-103","actor":"agentctl","status":"ready","phase":"inbox","moved":null}
