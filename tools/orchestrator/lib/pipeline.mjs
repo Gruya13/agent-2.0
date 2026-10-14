@@ -326,6 +326,9 @@ export function createPipeline(config, options = {}) {
       id, role, base: researchBase, fresh: true, branch: `agent/${role}/${id}`,
     });
     await store.emit('phase.start', { task: id, phase: 'research', role, worktree: wt, branch });
+    // Snimak pre poziva: `detectArtifacts` vraća SVE beleške u zoni uloge, pa bi
+    // bez ovoga tuđi nacrti ušli u artefakte ovog zadatka.
+    const before = await detectArtifacts(wtConfig, { role });
 
     const prompt = await buildPrompt(config, {
       role,
@@ -341,7 +344,7 @@ export function createPipeline(config, options = {}) {
       throw error;
     }
 
-    const produced = await detectArtifacts(wtConfig, { role, before: [] });
+    const produced = await detectArtifacts(wtConfig, { role, before });
     if (!result.ok || produced.length === 0) {
       await store.updateBody(id, {
         actor: owner,
@@ -503,6 +506,7 @@ export function createPipeline(config, options = {}) {
       id, role, fresh: true, branch: `agent/${role}/${id}`,
     });
     await store.emit('phase.start', { task: id, phase: 'extract', role, worktree: wt, branch });
+    const before = await detectArtifacts(wtConfig, { role });
 
     const prompt = await buildPrompt(config, {
       role,
@@ -521,7 +525,7 @@ export function createPipeline(config, options = {}) {
       throw error;
     }
 
-    const produced = await detectArtifacts(wtConfig, { role });
+    const produced = await detectArtifacts(wtConfig, { role, before });
     if (!result.ok || produced.length === 0) {
       await failPhase(id, role, { reason: result.timedOut ? 'isteklo vreme harnesa' : `nema fragmenata (exit ${result.exitCode})` });
       return { phase: 'extract', task: id, ok: false, reason: 'nema fragmenata' };
@@ -943,6 +947,11 @@ export function createPipeline(config, options = {}) {
       id, role, base: verifierBranch, fresh: true, branch: `agent/${role}/${id}`,
     });
     await store.emit('phase.start', { task: id, phase: 'consolidate', role, worktree: wt });
+    // Snimak PRE poziva: u zoni konsolidatora (`wiki/`) su i SVE postojeće
+    // produkcione beleške. Bez snimka bi `detectArtifacts` vratio i tuđe
+    // beleške, pa bi ih `normalizeConsolidatedNote` prepisao i prijavio kao
+    // artefakte ovog zadatka (potvrđeno na TASK-103).
+    const before = await detectArtifacts(wtConfig, { role });
 
     const prompt = await buildPrompt(config, {
       role,
@@ -980,7 +989,7 @@ export function createPipeline(config, options = {}) {
     }
 
     // Nacrt više ne postoji: artefakti zadatka od sada pokazuju na produkciju.
-    const produced = await detectArtifacts(wtConfig, { role });
+    const produced = await detectArtifacts(wtConfig, { role, before });
     if (!produced.length) {
       // Izlazni kod 0 nije dokaz: bez produkcione beleške u radnom stablu nema
       // šta da se spoji u `main`.
@@ -998,7 +1007,11 @@ export function createPipeline(config, options = {}) {
     for (const rel of produced) {
       await normalizeConsolidatedNote(wt, rel, { authors: contributors, now: now() });
     }
-    await store.setArtifacts(id, produced, { actor: owner, note: `konsolidovano: ${produced.join(', ')}` });
+    // NAPOMENA: `artifacts` se NE upisuju ovde. `produced` je sve što grana menja
+    // u radnom stablu, a grana može da dira i tuđu postojeću belešku. Kapija
+    // spajanja čita `artifacts` kao dozvoljene produkcione mete, pa bi upis pre
+    // merge-a pretvorio odbijenu putanju u dozvoljenu metu za sledeći pokušaj
+    // (potvrđeno na TASK-103: tuđa beleška je ostala u zadatku posle odbijanja).
 
     const branch = `agent/${role}/${id}`;
     const commit = await commitWorktreeSafe(config, id, role, `consolidator(${id}): konsolidacija u wiki/`, owner);
@@ -1024,12 +1037,30 @@ export function createPipeline(config, options = {}) {
           note: 'konflikt pri merge-u',
         });
       }
+      // Predložene putanje odbijenog pokušaja ostaju u ISTORIJI zadatka, ne u
+      // `artifacts`: evidencija mora da opiše ono što je stvarno prošlo kapiju.
+      await store.updateBody(id, {
+        actor: 'agentctl',
+        append: [
+          `### Konsolidacija odbijena (${now()})`,
+          '',
+          `Razlog: ${merge.reason}`,
+          '',
+          `Predloženi artefakti ovog (odbijenog) pokušaja: ${produced.join(', ')}`,
+          '',
+          'Ove putanje NISU upisane u `artifacts` i ne postaju dozvoljene produkcione mete.',
+        ].join('\n'),
+        note: 'konsolidacija odbijena (predloženi artefakti u istoriji)',
+      });
       await commitBookkeeping(`agentctl: ${id} -> blocked (merge: ${merge.reason})`);
       await store.emit('phase.failed', { task: id, phase: 'consolidate', reason: merge.reason, conflict: Boolean(merge.conflict) });
       logger(`consolidate: ${id} -> KONFLIKT/ODBIJENO (${merge.reason})`);
       return { phase: 'consolidate', task: id, ok: false, conflict: Boolean(merge.conflict), reason: merge.reason };
     }
 
+    // Tek sada, posle uspešnog merge-a, `artifacts` opisuju ono što je zaista
+    // objavljeno ovim zadatkom.
+    await store.setArtifacts(id, produced, { actor: owner, note: `konsolidovano: ${produced.join(', ')}` });
     await store.transition(id, 'consolidated', { actor: 'agentctl', note: `merge ${merge.sha.slice(0, 8)}` });
     await store.setAuthors(id, ['consolidator'], { actor: 'agentctl' });
     await removeWorktreesForTask(config, id);

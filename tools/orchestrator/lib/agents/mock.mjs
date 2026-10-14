@@ -262,6 +262,19 @@ async function consolidator(config, { task, cwd, now }) {
   await writeNote(cwd, productionRel, { frontmatter, body });
   await fs.rm(path.resolve(cwd, draftRel), { force: true });
 
+  // Testni režim: konsolidator menja i TUĐU postojeću belešku (kao što je stvarni
+  // codex uradio na TASK-103). Služi da se kapija i evidencija artefakata
+  // provere nad stvarnim kontraprimerom, a ne nad izmišljenim stanjem.
+  const dodir = process.env.AGENT_2_0_MOCK_CONSOLIDATE_TOUCH;
+  if (dodir) {
+    const tekst = await fs.readFile(path.resolve(cwd, dodir), 'utf8');
+    await fs.writeFile(
+      path.resolve(cwd, dodir),
+      tekst.replace(/^updated: .*$/m, `updated: ${now}`),
+      'utf8',
+    );
+  }
+
   // `wiki/Index.md` se NE piše ovde: to je izveden artefakt koji kontrolni sloj
   // regeneriše u `main` posle merge-a (faza 5). Da ga svaka grana nosi, svaki
   // bi paralelni merge pukao na njemu.

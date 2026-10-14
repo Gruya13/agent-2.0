@@ -77,7 +77,7 @@ Objavljena beleška `wiki/Flatpak.md` (79 redova) proverena je tačku-po-tačku:
 | Oznaka | Nalaz | Vrsta po odeljku 9 | Odluka |
 |---|---|---|---|
 | N13 | Konsolidator (codex) je u svojoj grani izmenio **postojeću produkcionu belešku** `wiki/Operativni_vodic_asinhronog_sistema.md` (samo polje `updated`); kapija spajanja je to odbila i zadatak je otišao u `blocked` | sprečava da dogovoreni scenario završi | **kapija je ispravna**; ispravljen brief uloge i potvrđeno stvarnim pozivom |
-| N14 | Posle odbijenog pokušaja, lista `artifacts` zadatka zadržava `wiki/Operativni_vodic_asinhronog_sistema.md` iako taj fajl nikad nije ušao u `main` | nepotvrđena sumnja / metapodaci | zabeleženo; nije popravljano u ovom koraku |
+| N14 | Posle odbijenog pokušaja, lista `artifacts` zadatka zadržava `wiki/Operativni_vodic_asinhronog_sistema.md` | **potvrđeno** (vidi ispravku ispod) | zabeleženo; ispravljeno u zadatku posle K4 |
 | N15 | Red-team i verifikator dele vendor (`dsh`), pa su slepe tačke korelisane; oba red-team skripta su bila lažni nalazi | ograničenje podržanog režima | zabeleženo u zadatku (`correlationRisk: true`); nije greška |
 
 **N13 — uzrok i ispravka.** Brief konsolidatora je u tački 2 tražio da „dopuni telo
@@ -102,6 +102,37 @@ izmena postojećih belešaka (merge `3f3cca0`).
    `agentctl index`. **Ovaj tok uz ručnu intervenciju nije dokaz da kapija sama
    propušta ispravan sadržaj**; kapija je u ovom prolazu dokazala suprotno — da
    odbija neovlašćenu izmenu.
+
+
+## 8. Ispravka ovog zapisa (posle pregleda od 14.10.2026)
+
+**N14 je potvrđen i ima stvarne posledice.** Prvobitna tvrdnja da tuđa putanja
+„nikad nije ušla u `main`“ **nije tačna**. Kontrolni sloj je posle odbijenog
+pokušaja upisao sve promenjene putanje u `artifacts` zadatka (`setArtifacts` je
+išao **pre** merge-a), a kapija čita `artifacts` kao dozvoljene produkcione mete
+(`zonePolicyFor`). Zato je u **ponovljenom** pokušaju
+`wiki/Operativni_vodic_asinhronog_sistema.md` postao deklarisan artefakt zadatka
+i kapija ga je propustila:
+
+```text
+$ git show --stat 3f3cca0
+ wiki/Operativni_vodic_asinhronog_sistema.md | 2 +-
+```
+
+Izmena u `main` je bila samo polje `updated` (i normalizacija zaglavlja), ali je
+**neovlašćena**: nijedan zadatak nije smeo da menja tuđu produkcionu belešku.
+Pravi koren je `detectArtifacts`, koji za ulogu `consolidator` vraća **sve**
+beleške u `wiki/`, pa `normalizeConsolidatedNote` prepisuje i tuđe beleške.
+
+Popravljeno u zadatku posle K4:
+1. `detectArtifacts` dobija snimak `before` pre poziva harnesa (u fazama
+   `research`, `extract` i `consolidate`), pa vraća samo ono što je **taj**
+   zadatak proizveo;
+2. `setArtifacts` se upisuje tek **posle uspešnog** merge-a;
+3. odbijen pokušaj ostavlja predložene putanje u **istoriji zadatka** (telo), ne u
+   `artifacts`;
+4. regresioni scenario `E2E: odbijena konsolidacija ne upisuje tuđu putanju u
+   artifacts (retry je ne prihvata)`.
 
 ## 6. Zaključak
 

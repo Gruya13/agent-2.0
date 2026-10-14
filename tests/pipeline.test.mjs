@@ -428,6 +428,58 @@ test('E2E: posle red-team nalaza autor dobija priliku da ispravi nacrt', async (
   }
 });
 
+test('E2E: odbijena konsolidacija ne upisuje tuđu putanju u artifacts (retry je ne prihvata)', async () => {
+  const { vault, store, pipeline } = await setup();
+  const T = '2025-01-01T00:00:00.000Z';
+  // Postojeća produkciona beleška koju konsolidator ne sme da dira.
+  await vault.write('wiki/Postojeca.md', [
+    '---', 'title: Postojeca', `created: ${T}`, `updated: ${T}`,
+    'authors: [researcher]', 'status: consolidated', 'tags: [x]', '---', '', '# Postojeca', '', 'tekst', '',
+  ].join('\n'));
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'add', '-A']);
+  await gitExec(vault.root, ['-c', 'user.name=f', '-c', 'user.email=f@local', 'commit', '-q', '-m', 'baza']);
+
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Nova beleska' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  await pipeline.runChallenge('TASK-101');
+  const artifactsPre = [...(await store.get('TASK-101')).data.artifacts];
+  assert.ok(artifactsPre.every((rel) => !rel.includes('Postojeca')), 'tuđa putanja ne sme biti deklarisani artefakt');
+
+  // 1) Odbijen pokušaj: konsolidator menja i tuđu belešku.
+  process.env.AGENT_2_0_MOCK_CONSOLIDATE_TOUCH = 'wiki/Postojeca.md';
+  try {
+    const odbijeno = await pipeline.runConsolidate('TASK-101');
+    assert.equal(odbijeno.ok, false, 'merge mora biti odbijen');
+    assert.match(odbijeno.reason, /van dozvole/);
+
+    const posle = await store.get('TASK-101');
+    assert.deepEqual(posle.data.artifacts, artifactsPre, 'odbijen pokušaj ne sme da menja artifacts');
+    assert.equal(posle.data.status, 'blocked');
+    // Odbijena putanja ostaje u nalazu (razlog merge-a je imenuje), a u
+    // `artifacts` ulaze samo putanje koje je ovaj zadatak zaista proizveo.
+    assert.match(posle.data.blocked_reason, /wiki\/Postojeca\.md/, 'odbijena putanja ostaje u nalazu');
+    assert.match(posle.body, /Razlog: .*wiki\/Postojeca\.md/);
+    assert.match(posle.body, /odbijenog\) pokušaja: wiki\/Nova_beleska\.md/, 'u istoriji su predloženi artefakti pokušaja');
+    assert.match(await vault.read('wiki/Postojeca.md'), /updated: 2025-01-01T00:00:00.000Z/, 'main nije diran');
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CONSOLIDATE_TOUCH;
+  }
+
+  // 2) Uspešan retry: tuđa putanja nije postala dozvoljena produkciona meta.
+  await store.transition('TASK-101', 'ready', { actor: 'test', note: 'ponovni pokusaj posle odbijanja' });
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  // Challenge je već dao čist nalaz; faza se ne ponavlja bez novog nalaza.
+  const retry = await pipeline.runConsolidate('TASK-101');
+  assert.equal(retry.ok, true, 'ispravljen pokušaj mora da prođe');
+  const kraj = await store.get('TASK-101');
+  assert.equal(kraj.data.artifacts.length, 1, 'artifacts opisuju tačno objavljeni rezultat');
+  assert.match(kraj.data.artifacts[0], /^wiki\/[^/]+\.md$/);
+  assert.ok(!kraj.data.artifacts.includes('wiki/Postojeca.md'), 'tuđa putanja nije postala dozvoljena meta');
+  assert.match(await vault.read('wiki/Postojeca.md'), /updated: 2025-01-01T00:00:00.000Z/, 'tuđa beleška nije dirana ni u retry-u');
+  await vault.cleanup();
+});
 test('E2E: red-team ne sme da menja van svoje zone', async () => {
   const { vault, store, pipeline } = await setup();
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Van zone' });

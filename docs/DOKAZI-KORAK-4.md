@@ -15,7 +15,7 @@ nalaza koja se mogu proveriti komandom:
 
 | Nalaz | Tvrdnja nacrta | Zašto je oborena |
 |---|---|---|
-| N1 (red 18) | nacrt je „evidentiran u centralnom indeksu [[Index]]“ | `grep -n "Flatpak" wiki/Index.md` → nema pogodaka; indeks po invarijanti 10 sadrži samo konsolidovane beleške posle merge-a |
+| N1 (red 18) | nacrt je „evidentiran u centralnom indeksu [[Index]]“ | `grep -n "Flatpak" wiki/Index.md` → nema pogodaka. **Preciznije:** `renderIndex` preskače sam indeks i fragmente, ali ne filtrira sve nacrte — za fizički prisutne nacrte beleži i status `draft`. Zato ovaj konkretan nalaz važi za tadašnje stanje, ali se **ne** sme generalizovati na „indeks sadrži samo consolidated beleške“. |
 | N2 (red 23) | aplikacije se pokreću „u potpunoj izolaciji“ | jače od izvora (L7: „in isolation“) i protivreči tvrdnji 2 istog nacrta o dozvolama za Bluetooth, zvuk, mrežu i fajlove |
 
 Verdikt prvog prolaza: `VERDICT: fail / REASONS: 2`. Posle ispravke istraživača
@@ -82,10 +82,12 @@ artefakt može proći“ ima put kroz sistem. Regresioni test
 | 4 | verify pass | verified | 2 | — |
 | 5 | challenge reproducible | ready (pre ispravke: review) | 3 | 2 |
 
-- **Značenje:** brojač ne broji „koliko je puta verifikator odbio nacrt“, nego
-  **koliko je puta zadatak ušao u stanje `review`** (svaki završen nacrt, svaki
-  nalaz red-teama). To je praktičan pokazatelj broja pokušaja, ali nije isto što
-  i broj odbijanja; pravilo je zato ovde izričito zapisano.
+- **Značenje (tačan izraz):** brojač je `history.filter(h => h.status === 'review').length`
+  — broj **zapisa** u istoriji kojima je status `review`, a ne broj stvarnih
+  ulazaka u to stanje. Istorija može sadržati ponovljene statuse (npr. dva uzastopna
+  zapisa sa istim statusom), pa se te dve vrednosti ne poklapaju u svim uslovima.
+  Brojač zato treba čitati kao približan pokazatelj, a ne kao garantovan broj
+  pokušaja; pravilo je zapisano ovim izrazom, bez jačeg obećanja.
 
 ## 5. Ogled: reprodukcija čuva svoju reviziju
 
