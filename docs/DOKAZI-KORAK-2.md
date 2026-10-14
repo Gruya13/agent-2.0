@@ -315,7 +315,23 @@ obima ove faze.
 
 Skup posle obe ispravke: **140 prolazi, 0 padova**.
 
-## 15. Preostalo ograničenje mehanizma
+### Četvrta runda (nad `0c7d9c1`)
+
+| Tvrdnja | Ishod | Dokaz |
+|---|---|---|
+| Q1 test roka prolazi na `0c7d9c1`, pada na `57cedd4` | **POTVRĐENO** | `pass 1 / fail 0`; na `57cedd4` `fail 1` („Missing expected rejection“) |
+| Q2 vlasnik drži lock, čekalac `{timeoutMs: 50, retryMs: 1000}` | **POTVRĐENO** | `{"elapsedMs":52,"entered":false,"error":"nije moguće zaključati test.lock u zadatom roku"}` |
+| Q3 zakazani raspored sa dva vlasnika | **POTVRĐENO** | `{"scenario":"Q3","overlapMs":0}` — B više ne briše novi marker |
+| Q4 bez regresije | **POTVRĐENO** | `npm test` 140/140; svih 5 `fajl-lock:` testova prolazi |
+
+**Q5 — preostali kontraprimer je prozor provere i brisanja.** Verifikator je
+instrumen­tacijom (`SIGSTOP` posle `stat`, neposredno pre `rm`) ponovo dobio
+250 ms preklapanja. To je tačno prozor koji je već zapisan u odeljku 17 kao
+ograničenje mehanizma; verifikator to i sam konstatuje („dokazan je preostali
+prozor između provere inode-a i `rm`, koji dokumentacija ove revizije već navodi
+kao ograničenje“). Zatvaranje zahteva OS-level primitiv i nije deo ove faze.
+
+## 17. Preostalo ograničenje mehanizma
 
 - Uklanjanje locka nije atomski uslovljeno sadržajem (fajl-sistem ne daje
   compare-and-swap). Ostaje teoretski prozor između završne provere i `rm`;
