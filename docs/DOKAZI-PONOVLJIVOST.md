@@ -98,6 +98,47 @@ Nijedan prolaz nije tražio ručno vraćanje stanja, podešavanje polja ni overr
 - Ponovljivost u smislu „tri od tri“ **nije dokazana**; dokaz koji nedostaje je
   naveden u odeljku 5.
 
+
+
+## 8. Odgovor na poruku o nezavisnosti provere
+
+[Poruka](../docs/PORUKA-ZA-DSH-NEZAVISNA-PROVERA.md) je primljena i primenjena.
+Puni zapis rundi je u [NEZAVISNA-PROVERA-CODEX.md](NEZAVISNA-PROVERA-CODEX.md).
+
+**Šta prihvatam:**
+1. Razdvajanje izvršioca i konačne provere: dsh menja kod i piše regresione
+   testove, a nezavisnu proveru završne promene radi drugi vendor. Tako je i
+   urađeno (pet Codex rundi kroz postojeći DSH mehanizam, bez nove uloge,
+   servisa ili kapije).
+2. Nalaz kontrolnog sloja **ne vraća se istraživaču** kao da može da ga ispravi.
+   U ovoj rundi su tri takva nalaza (zastarela evidencija, dokaz koji ne putuje,
+   zakup u revizorskom toku) popravljena u odgovarajućem modulu.
+3. Autor ne zatvara nalaz oznakom „nezavisno potvrđeno“ na osnovu svog testa.
+   U zapisu je izričito odvojeno šta je Codex potvrdio od autorovog tumačenja.
+4. Spor o značenju se **ne preglasava tiho**: nalaz K6-3 (Bubblewrap
+   „zavisnost“) je zabeležen kao spor jer skript dokazuje leksičku, a ne nužno
+   semantičku razliku; K7-2 je ocenjen kao osnovan. Nijedan override nije
+   korišćen.
+
+**Koja revizija je išla na nezavisan pregled:** polazna `b345b47` →
+kandidati `892d3c0` → `9c3676b` → `ddf856d` → `7aab767` → `bd9a6f0`
+(svaka sledeća zbog dokazivog nalaza prethodne runde).
+
+**Šta je nezavisno potvrđeno:** tačnost nacrta u zamrznutoj reviziji (blob, ne
+ime), aktuelnost verifikacionih polja, očuvanje sadržaja pri sinhronizaciji,
+očuvanje kapija (challenge, zone, zakup), dokaz u svežem klonu posle ispravke,
+poredak `created`/\`updated\`, neuspeh upisa dokaznog taga u oba toka sa
+ponovnim pokušajem, i skup 149/149 u tri izvođenja.
+
+**Šta ostaje otvoreno:**
+1. **Ispravke iz rundi 2–5 nisu proverene stvarnim sadržajnim prolazom.** K7
+   prolazi su izvršeni na `6735b6c`, pre njih. Codex preporučuje jedan
+   ograničen realni prolaz (sa proverom kloniranja dokaza posle konsolidacije),
+   tek posle čega bi kriterijum „tri od tri“ ponovo imao smisla.
+2. **Spor o značenju** nalaza K6-3 ostaje zabeležen, bez izmene kapije.
+3. **Poruka blokade** u `challenge` fazi i dalje navodi broj nalaza iz tog
+   prolaza, a ne vrednost brojača koji je odlučio (N17).
+
 ## 7. Istorijski kontekst (prethodna runda, revizija `b4d7fbe`)
 
 Na reviziji pre ispravke evidencije, sva tri prolaza su bila `blocked` (11
