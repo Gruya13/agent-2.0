@@ -1039,7 +1039,9 @@ export function createPipeline(config, options = {}) {
     // status i spisak autora su izvedeni iz evidencije zadatka.
     const contributors = [...new Set([...(claimed.data.authors ?? []), 'researcher', 'verifier', 'consolidator'])];
     for (const rel of produced) {
-      await normalizeConsolidatedNote(wt, rel, { authors: contributors, now: now() });
+      // `created` dolazi iz evidencije zadatka (kada je zadatak nastao), ne iz
+      // onoga što je model upisao u nacrt.
+      await normalizeConsolidatedNote(wt, rel, { authors: contributors, now: now(), created: claimed.data.created ?? null });
     }
     // NAPOMENA: `artifacts` se NE upisuju ovde. `produced` je sve što grana menja
     // u radnom stablu, a grana može da dira i tuđu postojeću belešku. Kapija

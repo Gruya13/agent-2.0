@@ -520,6 +520,23 @@ test('E2E: red-team dobija usklađen zapis zadatka na zamrznutoj reviziji', asyn
   await gitExec(vault.root, ['cat-file', '-e', `${commit}^{commit}`]);
   await vault.cleanup();
 });
+
+test('E2E: objavljena beleška nosi `created` iz evidencije zadatka, ne iz nacrta', async () => {
+  const { vault, store, pipeline } = await setup();
+  await pipeline.ingest({ source: 'raw/dokument.md', title: 'Provera created' });
+  const task = await store.get('TASK-101');
+  const createdZadatka = task.data.created;
+
+  await pipeline.runResearch('TASK-101');
+  await pipeline.runVerify('TASK-101');
+  await pipeline.runChallenge('TASK-101');
+  const r = await pipeline.runConsolidate('TASK-101');
+  assert.equal(r.ok, true, JSON.stringify(r));
+
+  const beleska = await readNote(vault.root, 'wiki/Provera_created.md');
+  assert.equal(beleska.frontmatter.created, createdZadatka, 'created mora biti vreme nastanka zadatka');
+  await vault.cleanup();
+});
 test('E2E: red-team ne sme da menja van svoje zone', async () => {
   const { vault, store, pipeline } = await setup();
   await pipeline.ingest({ source: 'raw/dokument.md', title: 'Van zone' });

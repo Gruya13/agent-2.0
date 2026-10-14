@@ -148,13 +148,16 @@ export async function findBacklinks(vaultRoot, target, { dirs = ['wiki'] } = {})
  * upiše. Bez toga baza znanja tvrdi da je belešku napisao samo istraživač, iako
  * ju je verifikovao i konsolidovao neko drugi.
  */
-export async function normalizeConsolidatedNote(vaultRoot, rel, { authors = [], now = new Date().toISOString() } = {}) {
+export async function normalizeConsolidatedNote(vaultRoot, rel, { authors = [], now = new Date().toISOString(), created = null } = {}) {
   const note = await readNote(vaultRoot, rel);
   const merged = [...new Set([...(note.frontmatter?.authors ?? []).map(String), ...authors.map(String)])];
   const frontmatter = {
     ...(note.frontmatter ?? {}),
     title: note.frontmatter?.title ?? noteName(rel),
-    created: note.frontmatter?.created ?? now,
+    // `created` je knjigovodstvo, ne autorstvo: model ga često pogrešno upiše
+    // (npr. vreme posle `updated`, ili zaokruženo). Kada ga kontrolni sloj
+    // prosledi iz evidencije zadatka, on pobeđuje.
+    created: created ?? note.frontmatter?.created ?? now,
     updated: now,
     authors: merged,
     status: 'consolidated',
