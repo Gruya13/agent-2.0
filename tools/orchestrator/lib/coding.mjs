@@ -734,12 +734,18 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         },
       };
       // Zadatak vraća ishod u memoriju; piše kontrolni sloj, ne agent.
-      try {
-        ev.memory_write = await upisiZapisUMemoriju(id, task, ev);
-        logger(`code: ${id} zapis u memoriju: ${ev.memory_write}`);
-      } catch (error) {
-        logger(`code: ${id} zapis u memoriju nije uspeo: ${error.message}`);
+      const zapis = await pokusajZapisa(id, task, ev, token);
+      ev = zapis.ev;
+      if (!zapis.ok) {
+        return {
+          phase: 'code',
+          task: id,
+          ok: false,
+          merge: sha,
+          reason: `kod je prihvaćen (${sha.slice(0, 8)}), ali zapis u memoriju nije prošao: ${zapis.error.message}`,
+        };
       }
+      logger(`code: ${id} zapis u memoriju: ${ev.memory_write}`);
       await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: `prihvaćeno: ${sha.slice(0, 8)}` });
       await store.transition(id, 'consolidated', { actor: 'agentctl', note: `merge ${sha.slice(0, 8)}` });
       await store.emit('code.accepted', { task: id, merge: sha, branch: grana });
@@ -748,6 +754,44 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     } finally {
       void token;
     }
+  }
+
+  /**
+   * Pokušaj zapisa ishoda u wiki memoriju. Neuspeh se NE guta: upisuje se u
+   * evidenciju zadatka, emituje kao događaj i zadatak se vraća u `verified` da
+   * zapis može da se ponovi (kod je već prihvaćen u ciljnom repou).
+   */
+  async function pokusajZapisa(id, task, ev, token) {
+    try {
+      const rel = await upisiZapisUMemoriju(id, task, ev);
+      return { ok: true, ev: { ...ev, memory_write: rel, memory_write_error: null } };
+    } catch (error) {
+      const novi = {
+        ...ev,
+        memory_write: null,
+        memory_write_error: { message: error.message, at: now() },
+      };
+      await store.setFields(id, { code_evidence: novi }, { actor: OWNER, note: 'zapis u memoriju nije prošao' });
+      await store.emit('code.memory_write_failed', { task: id, error: error.message, merge: ev.accept?.merge ?? null });
+      await store.release(id, OWNER, { toStatus: 'verified', token, note: 'kod prihvaćen; čeka zapis u memoriju' }).catch(() => {});
+      logger(`code: ${id} zapis u memoriju nije prošao: ${error.message}`);
+      return { ok: false, ev: novi, error };
+    }
+  }
+
+  /** Ponovni pokušaj zapisa u memoriju kada je kod već prihvaćen. */
+  async function fazaZapisa(id, task, ev) {
+    const claim = await store.claim(id, OWNER);
+    const token = claim.leaseToken;
+    const zapis = await pokusajZapisa(id, task, ev, token);
+    if (!zapis.ok) {
+      return { phase: 'code', task: id, ok: false, reason: `zapis u memoriju nije prošao: ${zapis.error.message}` };
+    }
+    await store.setFields(id, { code_evidence: zapis.ev }, { actor: OWNER, note: 'zapis u memoriju' });
+    await store.transition(id, 'consolidated', { actor: 'agentctl', note: `zapis: ${zapis.ev.memory_write}` });
+    await store.emit('code.memory_written', { task: id, file: zapis.ev.memory_write });
+    logger(`code: ${id} -> consolidated (zapis u memoriju)`);
+    return { phase: 'code', task: id, ok: true, step: 'memory' };
   }
 
   // ------------------------------------------------------- ulaz
@@ -762,6 +806,8 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     if (!ev.implement) return await fazaIzrade(id, task, root, ev);
     if (!ev.review) return await fazaPregleda(id, task, root, ev);
     if (!ev.accept) return await fazaPrihvatanja(id, task, root, ev);
+    // Kod je prihvaćen, ali zapis u memoriju nije prošao: pokušaj ponovo.
+    if (!ev.memory_write) return await fazaZapisa(id, task, ev);
     return { phase: 'code', task: id, ok: true, step: 'done', merge: ev.accept?.merge ?? null };
   }
 

@@ -8,7 +8,10 @@ import assert from 'node:assert/strict';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
 import { createStore } from '../tools/orchestrator/lib/store.mjs';
 import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { gitExec, makeVault } from './helpers/vault.mjs';
+import { exists } from '../tools/orchestrator/lib/fsx.mjs';
 import { ISPRAVKA, pripremiCoding, skriptaProgramera } from './helpers/coding-fixture.mjs';
 
 const TUDJA = 'wiki/Tudja-beleska.md';
@@ -84,6 +87,36 @@ test('W3: reflect/index ne povlači tuđu belešku', async () => {
     assert.doesNotMatch(svi, /Tudja-beleska/, 'index/reflect ne sme da komituje tuđu belešku');
     assert.equal(await imaNekomitovan(vault), true, 'tuđi rad ostaje nekomitovan');
   } finally {
+    await vault.cleanup();
+  }
+});
+test('W4: neuspeh wiki zapisa ne daje lažan potpun uspeh i može da se ponovi', async () => {
+  const { vault, store, coding, zadatak } = await pripremiCoding();
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    await coding.runCodeTask(zadatak.data.id); // izrada
+    await coding.runCodeTask(zadatak.data.id); // pregled
+
+    // Blokiraj kontrolni git upis: zaostao index.lock.
+    const lock = path.join(vault.root, '.git', 'index.lock');
+    await fs.writeFile(lock, '', 'utf8');
+
+    const prvi = await coding.runCodeTask(zadatak.data.id);
+    const posle = await store.get(zadatak.data.id);
+    assert.equal(prvi.ok, false, 'bez zapisa u memoriju nema tvrdnje o potpunom uspehu');
+    assert.ok(posle.data.code_evidence.accept?.merge, 'kod je prihvaćen u ciljnom repou');
+    assert.ok(posle.data.code_evidence.memory_write_error, 'neuspeh zapisa mora biti zabeležen');
+    assert.notEqual(posle.data.status, 'consolidated', 'zadatak čeka zapis u memoriju');
+
+    // Oporavak: ukloni smetnju i ponovi.
+    await fs.rm(lock, { force: true });
+    const drugi = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(drugi.ok, true, JSON.stringify(drugi));
+    const kraj = await store.get(zadatak.data.id);
+    assert.equal(kraj.data.status, 'consolidated');
+    assert.equal(await exists(path.join(vault.root, 'wiki', 'Izmene', 'TASK-101.md')), true);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
     await vault.cleanup();
   }
 });
