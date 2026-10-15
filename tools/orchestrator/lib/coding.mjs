@@ -338,6 +338,10 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const testFajlovi = izmene.filter((rel) => TEST_RE.test(rel));
       if (!testFajlovi.length) return await odbij(id, ev, 'nema regresionog testa u izmenama', token);
 
+      // Pomoćni fajl kontrolnog sloja se UKLANJA pre komita: `MEMORY.md` je
+      // kontekst, ne deo zadatka. (`git add -A` ga je inače nosio u granu i u
+      // merge — dokazano stvarnim prolazom.)
+      await fs.rm(path.join(dir, 'MEMORY.md'), { force: true });
       await git(dir, ['add', '-A'], { actor: OWNER });
       const staged = (await git(dir, ['diff', '--cached', '--name-only'], { allowFailure: true })).stdout.trim();
       // Ako je agent ipak sam komitovao, ne pravimo prazan commit — HEAD je već

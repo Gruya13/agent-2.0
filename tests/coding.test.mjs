@@ -181,6 +181,13 @@ test('code: zadatak koristi wiki memoriju i vraća zapis u wiki posle prihvatanj
     assert.match(zapis.body, /wiki\/Konvencije\/Kod.md/);
     const log = await gitExec(vault.root, ['log', '--oneline', '-3']);
     assert.match(log.stdout, /zapis o izmeni TASK-101/);
+    // `MEMORY.md` je kontekst kontrolnog sloja i ne sme u ciljni repo.
+    // Za merge commit `git show --name-only` daje kombinovani (prazan) diff, pa
+    // se spisak uzima razlikom prema početnoj reviziji.
+    const uRepou = (await gitExec(cilj.root, ['diff', '--name-only', cilj.base, 'HEAD']))
+      .stdout.split('\n').filter(Boolean);
+    assert.equal(uRepou.includes('MEMORY.md'), false, 'MEMORY.md ne sme u ciljni repo');
+    assert.deepEqual(uRepou.sort(), ['src/parse.js', 'tests/parse.zero.test.js']);
   } finally {
     delete process.env.AGENT_2_0_MOCK_CODE_CMD;
     await vault.cleanup();
