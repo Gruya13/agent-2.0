@@ -335,6 +335,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     const claim = await store.claim(id, OWNER);
     const token = claim.leaseToken;
     let dir = null;
+    // Neuspeo pokušaj ne sme da ostavi granu iza sebe (nalaz W6): nastavak
+    // treba da počne od čistog stanja, bez ostataka prethodnog rada.
+    let uspesno = false;
+    // `implement` se upisuje u evidenciju TEK kada izrada uspe. Bez toga bi
+    // neuspeo pokušaj ostavio "implement" i nastavak bi pogrešno otišao na
+    // pregled grane koja ne postoji (nalaz W6).
+    let impl = null;
     try {
       await git(root, ['worktree', 'prune'], { actor: OWNER, allowFailure: true });
       await git(root, ['branch', '-D', granaZa(id)], { actor: OWNER, allowFailure: true });
@@ -385,13 +392,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         return await odbij(id, ev, `zakup je izgubljen tokom poziva programera: ${poziv.izgubljen.message}`, token);
       }
       const rezultat = poziv.rezultat;
-      ev = { ...ev, implement: { harness: rezultat.harness, exitCode: rezultat.exitCode, at: now() } };
+      impl = { harness: rezultat.harness, exitCode: rezultat.exitCode, at: now() };
       if (!rezultat.ok) return await odbij(id, ev, `programer nije uspeo (exit ${rezultat.exitCode})`, token);
 
       // kapija opsega PRE ičega drugog
       const izmene = await izmeneU(dir, task.data.code_base);
       const vanOpsega = izmene.filter((rel) => !matchesScope(rel, task.data.code_scope ?? []));
-      ev = { ...ev, implement: { ...ev.implement, files: izmene, outside: vanOpsega } };
+      impl = { ...impl, files: izmene, outside: vanOpsega };
       if (vanOpsega.length) return await odbij(id, ev, `izmena van dozvoljenog opsega: ${vanOpsega.join(', ')}`, token);
       if (!izmene.length) return await odbij(id, ev, 'programer nije napravio nijednu izmenu', token);
       const testFajlovi = izmene.filter((rel) => TEST_RE.test(rel));
@@ -405,7 +412,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         if (naOsnovi.code === 0) izmenjeniPostojeci.push(rel);
       }
       if (izmenjeniPostojeci.length) {
-        ev = { ...ev, implement: { ...ev.implement, changed_existing_tests: izmenjeniPostojeci } };
+        impl = { ...impl, changed_existing_tests: izmenjeniPostojeci };
         return await odbij(id, ev, `postojeći testovi su menjani: ${izmenjeniPostojeci.join(', ')}`, token);
       }
       // Nova preskakanja u novim testovima nisu dokaz. Čita se RADNO stablo:
@@ -430,7 +437,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         await git(dir, ['-c', `user.name=${autor}`, '-c', `user.email=${autor}@agent-2.0.local`, 'commit', '-q', '-m', `programer(${id}): popravka`], { actor: OWNER });
       }
       const commit = (await git(dir, ['rev-parse', 'HEAD'])).stdout;
-      ev = { ...ev, implement: { ...ev.implement, commit, author: autor } };
+      impl = { ...impl, commit, author: autor };
       logger(`code: ${id} izmena ${commit.slice(0, 8)} (${izmene.length} fajlova)`);
 
       // 3. testiranje posle popravke: i propisana suite i reprodukciona komanda.
@@ -478,14 +485,17 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         return await odbij(id, ev, `pad na osnovi nije tvrdnja o ponašanju (vrsta: ${klasa})`, token);
       }
 
+      ev = { ...ev, implement: impl };
       await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: 'popravka + testovi + dokaz pada na osnovi' });
       await store.setArtifacts(id, izmene, { actor: OWNER, note: `izmene: ${izmene.join(', ')}` });
       await store.release(id, OWNER, { toStatus: 'verified', token, note: `popravka ${commit.slice(0, 8)}` });
       await store.emit('code.implemented', { task: id, commit, files: izmene });
       logger(`code: ${id} -> verified (test prolazi posle popravke, pada pre)`);
+      uspesno = true;
       return { phase: 'code', task: id, ok: true, step: 'implement', commit };
     } finally {
       if (dir) await ukloniStablo(root, dir);
+      if (!uspesno) await git(root, ['branch', '-D', granaZa(id)], { actor: OWNER, allowFailure: true });
     }
   }
 

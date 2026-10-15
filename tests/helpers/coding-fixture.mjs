@@ -84,7 +84,8 @@ export const reproKomanda = () => `node -e ${JSON.stringify(REPRO_SKRIPT)}`;
  * `lease` dozvoljava kratak TTL za proveru životnog ciklusa zakupa.
  */
 export async function pripremiCoding({
-  saBugom = true, lease = null, scope = ['src/**', 'tests/**'], testCommand = 'npm test', extra = {},
+  saBugom = true, lease = null, scope = ['src/**', 'tests/**'], testCommand = 'npm test',
+  extra = {}, memory = [],
 } = {}) {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);
@@ -100,6 +101,7 @@ export async function pripremiCoding({
     scope,
     testCommand,
     reproCommand: reproKomanda(),
+    memory,
   });
   return { vault, config, store, coding, cilj, zadatak };
 }
