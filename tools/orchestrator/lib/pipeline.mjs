@@ -985,8 +985,11 @@ export function createPipeline(config, options = {}) {
       await failPhase(id, role, { reason: error.message, toStatus: 'verified' });
       return { phase: 'consolidate', task: id, ok: false, reason: 'dokaz nije sačuvan', kind: 'audit' };
     }
+    const knjigovodstvo = await bookkeepingTargets();
+    if (knjigovodstvo.tudji.length) logger(`ne komitujem tude izmene: ${knjigovodstvo.tudji.join(', ')}`);
     const merge = await mergeIntoMain(config, {
       branch,
+      bookkeepingPaths: knjigovodstvo.dozvoljeni,
       message: `agentctl(${id}): revizija baze (librarian+verifier)`,
       zonePolicy: zonePolicyFor(task),
       worktreeDir: worktreePath(config, id, verifyRole),
@@ -1116,8 +1119,11 @@ export function createPipeline(config, options = {}) {
       await failPhase(id, role, { reason: error.message, toStatus: 'verified' });
       return { phase: 'consolidate', task: id, ok: false, reason: 'dokaz nije sačuvan' };
     }
+    const knjigovodstvo = await bookkeepingTargets();
+    if (knjigovodstvo.tudji.length) logger(`ne komitujem tude izmene: ${knjigovodstvo.tudji.join(', ')}`);
     const merge = await mergeIntoMain(config, {
       branch,
+      bookkeepingPaths: knjigovodstvo.dozvoljeni,
       message: `agentctl(${id}): konsolidacija (researcher+verifier+consolidator)`,
       zonePolicy: zonePolicyFor(task),
       worktreeDir: worktreePath(config, id, role),
@@ -1326,7 +1332,7 @@ export function createPipeline(config, options = {}) {
   return {
     config, store, clock, logger,
     ingest, audit, runAudit, runExtract, runResearch, runVerify, runChallenge, runConsolidate, reflect, runOnce, run, status,
-    evaluateReadiness, failPhase,
+    evaluateReadiness, failPhase, commitBookkeeping,
   };
 }
 

@@ -148,6 +148,10 @@ export async function commitWorktree(config, id, message, { actor, role = null }
  */
 export async function mergeIntoMain(config, {
   branch, message, actor = 'agentctl', worktreeDir = null, generatedPaths = [], zonePolicy = null,
+  // Tačne putanje knjigovodstva koje smeju da uđu u komit pre merge-a. Pozivalac
+  // ih zadaje (kontrolni sloj zna šta je njegovo); bez njih se NE komituje
+  // ništa automatski — „komituj cela stabla" je potvrđeno povlačilo tuđi rad.
+  bookkeepingPaths = [],
 } = {}) {
   const worktrees = await listWorktrees(config);
   const primary = worktrees.find((w) => path.resolve(w.path) === path.resolve(config.root));
@@ -195,8 +199,8 @@ export async function mergeIntoMain(config, {
 
   // 1. Knjigovodstvo crne table u main mora biti komitovano pre spajanja.
   const dirty = await statusPorcelain(config.root);
-  if (dirty.length) {
-    await commitPaths(config.root, ['tasks', 'wiki', '.agents/raw-manifest.json', 'raw'], `agentctl: knjigovodstvo pre merge-a ${branch}`, { actor: 'agentctl' });
+  if (dirty.length && bookkeepingPaths.length) {
+    await commitPaths(config.root, bookkeepingPaths, `agentctl: knjigovodstvo pre merge-a ${branch}`, { actor: 'agentctl' });
     const stillDirty = await statusPorcelain(config.root);
     if (stillDirty.length) {
       const changed = await branchChangedPaths(config, branch);

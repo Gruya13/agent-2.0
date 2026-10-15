@@ -115,14 +115,9 @@ Globalne opcije:
   --config <fajl>           alternativna konfiguracija
 `;
 
-async function commitBookkeepingSafe(config, message) {
-  const { commitPaths } = await import('./lib/git.mjs');
-  try {
-    return await commitPaths(config.root, ['tasks', 'wiki', '.agents/raw-manifest.json'], message, { actor: 'agentctl' });
-  } catch {
-    return { committed: false };
-  }
-}
+// Knjigovodstvo ide kroz pipeline: ono koristi allow-listu tačnih putanja i
+// prijavljuje tuđe izmene umesto da ih komituje ("komituj cela stabla" je
+// potvrđeno povlačilo tuđi rad u wiki-ju i tasks/).
 
 async function buildContext(flags) {
   const vaultRoot = flags.vault ? path.resolve(flags.vault) : PACKAGE_ROOT;
@@ -311,7 +306,7 @@ const COMMANDS = {
   },
 
   /** Vrati blokiran zadatak u opticaj posle ljudske intervencije. */
-  async ready({ store, config, flags }, positional) {
+  async ready({ pipeline, store, config, flags }, positional) {
     const id = positional[0];
     if (!id) throw new Error('ready zahteva TASK-ID');
     const task = await store.get(id);
@@ -320,7 +315,7 @@ const COMMANDS = {
     }
     const note = typeof flags.reason === 'string' ? flags.reason : 'čovek je vratio zadatak u opticaj';
     const updated = await store.transition(id, 'ready', { actor: 'operator', note });
-    await commitBookkeepingSafe(config, `agentctl: ${id} vraćen u opticaj (${note})`);
+    await pipeline.commitBookkeeping(`agentctl: ${id} vraćen u opticaj (${note})`);
     out(`zadatak ${id}: blocked -> ready (${note})`);
     return updated ? 0 : 0;
   },

@@ -323,7 +323,9 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       },
       body: telo,
     });
-    await commitPaths(config.root, ['wiki'], `agentctl: zapis o izmeni ${id} u memoriju`, { actor: 'agentctl' });
+    // Komituje se TAČNO ova beleška. `['wiki']` bi kroz `git add -A` povukao i
+    // tuđe nekomitovane izmene u wiki-ju (potvrđeno testom W1).
+    await commitPaths(config.root, [rel], `agentctl: zapis o izmeni ${id} u memoriju`, { actor: 'agentctl' });
     return rel;
   }
 
