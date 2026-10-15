@@ -577,6 +577,9 @@ async function reviewer(config, { task, cwd, now }) {
     "assert.ok(true);",
     '',
   ].join('\n'));
+  // Testni režim: nalaz postoji i proces je uspešan, ali BEZ verdikta. Služi da
+  // se dokaže da prihvatanje mora tražiti izričit `pass`, ne samo izveštaj.
+  const bezVerdikta = process.env.AGENT_2_0_MOCK_REVIEW_NO_VERDICT === '1';
   await writeFileAtomic(path.join(cwd, rel), [
     `# Nezavisan pregled ${task.data.id}`,
     '',
@@ -584,10 +587,15 @@ async function reviewer(config, { task, cwd, now }) {
     '- metod: mock (deterministički nalaz za test toka)',
     '- kontrolni slučaj: mock ne pravi sopstveni scenario',
     '',
-    'VERDICT: pass',
+    bezVerdikta ? '(nalaz bez verdikta)' : 'VERDICT: pass',
     '',
   ].join('\n'));
-  return { ok: true, output: `MOCK reviewer: nalaz upisan u ${rel}`, artifacts: [rel], verdict: 'pass' };
+  return {
+    ok: true,
+    output: `MOCK reviewer: nalaz upisan u ${rel}${bezVerdikta ? ' (bez verdikta)' : ''}`,
+    artifacts: [rel],
+    verdict: bezVerdikta ? null : 'pass',
+  };
 }
 
 export async function runMock(config, { role, task, cwd, now = new Date().toISOString() }) {

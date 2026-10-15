@@ -24,6 +24,7 @@ import { exists, walkFiles, writeFileAtomic } from './fsx.mjs';
 import { commitPaths, git } from './git.mjs';
 import { buildPrompt, identityFor, runAgent } from './agents/index.mjs';
 import { matchesScope } from './scope.mjs';
+import { holdsLease } from './lease.mjs';
 import { readNote, writeNote } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
 
@@ -48,8 +49,11 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
   /** Ciljni repo mora biti git repozitorijum, strogo odvojen od kontrolnog. */
   async function proveriCilj(task) {
     if (!task.data.code_target) throw new CodingError('zadatak nema "code_target"', 'NO_TARGET');
-    const root = path.resolve(String(task.data.code_target));
-    const kontrolni = path.resolve(config.root);
+    const realno = async (p) => { try { return await fs.realpath(p); } catch { return path.resolve(p); } };
+    // Simbolički link može da pokaže na kontrolni repo, pa se poredi REALNA
+    // putanja, ne samo tekst.
+    const root = await realno(String(task.data.code_target));
+    const kontrolni = await realno(config.root);
     if (root === kontrolni || root.startsWith(kontrolni + path.sep)) {
       throw new CodingError(`code_target (${root}) je kontrolni repo ili unutar njega`, 'TARGET_IS_CONTROL');
     }
@@ -83,7 +87,34 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         stdout: String(error.stdout ?? ''),
         stderr: String(error.stderr ?? error.message),
         durationMs: Date.now() - started,
+        timedOut: error.killed === true || error.signal === 'SIGTERM',
       };
+    }
+  }
+
+/**
+   * Izvrši posao DRŽEĆI zakup živim.
+   *
+   * Coding tok poziva harnes i test komande direktno, pa bez ovoga dug poziv
+   * ostavlja zakup da istekne (dokazano kontrolnim testom R2). Obnavljanje ide
+   * kroz isti `store.renew` koji koristi dokumentni tok; ovde nema nove
+   * infrastrukture. Ako obnova ne uspe, zakup je stvarno izgubljen i posao se ne
+   * sme nastaviti kao uspešan.
+   */
+  async function saZakupom(id, token, fn) {
+    let greska = null;
+    const period = Math.max(50, Number(config.lease?.heartbeatMs ?? 2000));
+    const timer = setInterval(() => {
+      store.renew(id, OWNER, { token }).catch((error) => { greska = greska ?? error; });
+    }, period);
+    timer.unref?.();
+    try {
+      const rezultat = await fn();
+      return { rezultat, izgubljen: greska };
+    } catch (error) {
+      return { rezultat: null, izgubljen: greska, error };
+    } finally {
+      clearInterval(timer);
     }
   }
 
@@ -123,8 +154,21 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       : [];
     return [...new Set([...izStatusa, ...izDiffa])]
       .filter((rel) => rel && !rel.startsWith('.agent-review/'))
-      // `MEMORY.md` i `.runtime/` pripadaju kontrolnom sloju, ne zadatku.
-      .filter((rel) => rel !== 'MEMORY.md');
+      // Pomoćni kontekst kontrolnog sloja nije deo zadatka.
+      .filter((rel) => !rel.startsWith('.agent-context/'));
+  }
+
+  /**
+   * Vrsta pada na osnovi. Dokaz buga je samo `assertion`: greška importa,
+   * sintakse ili timeout znače da test nije ni proverio ponašanje.
+   */
+  function klasifikujPad(test) {
+    // (izvezeno za testiranje klasifikacije)
+    const tekst = `${test.stdout ?? ''}\n${test.stderr ?? ''}`;
+    if (test.timedOut) return 'timeout';
+    if (/SyntaxError|Cannot find module|ERR_MODULE_NOT_FOUND|ERR_REQUIRE_ESM|MODULE_NOT_FOUND/.test(tekst)) return 'error';
+    if (/AssertionError|ERR_ASSERTION|✖/.test(tekst)) return 'assertion';
+    return 'unknown';
   }
 
   /** Dokaz 1: regresioni test iz popravke mora pasti na početnoj reviziji. */
@@ -216,8 +260,11 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       }
     }
     const telo = delovi.join('\n');
-    await fs.writeFile(path.join(dir, 'MEMORY.md'), telo, 'utf8');
-    return { notes: [...notes], file: 'MEMORY.md', bytes: Buffer.byteLength(telo) };
+    // Nikad u projektni `MEMORY.md`: to može biti legitiman fajl ciljnog projekta.
+    const rel = path.join('.agent-context', 'MEMORY.md');
+    await fs.mkdir(path.join(dir, '.agent-context'), { recursive: true });
+    await fs.writeFile(path.join(dir, rel), telo, 'utf8');
+    return { notes: [...notes], file: rel.split(path.sep).join('/'), bytes: Buffer.byteLength(telo) };
   }
 
   /**
@@ -323,9 +370,15 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
           ].join('\n'),
         },
       });
-      const spec = config.agents?.[ROLE_IMPLEMENT] ?? {};
       const autor = identityFor(config, ROLE_IMPLEMENT);
-      const rezultat = await runAgent(config, { role: ROLE_IMPLEMENT, task, cwd: dir, prompt, now: now(), logger });
+      // Zakup se obnavlja dok traje poziv: bez toga dug poziv ostavlja zadatak
+      // bez važećeg zakupa (kontrolni test R2).
+      const poziv = await saZakupom(id, token, () => runAgent(config, { role: ROLE_IMPLEMENT, task, cwd: dir, prompt, now: now(), logger }));
+      if (poziv.error) throw poziv.error;
+      if (poziv.izgubljen) {
+        return await odbij(id, ev, `zakup je izgubljen tokom poziva programera: ${poziv.izgubljen.message}`, token);
+      }
+      const rezultat = poziv.rezultat;
       ev = { ...ev, implement: { harness: rezultat.harness, exitCode: rezultat.exitCode, at: now() } };
       if (!rezultat.ok) return await odbij(id, ev, `programer nije uspeo (exit ${rezultat.exitCode})`, token);
 
@@ -338,10 +391,30 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const testFajlovi = izmene.filter((rel) => TEST_RE.test(rel));
       if (!testFajlovi.length) return await odbij(id, ev, 'nema regresionog testa u izmenama', token);
 
+      // Postojeći testovi se NE smeju menjati: dozvoljeni su samo NOVI test
+      // fajlovi. Bez ovoga bi "popravka" mogla da oslabi tuđi test.
+      const izmenjeniPostojeci = [];
+      for (const rel of testFajlovi) {
+        const naOsnovi = await git(dir, ['cat-file', '-e', `${task.data.code_base}:${rel}`], { allowFailure: true });
+        if (naOsnovi.code === 0) izmenjeniPostojeci.push(rel);
+      }
+      if (izmenjeniPostojeci.length) {
+        ev = { ...ev, implement: { ...ev.implement, changed_existing_tests: izmenjeniPostojeci } };
+        return await odbij(id, ev, `postojeći testovi su menjani: ${izmenjeniPostojeci.join(', ')}`, token);
+      }
+      // Nova preskakanja u novim testovima nisu dokaz. Čita se RADNO stablo:
+      // fajl je u ovom trenutku još nekomitovan.
+      for (const rel of testFajlovi) {
+        const sadrzaj = await fs.readFile(path.join(dir, rel), 'utf8').catch(() => '');
+        if (/\.(skip|todo)\s*\(|test\.skip|\bskip:\s*true/.test(sadrzaj)) {
+          return await odbij(id, ev, `regresioni test sadrži preskakanje: ${rel}`, token);
+        }
+      }
+
       // Pomoćni fajl kontrolnog sloja se UKLANJA pre komita: `MEMORY.md` je
       // kontekst, ne deo zadatka. (`git add -A` ga je inače nosio u granu i u
       // merge — dokazano stvarnim prolazom.)
-      await fs.rm(path.join(dir, 'MEMORY.md'), { force: true });
+      await fs.rm(path.join(dir, '.agent-context'), { recursive: true, force: true });
       await git(dir, ['add', '-A'], { actor: OWNER });
       const staged = (await git(dir, ['diff', '--cached', '--name-only'], { allowFailure: true })).stdout.trim();
       // Ako je agent ipak sam komitovao, ne pravimo prazan commit — HEAD je već
@@ -353,9 +426,18 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       ev = { ...ev, implement: { ...ev.implement, commit, author: autor } };
       logger(`code: ${id} izmena ${commit.slice(0, 8)} (${izmene.length} fajlova)`);
 
-      // 3. testiranje posle popravke: i propisana suite i reprodukciona komanda
-      const posle = await pokreniTest(dir, task.data.code_test);
-      const reproPosle = task.data.code_repro ? await pokreniTest(dir, task.data.code_repro) : posle;
+      // 3. testiranje posle popravke: i propisana suite i reprodukciona komanda.
+      // Test komande umeju da traju dugo, pa i one idu pod obnovljenim zakupom.
+      const testiranje = await saZakupom(id, token, async () => {
+        const posle = await pokreniTest(dir, task.data.code_test);
+        const reproPosle = task.data.code_repro ? await pokreniTest(dir, task.data.code_repro) : posle;
+        return { posle, reproPosle };
+      });
+      if (testiranje.error) throw testiranje.error;
+      if (testiranje.izgubljen) {
+        return await odbij(id, ev, `zakup je izgubljen tokom testiranja: ${testiranje.izgubljen.message}`, token);
+      }
+      const { posle, reproPosle } = testiranje.rezultat;
       ev = {
         ...ev,
         check: {
@@ -374,6 +456,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const osnova = await dokaziPadNaOsnovi(root, task, testFajlovi, dir);
       ev = { ...ev, baseline: osnova };
       if (osnova.exitCode === 0) return await odbij(id, ev, 'regresioni test ne pada na početnoj reviziji (ne reprodukuje bug)', token);
+      // Pad na osnovi mora biti zbog OČEKIVANOG pogrešnog ponašanja: greška
+      // importa, sintaksa ili timeout nisu dokaz reprodukovanog buga.
+      const klasa = klasifikujPad(osnova);
+      ev = { ...ev, baseline: { ...osnova, failure_kind: klasa } };
+      if (klasa !== 'assertion') {
+        return await odbij(id, ev, `pad na osnovi nije tvrdnja o ponašanju (vrsta: ${klasa})`, token);
+      }
 
       await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: 'popravka + testovi + dokaz pada na osnovi' });
       await store.setArtifacts(id, izmene, { actor: OWNER, note: `izmene: ${izmene.join(', ')}` });
@@ -394,6 +483,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     let dir = null;
     try {
       const grana = granaZa(id);
+      // Nezavisnost nije stvar naziva uloge: reviewer mora biti DRUGI vendor od
+      // autora popravke, inače "nezavisan pregled" to nije.
+      const autorPopravke = ev.implement?.author ?? identityFor(config, ROLE_IMPLEMENT);
+      const vendorPregleda = identityFor(config, ROLE_REVIEW);
+      if (vendorPregleda === autorPopravke) {
+        return await odbij(id, ev, `reviewer i autor popravke su isti vendor (${vendorPregleda})`, token);
+      }
       dir = await napraviStablo(root, id, { rev: grana });
       const diff = await git(dir, ['diff', `${task.data.code_base}..HEAD`], { allowFailure: true });
       const izmene = (await git(dir, ['diff', '--name-only', `${task.data.code_base}..HEAD`])).stdout.split('\n').filter(Boolean);
@@ -424,7 +520,12 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
           ].join('\n'),
         },
       });
-      const rezultat = await runAgent(config, { role: ROLE_REVIEW, task, cwd: dir, prompt, now: now(), logger });
+      const poziv = await saZakupom(id, token, () => runAgent(config, { role: ROLE_REVIEW, task, cwd: dir, prompt, now: now(), logger }));
+      if (poziv.error) throw poziv.error;
+      if (poziv.izgubljen) {
+        return await odbij(id, ev, `zakup je izgubljen tokom pregleda: ${poziv.izgubljen.message}`, token);
+      }
+      const rezultat = poziv.rezultat;
       // Reviewer-ov SOPSTVENI scenario je dokaz: čuva se uz evidenciju PRE nego
       // što se radno stablo obriše, inače ostaje samo opis u nalazu.
       const scenarioDir = path.join(config.paths.reviews, `${id}-review`);
@@ -443,10 +544,27 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const imaNalaz = await exists(put);
       const telo = imaNalaz ? await fs.readFile(put, 'utf8') : `_Nema nalaza; harnes izlaz:\n\n${String(rezultat.output).slice(0, 4000)}_`;
       const rel = await zapisiNalaz(id, 'review', `Nezavisan pregled ${id}`, telo);
-      ev = { ...ev, review: { harness: rezultat.harness, verdict: rezultat.verdict ?? null, exitCode: rezultat.exitCode, file: rel, at: now() } };
+      // Tačno koja revizija je pregledana i na kojoj osnovi — bez toga prihvatanje
+      // ne može da dokaže da spaja baš pregledani kod.
+      const pregledanSha = (await git(dir, ['rev-parse', 'HEAD'])).stdout.trim();
+      const osnovaMain = (await git(root, ['rev-parse', 'main'], { allowFailure: true })).stdout.trim()
+        || (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
+      ev = {
+        ...ev,
+        review: {
+          harness: rezultat.harness,
+          verdict: rezultat.verdict ?? null,
+          exitCode: rezultat.exitCode,
+          file: rel,
+          sha: pregledanSha,
+          base: osnovaMain,
+          at: now(),
+        },
+      };
       await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: `nezavisan pregled (${rezultat.harness})` });
-      if (!imaNalaz || !rezultat.ok || rezultat.verdict === 'fail') {
-        return await odbij(id, ev, `nezavisan pregled nije prošao (verdikt: ${rezultat.verdict ?? 'nema'})`, token);
+      // Prihvata se SAMO izričit `pass`: izveštaj i exit 0 nisu dovoljni.
+      if (!imaNalaz || !rezultat.ok || rezultat.verdict !== 'pass') {
+        return await odbij(id, ev, `nezavisan pregled nije dao izričit pass (verdikt: ${rezultat.verdict ?? 'nema'})`, token);
       }
       await store.release(id, OWNER, { toStatus: 'verified', token, note: `nezavisan pregled: ${rezultat.verdict}` });
       await store.emit('code.reviewed', { task: id, harness: rezultat.harness, verdict: rezultat.verdict, file: rel });
@@ -459,10 +577,57 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
 
   // ------------------------------------------------------- 5: prihvatanje
 
+  /**
+   * Integraciona provera u IZOLOVANOM stablu: spojiti kandidata sa trenutnom
+   * glavnom granom i pokrenuti propisanu proveru — PRE nego što se glavna grana
+   * uopšte promeni. `merge exit 0` sam po sebi nije dokaz ispravnog rezultata.
+   */
+  async function integracionaProba(root, { grana, testCommand }) {
+    let dir = null;
+    try {
+      dir = await napraviStablo(root, `${path.basename(root)}-integracija`, { rev: 'main' });
+      const merge = await git(dir, ['merge', '--no-ff', '-m', 'integracija (proba)', grana], { actor: OWNER, allowFailure: true });
+      if (merge.code !== 0) {
+        await git(dir, ['merge', '--abort'], { actor: OWNER, allowFailure: true });
+        return { ok: false, reason: `spajanje nije prošlo: ${merge.stderr.split('\n')[0]}`, at: now() };
+      }
+      const test = await pokreniTest(dir, testCommand);
+      return {
+        ok: test.exitCode === 0,
+        reason: test.exitCode === 0 ? null : `zajednički rezultat ne prolazi proveru (exit ${test.exitCode})`,
+        exitCode: test.exitCode,
+        command: testCommand,
+        stdout: String(test.stdout).slice(0, 800),
+        at: now(),
+      };
+    } finally {
+      if (dir) await ukloniStablo(root, dir);
+    }
+  }
+
   async function fazaPrihvatanja(id, task, root, ev) {
     const claim = await store.claim(id, OWNER);
     const token = claim.leaseToken;
     try {
+      // 1) Potpuna evidencija: prisustvo polja nije dokaz. Prihvatanje ne sme da
+      // se osloni na to da je prethodna faza "prošla".
+      const problemi = [];
+      if (!(ev.reproduce?.exitCode > 0)) problemi.push('bug nije reprodukovan');
+      if (ev.check?.exitCode !== 0) problemi.push('provera posle popravke nije prošla');
+      if (!(ev.baseline?.exitCode > 0)) problemi.push('regresioni test nije pao na osnovi');
+      if (ev.baseline?.failure_kind && ev.baseline.failure_kind !== 'assertion') {
+        problemi.push(`pad na osnovi nije tvrdnja o ponašanju (${ev.baseline.failure_kind})`);
+      }
+      if (ev.review?.verdict !== 'pass') problemi.push('nema izričitog nezavisnog pass-a');
+      if (!ev.review?.sha) problemi.push('nije zabeležena pregledana revizija');
+      if (problemi.length) return await odbij(id, ev, `nepotpuna evidencija: ${problemi.join('; ')}`, token);
+
+      // 2) Zakup je i dalje naš, pod istim tokenom.
+      const svez = await store.get(id);
+      if (!holdsLease(svez.data, OWNER, token)) {
+        return await odbij(id, ev, 'zakup nad zadatkom više nije naš (tuđi ili istekao)', token);
+      }
+
       const grana = granaZa(id);
       const trenutna = (await git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
       if (trenutna !== 'main' && trenutna !== 'master') {
@@ -471,14 +636,41 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const prljavo = (await git(root, ['status', '--porcelain'])).stdout.trim();
       if (prljavo) return await odbij(id, ev, 'ciljni repo je prljav pre prihvatanja', token);
 
+      // 3) Spaja se TAČNO pregledana revizija.
+      const granaSha = (await git(root, ['rev-parse', grana])).stdout.trim();
+      if (granaSha !== ev.review.sha) {
+        return await odbij(id, ev, `grana je promenjena posle pregleda (${granaSha.slice(0, 8)} != ${String(ev.review.sha).slice(0, 8)})`, token);
+      }
+      const mainSha = (await git(root, ['rev-parse', 'main'])).stdout.trim();
+      const osnovaPromenjena = Boolean(ev.review.base) && mainSha !== ev.review.base;
+
+      // 4) Integraciona provera pre diranja glavne grane.
+      const proba = await saZakupom(id, token, () => integracionaProba(root, { grana, testCommand: task.data.code_test }));
+      if (proba.izgubljen) {
+        return await odbij(id, ev, `zakup je izgubljen tokom integracione provere: ${proba.izgubljen.message}`, token);
+      }
+      ev = { ...ev, integration: { ...proba.rezultat, base_stale: osnovaPromenjena, base_was: ev.review.base, base_now: mainSha } };
+      if (!proba.rezultat.ok) {
+        // Ako se osnovica promenila, stari pregled ne važi za novi rezultat.
+        if (osnovaPromenjena) ev = { ...ev, review: null };
+        return await odbij(id, ev, `integraciona provera nije prošla: ${proba.rezultat.reason}`, token);
+      }
+
+      // 5) Dokazni tag PRE merge-a: neuspeh upisa se ne ignorise.
+      const tag = await git(root, ['tag', '-f', `dokaz/${id}-accept`, granaSha], { actor: OWNER, allowFailure: true });
+      if (tag.code !== 0) {
+        return await odbij(id, ev, `dokazni tag nije nastao: ${tag.stderr.split('\n')[0]}`, token);
+      }
+
       const merge = await git(root, ['merge', '--no-ff', '-m', `agentctl(${id}): prihvacena popravka`, grana], { actor: OWNER, allowFailure: true });
       if (merge.code !== 0) {
         await git(root, ['merge', '--abort'], { actor: OWNER, allowFailure: true });
         return await odbij(id, ev, `merge nije prošao: ${merge.stderr.split('\n')[0]}`, token);
       }
       const sha = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
+      // Isti sadržaj kao integraciono testirani kandidat.
       await git(root, ['tag', '-f', `dokaz/${id}-accept`, sha], { actor: OWNER, allowFailure: true });
-      ev = { ...ev, accept: { merge: sha, branch: grana, at: now() } };
+      ev = { ...ev, accept: { merge: sha, branch: grana, reviewed: granaSha, tag: `dokaz/${id}-accept`, at: now() } };
       // Zadatak vraća ishod u memoriju; piše kontrolni sloj, ne agent.
       try {
         ev.memory_write = await upisiZapisUMemoriju(id, task, ev);
@@ -546,5 +738,5 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     return store.get(id);
   }
 
-  return { runCodeTask, dodajCodeZadatak, proveriCilj };
+  return { runCodeTask, dodajCodeZadatak, proveriCilj, klasifikujPad };
 }
