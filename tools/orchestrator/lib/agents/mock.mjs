@@ -538,9 +538,52 @@ async function redTeam(config, { task, cwd, now }) {
   };
 }
 
+/**
+ * Implementacioni agent (coding tok).
+ *
+ * Mock ne ume da napiše popravku, pa izvršava komandu iz okruženja: tako test
+ * deterministički simulira i uspešnu popravku, i izmenu van opsega, i nikakvu
+ * izmenu. `ok` zavisi od izlaznog koda, isto kao kod pravog harnesa.
+ */
+async function programer(config, { cwd }) {
+  const cmd = process.env.AGENT_2_0_MOCK_CODE_CMD;
+  if (!cmd) return { ok: true, output: 'MOCK programer: nema AGENT_2_0_MOCK_CODE_CMD (bez izmene)', artifacts: [] };
+  const { exec } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  try {
+    const { stdout, stderr } = await promisify(exec)(cmd, { cwd, maxBuffer: 8 * 1024 * 1024 });
+    return { ok: true, output: `MOCK programer: ${cmd}\n${stdout}\n${stderr}`.trim(), artifacts: [] };
+  } catch (error) {
+    return {
+      ok: false,
+      output: `MOCK programer pao: ${error.message}\n${error.stdout ?? ''}\n${error.stderr ?? ''}`,
+      artifacts: [],
+    };
+  }
+}
+
+/**
+ * Nezavisni pregled (coding tok): nalaz se piše u sopstveni checkout
+ * (`.agent-review/<id>.md`), pa ga kontrolni sloj preuzima u evidenciju.
+ */
+async function reviewer(config, { task, cwd, now }) {
+  const rel = `.agent-review/${task.data.id}.md`;
+  await writeFileAtomic(path.join(cwd, rel), [
+    `# Nezavisan pregled ${task.data.id}`,
+    '',
+    `- vreme: ${now}`,
+    '- metod: mock (deterministički nalaz za test toka)',
+    '- kontrolni slučaj: mock ne pravi sopstveni scenario',
+    '',
+    'VERDICT: pass',
+    '',
+  ].join('\n'));
+  return { ok: true, output: `MOCK reviewer: nalaz upisan u ${rel}`, artifacts: [rel], verdict: 'pass' };
+}
+
 export async function runMock(config, { role, task, cwd, now = new Date().toISOString() }) {
   const started = Date.now();
-  const handlers = { extractor, researcher, verifier, 'red-team': redTeam, librarian, consolidator };
+  const handlers = { extractor, researcher, verifier, 'red-team': redTeam, librarian, consolidator, programer, reviewer };
   const handler = handlers[role];
   if (!handler) throw new Error(`mock adapter ne poznaje ulogu "${role}"`);
 

@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { PACKAGE_ROOT, ROLES, loadConfig } from './lib/config.mjs';
 import { createStore } from './lib/store.mjs';
 import { createPipeline } from './lib/pipeline.mjs';
+import { createCodingPipeline } from './lib/coding.mjs';
 import { createWorktree as _createWorktree, ensureMainBranch, listWorktrees, removeWorktreesForTask, MAIN_BRANCH } from './lib/worktree.mjs';
 import { formatFindings, lintVault, updateRawManifest, RAW_MANIFEST } from './lib/lint.mjs';
 import { renderIndex } from './lib/vault.mjs';
@@ -70,6 +71,8 @@ Komande:
   init                      uspostavi topologiju vault-a i glavnu granu
   ingest <raw/fajl>         otvori zadatak iz izvornog dokumenta
   audit [--scope A,B]       otvori revizorski zadatak nad opsegom baze
+  code --target <repo> --base <rev> --scope A,B --test "<komanda>" --requirement "<zahtev>"
+                            otvori coding zadatak nad CILJNIM repozitorijumom
   list [--status <s>]       prikaži zadatke
   show <TASK-ID>            prikaži zadatak
   claim <TASK-ID> --owner   preuzmi zadatak pod vremenski zakup
@@ -101,7 +104,12 @@ Globalne opcije:
   --ttl <ms>                trajanje zakupa
   --rounds <n>              broj krugova kontrolne petlje
   --only <faza>             ograniči run na jednu fazu
-  --scope a,b               opseg revizije (npr. "wiki/*.md")
+  --scope a,b               opseg revizije (npr. "wiki/*.md") ili opseg koda (npr. "src/**,tests/**")
+  --target <putanja>        ciljni git repozitorijum za coding zadatak
+  --base <rev>              početna revizija ciljnog repozitorijuma
+  --test "<komanda>"        komanda koja proverava rezultat (npr. "npm test")
+  --repro "<komanda>"       kratka komanda koja PADA dok je bug prisutan
+  --requirement <tekst>     programski zahtev (bez gotovog rešenja)
   --extract / --no-extract  forsiraj ili zabrani fazu extract
   --config <fajl>           alternativna konfiguracija
 `;
@@ -119,11 +127,10 @@ async function buildContext(flags) {
   const vaultRoot = flags.vault ? path.resolve(flags.vault) : PACKAGE_ROOT;
   const config = await loadConfig(vaultRoot, flags.config ? { configFile: path.resolve(flags.config) } : {});
   const store = createStore(config);
-  const pipeline = createPipeline(config, {
-    store,
-    logger: (message) => process.stderr.write(`[agentctl] ${message}\n`),
-  });
-  return { config, store, pipeline, flags };
+  const logger = (message) => process.stderr.write(`[agentctl] ${message}\n`);
+  const pipeline = createPipeline(config, { store, logger });
+  const coding = createCodingPipeline(config, { store, logger });
+  return { config, store, pipeline, coding, flags };
 }
 
 const COMMANDS = {
@@ -185,6 +192,29 @@ const COMMANDS = {
       tags: flags.tag ? String(flags.tag).split(',').map((x) => x.trim()).filter(Boolean) : [],
     });
     out(`revizorski zadatak ${task.data.id} (${task.data.status}) opseg: ${(task.data.audit_scope ?? []).join(', ')}`);
+    return 0;
+  },
+
+  /**
+   * Novi coding zadatak. Zahtev se zamrzava ovde, pre izvršavanja; ciljni repo
+   * je strogo odvojen od kontrolnog, a opseg važi za KOD ciljnog projekta.
+   */
+  async code({ flags, coding }) {
+    const scope = String(flags.scope ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    const zadatak = await coding.dodajCodeZadatak({
+      title: typeof flags.title === 'string' ? flags.title : null,
+      requirement: typeof flags.requirement === 'string' ? flags.requirement
+        : typeof flags.request === 'string' ? flags.request : '',
+      target: flags.target,
+      base: flags.base,
+      scope,
+      testCommand: flags.test,
+      reproCommand: typeof flags.repro === 'string' ? flags.repro : null,
+      tags: flags.tag ? String(flags.tag).split(',').map((x) => x.trim()).filter(Boolean) : [],
+    });
+    out(`coding zadatak ${zadatak.data.id} (${zadatak.data.status}) cilj: ${zadatak.data.code_target}`);
+    out(`osnova: ${zadatak.data.code_base}  opseg: ${(zadatak.data.code_scope ?? []).join(', ')}`);
+    out(`provera: ${zadatak.data.code_test}`);
     return 0;
   },
 

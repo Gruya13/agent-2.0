@@ -27,6 +27,7 @@ import { isReproductionScript, runReproductionScripts } from './reproduce.mjs';
 import { matchesScope } from './scope.mjs';
 import { listNotes, normalizeConsolidatedNote, readNote, renderIndex } from './vault.mjs';
 import { defaultBody, dirForPhase, findTask, newTaskData, nextTaskId, phaseFor, writeTaskFile } from './task.mjs';
+import { createCodingPipeline } from './coding.mjs';
 
 export class PipelineError extends Error {
   constructor(message, code = 'PIPELINE_ERROR') {
@@ -37,6 +38,7 @@ export class PipelineError extends Error {
 }
 
 const ROLE_OF_PHASE = {
+  code: 'programer',
   extract: 'extractor',
   audit: 'librarian',
   challenge: 'red-team',
@@ -98,6 +100,10 @@ export function createPipeline(config, options = {}) {
    * sa manifestom — ALI samo ako manifest ne prijavljuje prekršaj: izmenjen ili
    * obrisan izvor se nikad ne komituje, da se prekršaj ne bi sakrio u istoriji.
    */
+  // Coding tok je odvojen od dokumentnog: zadatke `kind: code` vodi nad CILJNIM
+  // repozitorijumom, dok dokumentne faze ostaju nad kontrolnim.
+  const coding = createCodingPipeline(config, { store, logger });
+
   const BOOKKEEPING_PATHS = ['tasks', 'wiki', '.agents/raw-manifest.json', 'raw'];
 
   /**
@@ -1216,11 +1222,14 @@ export function createPipeline(config, options = {}) {
     const tasks = await store.list();
     const pick = (status) => tasks.filter((t) => t.data.status === status).map((t) => t.data.id);
 
-    const phases = only ? [only] : ['consolidate', 'verify', 'challenge', 'audit', 'extract', 'research'];
+    const phases = only ? [only] : ['code', 'consolidate', 'verify', 'challenge', 'audit', 'extract', 'research'];
     for (const phase of phases) {
       const status = {
         consolidate: 'verified', verify: 'review', challenge: 'verified',
         audit: 'ready', extract: 'ready', research: 'ready',
+        // Coding zadatak ulazi u tok iz `ready` (posle izrade prelazi u
+        // `verified`, gde ga čeka nezavisan pregled i prihvatanje).
+        code: 'ready',
       }[phase];
       for (const id of pick(status)) {
         const role = ROLE_OF_PHASE[phase];
@@ -1228,6 +1237,8 @@ export function createPipeline(config, options = {}) {
         const fresh = await store.tryGet(id);
         if (!fresh) continue;
         const kind = fresh.data.kind ?? 'ingest';
+        if (phase === 'code' && kind !== 'code') continue;
+        if (phase !== 'code' && kind === 'code') continue;
         if (phase === 'audit' && kind !== 'audit') continue;
         if (phase === 'extract' && (kind !== 'ingest' || !fresh.data.extract_required || fresh.data.extracted)) continue;
         if (phase === 'research' && (kind !== 'ingest' || (fresh.data.extract_required && !fresh.data.extracted))) continue;
@@ -1236,7 +1247,8 @@ export function createPipeline(config, options = {}) {
         if (phase === 'consolidate' && fresh.data.status !== 'verified') continue;
         if (phase === 'consolidate' && challengeEnabled && fresh.data.challenge?.verdict !== 'clean') continue;
         try {
-          const result = phase === 'consolidate' ? await runConsolidate(id)
+          const result = phase === 'code' ? await coding.runCodeTask(id)
+            : phase === 'consolidate' ? await runConsolidate(id)
             : phase === 'verify' ? await runVerify(id)
               : phase === 'challenge' ? await runChallenge(id)
                 : phase === 'audit' ? await runAudit(id)

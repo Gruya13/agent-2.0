@@ -11,7 +11,7 @@ import { exists } from './fsx.mjs';
 
 export const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-export const ROLES = ['extractor', 'researcher', 'verifier', 'red-team', 'librarian', 'consolidator'];
+export const ROLES = ['extractor', 'researcher', 'verifier', 'red-team', 'librarian', 'consolidator', 'programer', 'reviewer'];
 
 export const DEFAULT_CONFIG = {
   vault: {
@@ -48,6 +48,9 @@ export const DEFAULT_CONFIG = {
     'red-team': { harness: 'dsh', adapter: 'mock', model: null },
     librarian: { harness: 'codex', adapter: 'mock', model: null },
     consolidator: { harness: 'codex', adapter: 'mock', model: null },
+    // Coding tok: programer piše popravku, reviewer je DRUGI vendor.
+    programer: { harness: 'dsh', adapter: 'mock', model: null },
+    reviewer: { harness: 'codex', adapter: 'mock', model: null },
   },
 };
 

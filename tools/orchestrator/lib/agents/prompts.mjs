@@ -10,6 +10,9 @@ export const ROLE_ARTIFACT_ZONE = {
   researcher: 'wiki/drafts/',
   verifier: 'tasks/reviews/',
   consolidator: 'wiki/',
+  // Coding tok: zone su u CILJNOM repou i zadate su opsegom zadatka.
+  programer: '(code_scope zadatka u ciljnom repou)',
+  reviewer: '.agent-review/ (sopstveni radni checkout)',
 };
 
 export async function loadRoleBrief(config, role) {

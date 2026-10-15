@@ -70,3 +70,15 @@ agents:
     harness: codex
     model: null
     timeoutMs: 900000
+  # Coding tok: programer (dsh) piše popravku i regresioni test, reviewer
+  # (codex) je nezavisan vendor i pravi sopstveni kontrolni slučaj.
+  programer:
+    adapter: harness
+    harness: dsh
+    model: null
+    timeoutMs: 900000
+  reviewer:
+    adapter: harness
+    harness: codex
+    model: null
+    timeoutMs: 900000

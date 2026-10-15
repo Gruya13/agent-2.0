@@ -33,6 +33,10 @@ export const TRANSITIONS = {
 
 export const TASK_FIELD_ORDER = [
   'id', 'title', 'status', 'created', 'updated', 'kind', 'source', 'audit_scope',
+  // Polja coding zadatka: ciljni repozitorijum, početna revizija, dozvoljeni
+  // opseg nad KODOM ciljnog projekta, komanda koja proverava rezultat i dokazi
+  // po koracima toka. Kontrolni repo nikad nije `code_target`.
+  'code_target', 'code_base', 'code_scope', 'code_test', 'code_repro', 'code_evidence',
   'extract_required', 'extracted', 'priority', 'tags',
   'depends_on', 'authors', 'assignee', 'lock_owner', 'locked_at',
   'lease_expires_at', 'artifacts', 'verification', 'challenge', 'blocked_reason', 'history',
@@ -91,6 +95,14 @@ export function validateTaskData(data) {
   }
   if (data.kind === 'audit' && !(data.audit_scope ?? []).length) {
     problems.push('zadatak vrste "audit" zahteva neprazan "audit_scope"');
+  }
+  if (data.kind === 'code') {
+    if (!data.code_target) problems.push('zadatak vrste "code" zahteva "code_target"');
+    if (!data.code_base) problems.push('zadatak vrste "code" zahteva "code_base"');
+    if (!Array.isArray(data.code_scope) || !data.code_scope.length) {
+      problems.push('zadatak vrste "code" zahteva neprazan "code_scope"');
+    }
+    if (!data.code_test) problems.push('zadatak vrste "code" zahteva "code_test"');
   }
   if (data.status === 'blocked' && !data.blocked_reason) {
     problems.push('status "blocked" zahteva polje "blocked_reason"');
@@ -225,6 +237,7 @@ export function newTaskData({
   id, title, source = null, priority = 'normal', tags = [], dependsOn = [],
   now = new Date().toISOString(), body = '', extractRequired = false,
   kind = 'ingest', auditScope = [],
+  codeTarget = null, codeBase = null, codeScope = [], codeTest = null, codeRepro = null,
 }) {
   const data = {
     id,
@@ -236,6 +249,12 @@ export function newTaskData({
     kind,
     source,
     audit_scope: auditScope,
+    code_target: codeTarget,
+    code_base: codeBase,
+    code_scope: codeScope,
+    code_test: codeTest,
+    code_repro: codeRepro,
+    code_evidence: {},
     extract_required: Boolean(extractRequired),
     extracted: !extractRequired,
     priority,
