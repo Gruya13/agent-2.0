@@ -399,7 +399,11 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const izmene = await izmeneU(dir, task.data.code_base);
       const vanOpsega = izmene.filter((rel) => !matchesScope(rel, task.data.code_scope ?? []));
       impl = { ...impl, files: izmene, outside: vanOpsega };
-      if (vanOpsega.length) return await odbij(id, ev, `izmena van dozvoljenog opsega: ${vanOpsega.join(', ')}`, token);
+      if (vanOpsega.length) {
+        // Dijagnostika ostaje u evidenciji i kada `implement` nije upisan.
+        ev = { ...ev, outside_scope: vanOpsega };
+        return await odbij(id, ev, `izmena van dozvoljenog opsega: ${vanOpsega.join(', ')}`, token);
+      }
       if (!izmene.length) return await odbij(id, ev, 'programer nije napravio nijednu izmenu', token);
       const testFajlovi = izmene.filter((rel) => TEST_RE.test(rel));
       if (!testFajlovi.length) return await odbij(id, ev, 'nema regresionog testa u izmenama', token);
@@ -412,7 +416,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         if (naOsnovi.code === 0) izmenjeniPostojeci.push(rel);
       }
       if (izmenjeniPostojeci.length) {
-        impl = { ...impl, changed_existing_tests: izmenjeniPostojeci };
+        ev = { ...ev, changed_existing_tests: izmenjeniPostojeci };
         return await odbij(id, ev, `postojeći testovi su menjani: ${izmenjeniPostojeci.join(', ')}`, token);
       }
       // Nova preskakanja u novim testovima nisu dokaz. Čita se RADNO stablo:

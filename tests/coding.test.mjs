@@ -239,7 +239,10 @@ test('code: izmena van opsega sprečava prihvatanje', async () => {
     assert.match(String(rezultat.reason), /van dozvoljenog opsega/);
     const t = await store.get(zadatak.data.id);
     assert.equal(t.data.status, 'ready');
-    assert.equal(t.data.code_evidence.implement.outside.includes('README.md'), true);
+    // Neuspeo pokušaj ne upisuje `implement` (nije bilo uspešne izrade), ali
+    // dijagnostika van opsega ostaje u evidenciji.
+    assert.equal(t.data.code_evidence.implement, undefined);
+    assert.equal(t.data.code_evidence.outside_scope.includes('README.md'), true);
     // Ništa nije ušlo u ciljni repo.
     const log = (await gitExec(cilj.root, ['log', '--oneline'])).stdout;
     assert.doesNotMatch(log, /prihvacena popravka/);
