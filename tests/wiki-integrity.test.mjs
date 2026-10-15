@@ -178,3 +178,35 @@ test('W6: prekinuta izrada ostavlja čisto stanje za nastavak', async () => {
     await vault.cleanup();
   }
 });
+test('W7: postojeća beleška na putanji zapisa se ne prepisuje', async () => {
+  const { vault, store, coding, zadatak } = await pripremiCoding();
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    await coding.runCodeTask(zadatak.data.id); // izrada
+    await coding.runCodeTask(zadatak.data.id); // pregled
+
+    // Tuđe znanje na putanji na koju zapis cilja.
+    const rel = path.join(vault.root, 'wiki', 'Izmene', 'TASK-101.md');
+    await fs.mkdir(path.dirname(rel), { recursive: true });
+    await fs.writeFile(rel, '---\ntitle: Postojeće\n---\n\nEXISTING_KNOWLEDGE\n', 'utf8');
+
+    const prvi = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(prvi.ok, false, 'zapis ne sme da prepiše tuđu belešku');
+    const posle = await store.get(zadatak.data.id);
+    assert.ok(posle.data.code_evidence.accept?.merge, 'kod je prihvaćen u ciljnom repou');
+    assert.ok(posle.data.code_evidence.memory_write_error, 'neuspeh zapisa je zabeležen');
+    assert.equal(
+      (await fs.readFile(rel, 'utf8')).includes('EXISTING_KNOWLEDGE'), true,
+      'postojeća beleška mora ostati nepromenjena',
+    );
+
+    // Kada se putanja oslobodi, zapis prolazi.
+    await fs.rm(rel, { force: true });
+    const drugi = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(drugi.ok, true, JSON.stringify(drugi));
+    assert.equal((await store.get(zadatak.data.id)).data.status, 'consolidated');
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});

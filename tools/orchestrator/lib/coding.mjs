@@ -278,6 +278,22 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
    */
   async function upisiZapisUMemoriju(id, task, ev) {
     const rel = `wiki/Izmene/${id}.md`;
+    // Postojeća beleška na istoj putanji se NE prepisuje: to može biti tuđe
+    // znanje ili raniji zapis drugog zadatka (nalaz iz Codex-ovog scenarija
+    // 'code-collision'). Naš zapis nosi marker, pa je ponovni pokušaj dozvoljen.
+    const marker = `<!-- agentctl: zapis o izmeni ${id} -->`;
+    try {
+      const postojeci = await readNote(config.root, rel);
+      if (!String(postojeci.body ?? '').includes(marker)) {
+        throw new CodingError(
+          `putanja ${rel} je zauzeta postojećom beleškom; zapis ne prepisuje tuđe znanje`,
+          'MEMORY_PATH_TAKEN',
+        );
+      }
+    } catch (error) {
+      if (error instanceof CodingError) throw error;
+      // Beleška ne postoji (ili nije čitljiva kao beleška) — slobodna je.
+    }
     const zahtev = (() => {
       const m = /## Zahtev\n+([\s\S]*?)(?=\n## |$)/.exec(task.body ?? '');
       return (m?.[1] ?? task.body ?? '').trim();
@@ -285,6 +301,8 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     const sada = now();
     const izmene = ev.implement?.files ?? [];
     const telo = [
+      marker,
+      '',
       `# ${task.data.title} (${id})`,
       '',
       '## Zahtev',
