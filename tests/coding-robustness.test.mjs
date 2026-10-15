@@ -327,3 +327,68 @@ test('R16: zakup ostaje živ i tokom duge provere na osnovi', async () => {
     await vault.cleanup();
   }
 });
+test('R17: timeout (exit 124) nije dokaz buga i ako sadrži assertion poruku', async () => {
+  const { vault, coding } = await pripremiCoding();
+  try {
+    assert.equal(coding.klasifikujPad({
+      stdout: '✖ nula\nAssertionError [ERR_ASSERTION]', stderr: '', exitCode: 124,
+    }), 'timeout');
+    assert.equal(coding.klasifikujPad({ stdout: '', stderr: '', exitCode: 1, timedOut: true }), 'timeout');
+    assert.equal(coding.klasifikujPad({
+      stdout: '✖ nula\nAssertionError [ERR_ASSERTION]', stderr: '', exitCode: 1,
+    }), 'assertion');
+  } finally {
+    await vault.cleanup();
+  }
+});
+
+test('R18: test[`skip`] notacija se odbija kao preskakanje', async () => {
+  const { vault, coding, zadatak } = await pripremiCoding();
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera([
+    "import { readFileSync, writeFileSync } from 'node:fs';",
+    "writeFileSync('src/parse.js', readFileSync('src/parse.js', 'utf8')",
+    "  .replace('return n || podrazumevano;', 'return Number.isNaN(n) ? podrazumevano : n;'));",
+    "const bt = String.fromCharCode(96);",
+    "writeFileSync('tests/parse.zero.test.js', \"import test from 'node:test';\\ntest[\" + bt + \"skip\" + bt + \"](\\'nula\\', () => {});\\n\");",
+  ].join('\n'));
+  try {
+    const rezultat = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(rezultat.ok, false);
+    assert.match(String(rezultat.reason), /preskakanje/);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+
+test('R19: gubitak zakupa tokom upisa taga sprečava prihvatanje', async () => {
+  const { vault, store, coding, cilj, zadatak } = await pripremiCoding({ lease: { ttlMs: 300, heartbeatMs: 80 } });
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    await coding.runCodeTask(zadatak.data.id);
+    await coding.runCodeTask(zadatak.data.id);
+    const pre = (await gitExec(cilj.root, ['rev-parse', 'main'])).stdout.trim();
+
+    // Usporen upis taga: hook zadržava referentnu transakciju.
+    const hookDir = path.join(cilj.root, '.git', 'hooks');
+    await fs.mkdir(hookDir, { recursive: true });
+    const hook = path.join(hookDir, 'reference-transaction');
+    await fs.writeFile(hook, '#!/bin/sh\nsleep 0.5\n', 'utf8');
+    await fs.chmod(hook, 0o755);
+
+    const tok = coding.runCodeTask(zadatak.data.id);
+    await new Promise((r) => setTimeout(r, 250));
+    const tudji = await store.claim(zadatak.data.id, 'agentctl', { force: true, token: 'tudji-token' }).then(() => true).catch(() => false);
+    const rezultat = await tok.catch((e) => ({ ok: false, reason: e.message }));
+    await fs.rm(hook, { force: true });
+
+    const posle = (await gitExec(cilj.root, ['rev-parse', 'main'])).stdout.trim();
+    if (tudji) {
+      assert.equal(rezultat.ok, false, 'posle preuzimanja zakupa nema prihvatanja');
+      assert.equal(posle, pre, 'main se ne sme promeniti');
+    }
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});

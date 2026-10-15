@@ -165,7 +165,9 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
   function klasifikujPad(test) {
     // (izvezeno za testiranje klasifikacije)
     const tekst = `${test.stdout ?? ''}\n${test.stderr ?? ''}`;
-    if (test.timedOut) return 'timeout';
+    // Prekid ima prioritet nad svim ostalim: i `timeout(1)` daje 124, a izlaz
+    // može da sadrži i prethodnu assertion poruku (Codex: takav pad je prošao).
+    if (test.timedOut || test.exitCode === 124 || /Command timed out|timed out after/.test(tekst)) return 'timeout';
     // Greške izvršavanja idu PRVE: `node --test` obeležava i njih sa ✖, pa se
     // ✖ ne sme koristiti kao dokaz tvrdnje (Codex: TypeError je prošao kao assertion).
     if (/SyntaxError|TypeError|ReferenceError|RangeError|Cannot find module|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|ERR_REQUIRE_ESM/.test(tekst)) return 'error';
@@ -408,7 +410,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       // fajl je u ovom trenutku još nekomitovan.
       for (const rel of testFajlovi) {
         const sadrzaj = await fs.readFile(path.join(dir, rel), 'utf8').catch(() => '');
-        const PRESKAKANJE = /\.(skip|todo)\s*\(|\[\s*['"](skip|todo)['"]\s*\]|\b(skip|todo)\s*:\s*true/;
+        const PRESKAKANJE = /\.(skip|todo)\s*\(|\[\s*['"`](skip|todo)['"`]\s*\]|\b(skip|todo)\s*:\s*true/;
         if (PRESKAKANJE.test(sadrzaj)) {
           return await odbij(id, ev, `regresioni test sadrži preskakanje: ${rel}`, token);
         }
@@ -700,6 +702,18 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const tag = await git(root, ['tag', '-f', `dokaz/${id}-accept`, ev.review.sha], { actor: OWNER, allowFailure: true });
       if (tag.code !== 0) {
         return await odbij(id, ev, `dokazni tag nije nastao: ${tag.stderr.split('\n')[0]}`, token);
+      }
+
+      // 7b) Upis taga ume da potraje; zakup se proverava PONOVO, neposredno pre
+      // merge-a (Codex: preuzimanje tokom usporenog upisa taga je prošlo).
+      if (!holdsLease((await store.get(id)).data, OWNER, token)) {
+        return await odbij(id, ev, 'zakup nad zadatkom je izgubljen tokom upisa dokaznog taga', token);
+      }
+      const granaPreMerge = (await git(root, ['rev-parse', grana])).stdout.trim();
+      const mainPreMerge = (await git(root, ['rev-parse', 'main'])).stdout.trim();
+      if (granaPreMerge !== ev.review.sha || mainPreMerge !== mainSha) {
+        ev = { ...ev, review: null, review_reset: { reason: 'grana ili osnovica se promenila pre merge-a', at: now() } };
+        return await odbij(id, ev, 'grana ili osnovica se promenila pre merge-a; potreban nov pregled', token);
       }
 
       // 8) Merge TAČNO pregledanog SHA (ime grane nije dokaz sadržaja).
