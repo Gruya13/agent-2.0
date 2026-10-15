@@ -46,6 +46,7 @@ znanje tiho i nijedan neuspeh ne ostaje prikriven.
 | dokaz | reference proverljive u svežem klonu; neuspeh čuvanja nije uspeh | `pipeline.test.mjs` (dokaz u klonu), R9, W4 |
 | memorija → kod | tačno izabrane beleške se izvoze; projektni fajlovi netaknuti; kontekst se ne objavljuje | `coding.test.mjs` (memorija), R8 |
 | kod → memorija | samo prihvaćen rezultat daje zapis; delimičan neuspeh nije lažan uspeh | W4, `coding.test.mjs` |
+| prekid i nastavak | neuspeo pokušaj ne ostavlja granu, `implement` ni zarobljen zakup | **W6** |
 | sadržaj memorije | instrukcija u sadržaju ne dobija ovlašćenje da menja pravila/opseg | **W5** (novo) |
 
 ## 3. Pokrivenost slojeva (šta je stvarno izvršeno)
@@ -60,10 +61,13 @@ znanje tiho i nijedan neuspeh ne ostaje prikriven.
 | Dokumentni tok | extract → research → verify → challenge → consolidate | `pipeline.test.mjs` (34) + realni K8/K10 | — |
 | Librarian audit | precizan opseg kroz ceo tok | `pipeline.test.mjs`, `scope.test.mjs` | — |
 | Coding tok | reprodukcija, baseline assertion, očuvanje testova, pass, pregledan SHA, integracija | `coding.test.mjs` (6), `coding-robustness.test.mjs` (19) | — |
-| Wiki memorija | oba smera, granice sadržaja, indeks | `wiki-integrity.test.mjs` (6), `vault.test.mjs` (9) | — |
+| Wiki memorija | oba smera, granice sadržaja, indeks | `wiki-integrity.test.mjs` (**7**), `vault.test.mjs` (9) | — |
 | CLI, init, status, lint, oporavak | komande i nastavak posle prekinute faze | `cli.test.mjs` (11), W6 | — |
 
-Skup: **180 testova** u 15 fajlova (`npm test`, dva uzastopna izvođenja).
+Skup: **181 testova** u 15 fajlova (`npm test`, dva uzastopna izvođenja).
+
+Završni izveštaj faze (uključujući prekid zbog kvote provajdera):
+[ZAVRSNI-IZVESTAJ-WIKI-FAZA.md](ZAVRSNI-IZVESTAJ-WIKI-FAZA.md).
 
 ## 4. Otvorena ograničenja
 
