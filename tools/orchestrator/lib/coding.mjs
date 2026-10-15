@@ -166,8 +166,10 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     // (izvezeno za testiranje klasifikacije)
     const tekst = `${test.stdout ?? ''}\n${test.stderr ?? ''}`;
     if (test.timedOut) return 'timeout';
-    if (/SyntaxError|Cannot find module|ERR_MODULE_NOT_FOUND|ERR_REQUIRE_ESM|MODULE_NOT_FOUND/.test(tekst)) return 'error';
-    if (/AssertionError|ERR_ASSERTION|✖/.test(tekst)) return 'assertion';
+    // Greške izvršavanja idu PRVE: `node --test` obeležava i njih sa ✖, pa se
+    // ✖ ne sme koristiti kao dokaz tvrdnje (Codex: TypeError je prošao kao assertion).
+    if (/SyntaxError|TypeError|ReferenceError|RangeError|Cannot find module|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|ERR_REQUIRE_ESM/.test(tekst)) return 'error';
+    if (/AssertionError|ERR_ASSERTION/.test(tekst)) return 'assertion';
     return 'unknown';
   }
 
@@ -406,7 +408,8 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       // fajl je u ovom trenutku još nekomitovan.
       for (const rel of testFajlovi) {
         const sadrzaj = await fs.readFile(path.join(dir, rel), 'utf8').catch(() => '');
-        if (/\.(skip|todo)\s*\(|test\.skip|\bskip:\s*true/.test(sadrzaj)) {
+        const PRESKAKANJE = /\.(skip|todo)\s*\(|\[\s*['"](skip|todo)['"]\s*\]|\b(skip|todo)\s*:\s*true/;
+        if (PRESKAKANJE.test(sadrzaj)) {
           return await odbij(id, ev, `regresioni test sadrži preskakanje: ${rel}`, token);
         }
       }
@@ -453,7 +456,14 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       }
 
       // dokaz 1: regresioni test pada na početnoj reviziji
-      const osnova = await dokaziPadNaOsnovi(root, task, testFajlovi, dir);
+      // I baseline provera pokreće test komandu, pa i ona ide pod obnovljenim
+      // zakupom (Codex: sa TTL 400 ms i dugom proverom zakup je istekao).
+      const baselineProba = await saZakupom(id, token, () => dokaziPadNaOsnovi(root, task, testFajlovi, dir));
+      if (baselineProba.error) throw baselineProba.error;
+      if (baselineProba.izgubljen) {
+        return await odbij(id, ev, `zakup je izgubljen tokom provere na osnovi: ${baselineProba.izgubljen.message}`, token);
+      }
+      const osnova = baselineProba.rezultat;
       ev = { ...ev, baseline: osnova };
       if (osnova.exitCode === 0) return await odbij(id, ev, 'regresioni test ne pada na početnoj reviziji (ne reprodukuje bug)', token);
       // Pad na osnovi mora biti zbog OČEKIVANOG pogrešnog ponašanja: greška
@@ -592,12 +602,14 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         return { ok: false, reason: `spajanje nije prošlo: ${merge.stderr.split('\n')[0]}`, at: now() };
       }
       const test = await pokreniTest(dir, testCommand);
+      const tree = (await git(dir, ['rev-parse', 'HEAD^{tree}'])).stdout.trim();
       return {
         ok: test.exitCode === 0,
         reason: test.exitCode === 0 ? null : `zajednički rezultat ne prolazi proveru (exit ${test.exitCode})`,
         exitCode: test.exitCode,
         command: testCommand,
         stdout: String(test.stdout).slice(0, 800),
+        tree,
         at: now(),
       };
     } finally {
@@ -643,34 +655,68 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       }
       const mainSha = (await git(root, ['rev-parse', 'main'])).stdout.trim();
       const osnovaPromenjena = Boolean(ev.review.base) && mainSha !== ev.review.base;
+      // Definicija: nova osnovica znači da pregled više ne pokriva rezultat koji
+      // se prihvata — traži se NOV pregled, a ne automatski rebase (Codex).
+      if (osnovaPromenjena) {
+        ev = {
+          ...ev,
+          review_reset: {
+            reason: 'osnovica ciljnog repoa se promenila posle pregleda',
+            base_was: ev.review.base,
+            base_now: mainSha,
+            at: now(),
+          },
+          review: null,
+        };
+        return await odbij(id, ev, 'osnovica ciljnog repoa se promenila posle pregleda; potreban nov pregled', token);
+      }
 
       // 4) Integraciona provera pre diranja glavne grane.
       const proba = await saZakupom(id, token, () => integracionaProba(root, { grana, testCommand: task.data.code_test }));
       if (proba.izgubljen) {
         return await odbij(id, ev, `zakup je izgubljen tokom integracione provere: ${proba.izgubljen.message}`, token);
       }
-      ev = { ...ev, integration: { ...proba.rezultat, base_stale: osnovaPromenjena, base_was: ev.review.base, base_now: mainSha } };
+      ev = { ...ev, integration: { ...proba.rezultat, base_stale: false, base_was: ev.review.base, base_now: mainSha } };
       if (!proba.rezultat.ok) {
-        // Ako se osnovica promenila, stari pregled ne važi za novi rezultat.
-        if (osnovaPromenjena) ev = { ...ev, review: null };
         return await odbij(id, ev, `integraciona provera nije prošla: ${proba.rezultat.reason}`, token);
       }
 
-      // 5) Dokazni tag PRE merge-a: neuspeh upisa se ne ignorise.
-      const tag = await git(root, ['tag', '-f', `dokaz/${id}-accept`, granaSha], { actor: OWNER, allowFailure: true });
+      // 5) Ni grana ni osnovica se nisu pomerile TOKOM provere. Spaja se tačno
+      // pregledani SHA, pa izmena posle pregleda ne može da uđe u main.
+      const granaSad = (await git(root, ['rev-parse', grana])).stdout.trim();
+      const mainSad = (await git(root, ['rev-parse', 'main'])).stdout.trim();
+      if (granaSad !== ev.review.sha || mainSad !== mainSha) {
+        ev = { ...ev, review: null, review_reset: { reason: 'grana ili osnovica se promenila tokom integracione provere', at: now() } };
+        return await odbij(id, ev, 'grana ili osnovica se promenila tokom integracione provere; potreban nov pregled', token);
+      }
+
+      // 6) Zakup je i dalje naš neposredno pre upisa.
+      if (!holdsLease((await store.get(id)).data, OWNER, token)) {
+        return await odbij(id, ev, 'zakup nad zadatkom nije naš neposredno pre prihvatanja', token);
+      }
+
+      // 7) Dokazni tag PRE merge-a: neuspeh upisa se ne ignorise. Tag pokazuje
+      // na PREGLEDANU reviziju (ona je posle merge-a predak main-a).
+      const tag = await git(root, ['tag', '-f', `dokaz/${id}-accept`, ev.review.sha], { actor: OWNER, allowFailure: true });
       if (tag.code !== 0) {
         return await odbij(id, ev, `dokazni tag nije nastao: ${tag.stderr.split('\n')[0]}`, token);
       }
 
-      const merge = await git(root, ['merge', '--no-ff', '-m', `agentctl(${id}): prihvacena popravka`, grana], { actor: OWNER, allowFailure: true });
+      // 8) Merge TAČNO pregledanog SHA (ime grane nije dokaz sadržaja).
+      const merge = await git(root, ['merge', '--no-ff', '-m', `agentctl(${id}): prihvacena popravka`, ev.review.sha], { actor: OWNER, allowFailure: true });
       if (merge.code !== 0) {
         await git(root, ['merge', '--abort'], { actor: OWNER, allowFailure: true });
         return await odbij(id, ev, `merge nije prošao: ${merge.stderr.split('\n')[0]}`, token);
       }
       const sha = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
-      // Isti sadržaj kao integraciono testirani kandidat.
-      await git(root, ['tag', '-f', `dokaz/${id}-accept`, sha], { actor: OWNER, allowFailure: true });
-      ev = { ...ev, accept: { merge: sha, branch: grana, reviewed: granaSha, tag: `dokaz/${id}-accept`, at: now() } };
+      const drvo = (await git(root, ['rev-parse', 'HEAD^{tree}'])).stdout.trim();
+      ev = {
+        ...ev,
+        accept: {
+          merge: sha, branch: grana, reviewed: granaSha, tag: `dokaz/${id}-accept`,
+          tree: drvo, integration_tree: proba.rezultat.tree, at: now(),
+        },
+      };
       // Zadatak vraća ishod u memoriju; piše kontrolni sloj, ne agent.
       try {
         ev.memory_write = await upisiZapisUMemoriju(id, task, ev);

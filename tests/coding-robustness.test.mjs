@@ -201,3 +201,129 @@ test('R10: klasifikacija pada na osnovi razlikuje tvrdnju od greške', async () 
     await vault.cleanup();
   }
 });
+test('R11: TypeError na osnovi nije dokaz buga', async () => {
+  const { vault, coding } = await pripremiCoding();
+  try {
+    assert.equal(coding.klasifikujPad({ stdout: '✖ test', stderr: 'TypeError: x is not a function' }), 'error');
+    assert.equal(coding.klasifikujPad({ stdout: '✖ test\nAssertionError [ERR_ASSERTION]', stderr: '' }), 'assertion');
+  } finally {
+    await vault.cleanup();
+  }
+});
+
+test('R12: test["skip"] notacija se odbija kao preskakanje', async () => {
+  const { vault, coding, zadatak } = await pripremiCoding();
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera([
+    "import { readFileSync, writeFileSync } from 'node:fs';",
+    "writeFileSync('src/parse.js', readFileSync('src/parse.js', 'utf8')",
+    "  .replace('return n || podrazumevano;', 'return Number.isNaN(n) ? podrazumevano : n;'));",
+    "writeFileSync('tests/parse.zero.test.js', \"import test from 'node:test';\\ntest['skip']('nula', () => {});\\n\");",
+  ].join('\n'));
+  try {
+    const rezultat = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(rezultat.ok, false);
+    assert.match(String(rezultat.reason), /preskakanje/);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+
+test('R13: izmena grane tokom integracione provere ne ulazi u main', async () => {
+  const { vault, store, coding, cilj, zadatak } = await pripremiCoding();
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    await coding.runCodeTask(zadatak.data.id);
+    await coding.runCodeTask(zadatak.data.id);
+
+    // U toku prihvatanja (integraciona provera) neko doda commit na granu.
+    const tok = coding.runCodeTask(zadatak.data.id);
+    await new Promise((r) => setTimeout(r, 120));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-race-'));
+    await fs.rm(dir, { recursive: true, force: true });
+    await gitExec(cilj.root, ['worktree', 'add', '--quiet', dir, 'agent/code/TASK-101']);
+    await fs.writeFile(path.join(dir, 'src', 'nepregledano.js'), '// posle pregleda\n');
+    await gitExec(dir, ['-c', 'user.name=x', '-c', 'user.email=x@local', 'add', '-A']);
+    await gitExec(dir, ['-c', 'user.name=x', '-c', 'user.email=x@local', 'commit', '-q', '-m', 'nepregledano']);
+    await gitExec(cilj.root, ['worktree', 'remove', '--force', dir]);
+
+    const rezultat = await tok;
+    const uMainu = (await gitExec(cilj.root, ['ls-tree', '-r', '--name-only', 'main'])).stdout;
+    if (rezultat.ok) {
+      assert.doesNotMatch(uMainu, /nepregledano\.js/, 'nepregledana izmena ne sme u main');
+    } else {
+      assert.notEqual((await store.get(zadatak.data.id)).data.status, 'consolidated');
+    }
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+
+test('R14: promenjena osnovica posle pregleda traži nov pregled', async () => {
+  const { vault, store, coding, cilj, zadatak } = await pripremiCoding();
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    await coding.runCodeTask(zadatak.data.id);
+    await coding.runCodeTask(zadatak.data.id);
+
+    // Osnovica se pomera posle pregleda (bez uticaja na kandidata).
+    await fs.writeFile(path.join(cilj.root, 'NEUTRALNO.md'), 'neutralna izmena\n');
+    await gitExec(cilj.root, ['-c', 'user.name=x', '-c', 'user.email=x@local', 'add', '-A']);
+    await gitExec(cilj.root, ['-c', 'user.name=x', '-c', 'user.email=x@local', 'commit', '-q', '-m', 'pomeren main']);
+
+    const prihvatanje = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(prihvatanje.ok, false);
+    assert.match(String(prihvatanje.reason), /nov pregled/);
+    const t = await store.get(zadatak.data.id);
+    assert.ok(!t.data.code_evidence.review, 'stari pregled mora biti poništen');
+    assert.notEqual(t.data.status, 'consolidated');
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+
+test('R15: tuđi zakup sprečava prihvatanje', async () => {
+  const { vault, store, coding, zadatak } = await pripremiCoding();
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    await coding.runCodeTask(zadatak.data.id);
+    await coding.runCodeTask(zadatak.data.id);
+    // Drugi proces preuzima zakup pod svojim tokenom pre nego što prvi prihvati.
+    await store.claim(zadatak.data.id, 'agentctl', { force: true, token: 'tudji-token' });
+    // Faza ne sme da preuzme tuđi zakup: prihvatanje je onemogućeno.
+    const prihvatanje = await coding.runCodeTask(zadatak.data.id).catch((error) => ({ ok: false, reason: error.message }));
+    assert.equal(prihvatanje.ok, false, JSON.stringify(prihvatanje));
+    assert.notEqual((await store.get(zadatak.data.id)).data.status, 'consolidated');
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+
+test('R16: zakup ostaje živ i tokom duge provere na osnovi', async () => {
+  const { vault, store, coding, zadatak } = await pripremiCoding({
+    lease: { ttlMs: 400, heartbeatMs: 150 },
+    testCommand: 'sleep 0.6 && npm test',
+  });
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    const tok = coding.runCodeTask(zadatak.data.id);
+    let istekao = false;
+    const gledaj = setInterval(async () => {
+      try {
+        const t = await store.get(zadatak.data.id);
+        if (t.data.status === 'in_progress' && t.data.lease_expires_at
+          && Date.parse(t.data.lease_expires_at) < Date.now()) istekao = true;
+      } catch { /* zadatak je u prelazu */ }
+    }, 50);
+    const rezultat = await tok;
+    clearInterval(gledaj);
+    assert.equal(rezultat.ok, true, JSON.stringify(rezultat));
+    assert.equal(istekao, false, 'zakup je istekao tokom faze');
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
