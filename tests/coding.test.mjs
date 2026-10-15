@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
 import { exists } from '../tools/orchestrator/lib/fsx.mjs';
+import { readNote } from '../tools/orchestrator/lib/vault.mjs';
 import { createStore } from '../tools/orchestrator/lib/store.mjs';
 import { createCodingPipeline } from '../tools/orchestrator/lib/coding.mjs';
 import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
@@ -131,6 +132,55 @@ test('code: ceo tok — reprodukcija, popravka, test, nezavisan pregled, prihvat
     const merge = (await gitExec(cilj.root, ['log', '--oneline', '-1'])).stdout;
     assert.match(merge, /prihvacena popravka/);
     assert.deepEqual(t.data.artifacts.sort(), ['src/parse.js', 'tests/parse.zero.test.js']);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+
+test('code: zadatak koristi wiki memoriju i vraća zapis u wiki posle prihvatanja', async () => {
+  const vault = await makeVault();
+  await vault.write('wiki/Konvencije/Kod.md', [
+    '---', 'title: Konvencije za kod', 'created: 2025-01-01T00:00:00.000Z',
+    'updated: 2025-01-01T00:00:00.000Z', 'authors: [operator]', 'status: consolidated',
+    'tags: [konvencije]', '---', '',
+    '# Konvencije za kod', '',
+    '- Nula je validna vrednost i mora se testirati kao granica.', '',
+  ].join('\n'));
+  const config = await loadConfig(vault.root);
+  const store = createStore(config);
+  const coding = createCodingPipeline(config, { store });
+  const cilj = await napraviCiljniRepo();
+  const reproSkript = "import('./src/parse.js').then((m) => { const v = m.broj('0', null); if (v !== 0) process.exit(1); })";
+  const zadatak = await coding.dodajCodeZadatak({
+    title: 'Nula se gubi u broj()',
+    requirement: 'Funkcija broj(tekst, podrazumevano) mora da vrati 0 kada je tekst "0".',
+    target: cilj.root,
+    base: cilj.base,
+    scope: ['src/**', 'tests/**'],
+    testCommand: 'npm test',
+    reproCommand: `node -e ${JSON.stringify(reproSkript)}`,
+    memory: ['wiki/Konvencije/Kod.md'],
+  });
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    for (let i = 0; i < 3; i += 1) {
+      const r = await coding.runCodeTask(zadatak.data.id);
+      assert.equal(r.ok, true, JSON.stringify(r));
+    }
+    const t = await store.get(zadatak.data.id);
+    assert.equal(t.data.status, 'consolidated');
+    // memorija je pročitana iz wiki-ja i izvezena u radno stablo
+    assert.deepEqual(t.data.code_evidence.memory.notes, ['wiki/Konvencije/Kod.md']);
+    assert.ok(t.data.code_evidence.memory.bytes > 0, 'MEMORY.md mora imati sadržaj');
+    // ... ali nije deo zadatka: agent je ne dobija kao artefakt
+    assert.equal((t.data.artifacts ?? []).includes('MEMORY.md'), false);
+    // ishod se vraća u memoriju i to komituje kontrolni sloj
+    const zapis = await readNote(vault.root, 'wiki/Izmene/TASK-101.md');
+    assert.match(zapis.body, /## Ishod/);
+    assert.match(zapis.body, /wiki\/Konvencije\/Kod.md/);
+    const log = await gitExec(vault.root, ['log', '--oneline', '-3']);
+    assert.match(log.stdout, /zapis o izmeni TASK-101/);
   } finally {
     delete process.env.AGENT_2_0_MOCK_CODE_CMD;
     await vault.cleanup();

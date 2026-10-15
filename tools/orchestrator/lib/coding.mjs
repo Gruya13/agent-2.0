@@ -21,9 +21,10 @@ import { promises as fs } from 'node:fs';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { exists, walkFiles, writeFileAtomic } from './fsx.mjs';
-import { git } from './git.mjs';
+import { commitPaths, git } from './git.mjs';
 import { buildPrompt, identityFor, runAgent } from './agents/index.mjs';
 import { matchesScope } from './scope.mjs';
+import { readNote, writeNote } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
 
 const execAsync = promisify(exec);
@@ -120,7 +121,10 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     const izDiffa = base
       ? (await git(dir, ['diff', '--name-only', base], { allowFailure: true })).stdout.split('\n').filter(Boolean)
       : [];
-    return [...new Set([...izStatusa, ...izDiffa])].filter((rel) => rel && !rel.startsWith('.agent-review/'));
+    return [...new Set([...izStatusa, ...izDiffa])]
+      .filter((rel) => rel && !rel.startsWith('.agent-review/'))
+      // `MEMORY.md` i `.runtime/` pripadaju kontrolnom sloju, ne zadatku.
+      .filter((rel) => rel !== 'MEMORY.md');
   }
 
   /** Dokaz 1: regresioni test iz popravke mora pasti na početnoj reviziji. */
@@ -185,6 +189,93 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     return { phase: 'code', task: id, ok: false, reason: razlog, attempts: pokusaji };
   }
 
+
+  /**
+   * Memorija zadatka ide iz wiki-ja u radno stablo kao `MEMORY.md`.
+   *
+   * Ovo je JEDINI smer u kojem wiki ulazi u coding zadatak: agent ga čita, ali
+   * ga ne menja (fajl je van `code_scope` i ne komituje se). Zaštite wiki-ja se
+   * time ne diraju — nema nove dozvole za pisanje po memoriji.
+   */
+  async function eksportujMemoriju(task, dir) {
+    const notes = task.data.code_memory ?? [];
+    if (!notes.length) return null;
+    const delovi = [
+      '# Memorija zadatka (iz wiki-ja, samo za čitanje)',
+      '',
+      'Ovaj fajl je kontekst koji je kontrolni sloj izvezao iz baze znanja.',
+      'Ne menjaj ga i ne komituj: nije deo tvog zadatka.',
+      '',
+    ];
+    for (const rel of notes) {
+      try {
+        const n = await readNote(config.root, rel);
+        delovi.push(`## ${n.frontmatter?.title ?? rel}`, '', `_izvor: ${rel}_`, '', n.body.trim(), '');
+      } catch {
+        delovi.push(`## ${rel}`, '', '_(beleška nije dostupna u bazi znanja)_', '');
+      }
+    }
+    const telo = delovi.join('\n');
+    await fs.writeFile(path.join(dir, 'MEMORY.md'), telo, 'utf8');
+    return { notes: [...notes], file: 'MEMORY.md', bytes: Buffer.byteLength(telo) };
+  }
+
+  /**
+   * Zapis o prihvaćenoj promeni u wiki. Piše ga KONTROLNI SLOJ (`agentctl`),
+   * tek posle prihvatanja, iz evidencije zadatka — radni agent nema pristup
+   * `wiki/`-ju.
+   */
+  async function upisiZapisUMemoriju(id, task, ev) {
+    const rel = `wiki/Izmene/${id}.md`;
+    const zahtev = (() => {
+      const m = /## Zahtev\n+([\s\S]*?)(?=\n## |$)/.exec(task.body ?? '');
+      return (m?.[1] ?? task.body ?? '').trim();
+    })();
+    const sada = now();
+    const izmene = ev.implement?.files ?? [];
+    const telo = [
+      `# ${task.data.title} (${id})`,
+      '',
+      '## Zahtev',
+      '',
+      zahtev,
+      '',
+      '## Ishod',
+      '',
+      `- ciljni repozitorijum: \`${task.data.code_target}\``,
+      `- početna revizija: \`${task.data.code_base}\``,
+      `- popravka: \`${ev.implement?.commit ?? '—'}\``,
+      `- prihvaćeno: \`${ev.accept?.merge ?? '—'}\``,
+      `- izmene: ${izmene.map((f) => `\`${f}\``).join(', ') || '—'}`,
+      '',
+      '## Dokazi',
+      '',
+      `- reprodukcija pre popravke: \`${ev.reproduce?.command ?? '—'}\` → exit ${ev.reproduce?.exitCode ?? '—'}`,
+      `- provera posle popravke: \`${ev.check?.command ?? '—'}\` → exit ${ev.check?.exitCode ?? '—'}`,
+      `- regresioni test na početnoj reviziji: exit ${ev.baseline?.exitCode ?? '—'}`,
+      `- nezavisan pregled: ${ev.review?.harness ?? '—'} (verdikt: ${ev.review?.verdict ?? '—'})`,
+      ev.memory ? `- memorija korišćena: ${(ev.memory.notes ?? []).join(', ')}` : '- memorija korišćena: (nema)',
+      '',
+      '## Veze',
+      '',
+      '- [[Index]]',
+      '',
+    ].join('\n');
+    await writeNote(config.root, rel, {
+      frontmatter: {
+        title: `${task.data.title} (${id})`,
+        created: task.data.created ?? sada,
+        updated: sada,
+        authors: ['agentctl', ev.implement?.author ?? 'dsh', ev.review?.harness ?? 'reviewer'].filter(Boolean),
+        status: 'consolidated',
+        tags: ['izmena', 'code', id],
+      },
+      body: telo,
+    });
+    await commitPaths(config.root, ['wiki'], `agentctl: zapis o izmeni ${id} u memoriju`, { actor: 'agentctl' });
+    return rel;
+  }
+
   // ------------------------------------------------------- 1+2+3: izmena
 
   async function fazaIzrade(id, task, root, ev) {
@@ -205,7 +296,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       if (pre.exitCode === 0) return await odbij(id, ev, `bug se ne reprodukuje: "${reproKomanda}" prolazi na ${task.data.code_base}`, token);
       logger(`code: ${id} reprodukcija OK (repro pada na ${String(task.data.code_base).slice(0, 8)})`);
 
-      // 2. izmena koda
+      // 2. izmena koda — prvo memorija iz wiki-ja (samo za čitanje)
+      const memorija = await eksportujMemoriju(task, dir);
+      if (memorija) {
+        ev = { ...ev, memory: memorija };
+        await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: `memorija: ${memorija.notes.join(', ')}` });
+        logger(`code: ${id} memorija izvezena (${memorija.notes.length} beleške, ${memorija.bytes} B)`);
+      }
       const prompt = await buildPrompt(config, {
         role: ROLE_IMPLEMENT,
         task,
@@ -378,6 +475,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const sha = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
       await git(root, ['tag', '-f', `dokaz/${id}-accept`, sha], { actor: OWNER, allowFailure: true });
       ev = { ...ev, accept: { merge: sha, branch: grana, at: now() } };
+      // Zadatak vraća ishod u memoriju; piše kontrolni sloj, ne agent.
+      try {
+        ev.memory_write = await upisiZapisUMemoriju(id, task, ev);
+        logger(`code: ${id} zapis u memoriju: ${ev.memory_write}`);
+      } catch (error) {
+        logger(`code: ${id} zapis u memoriju nije uspeo: ${error.message}`);
+      }
       await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: `prihvaćeno: ${sha.slice(0, 8)}` });
       await store.transition(id, 'consolidated', { actor: 'agentctl', note: `merge ${sha.slice(0, 8)}` });
       await store.emit('code.accepted', { task: id, merge: sha, branch: grana });
@@ -404,7 +508,8 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
   }
 
   async function dodajCodeZadatak({
-    title, requirement, target, base, scope, testCommand, reproCommand = null, tags = [], priority = 'normal',
+    title, requirement, target, base, scope, testCommand, reproCommand = null,
+    memory = [], tags = [], priority = 'normal',
   }) {
     if (!title) throw new CodingError('code zadatak zahteva naslov', 'NO_TITLE');
     if (!requirement || String(requirement).trim().length < 10) {
@@ -420,6 +525,8 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       codeScope: scope,
       codeTest: testCommand,
       codeRepro: reproCommand,
+      // Beleške iz wiki-ja koje zadatak dobija kao kontekst (samo za čitanje).
+      codeMemory: memory,
       tags,
       priority,
       extractRequired: false,

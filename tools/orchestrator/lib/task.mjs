@@ -36,7 +36,7 @@ export const TASK_FIELD_ORDER = [
   // Polja coding zadatka: ciljni repozitorijum, početna revizija, dozvoljeni
   // opseg nad KODOM ciljnog projekta, komanda koja proverava rezultat i dokazi
   // po koracima toka. Kontrolni repo nikad nije `code_target`.
-  'code_target', 'code_base', 'code_scope', 'code_test', 'code_repro', 'code_evidence',
+  'code_target', 'code_base', 'code_scope', 'code_test', 'code_repro', 'code_memory', 'code_evidence',
   'extract_required', 'extracted', 'priority', 'tags',
   'depends_on', 'authors', 'assignee', 'lock_owner', 'locked_at',
   'lease_expires_at', 'artifacts', 'verification', 'challenge', 'blocked_reason', 'history',
@@ -238,6 +238,7 @@ export function newTaskData({
   now = new Date().toISOString(), body = '', extractRequired = false,
   kind = 'ingest', auditScope = [],
   codeTarget = null, codeBase = null, codeScope = [], codeTest = null, codeRepro = null,
+  codeMemory = [],
 }) {
   const data = {
     id,
@@ -254,6 +255,7 @@ export function newTaskData({
     code_scope: codeScope,
     code_test: codeTest,
     code_repro: codeRepro,
+    code_memory: codeMemory,
     code_evidence: {},
     extract_required: Boolean(extractRequired),
     extracted: !extractRequired,

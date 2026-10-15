@@ -109,6 +109,7 @@ Globalne opcije:
   --base <rev>              početna revizija ciljnog repozitorijuma
   --test "<komanda>"        komanda koja proverava rezultat (npr. "npm test")
   --repro "<komanda>"       kratka komanda koja PADA dok je bug prisutan
+  --memory a.md,b.md        wiki beleške zadatka kao MEMORY.md (samo za čitanje)
   --requirement <tekst>     programski zahtev (bez gotovog rešenja)
   --extract / --no-extract  forsiraj ili zabrani fazu extract
   --config <fajl>           alternativna konfiguracija
@@ -210,6 +211,7 @@ const COMMANDS = {
       scope,
       testCommand: flags.test,
       reproCommand: typeof flags.repro === 'string' ? flags.repro : null,
+      memory: flags.memory ? String(flags.memory).split(',').map((x) => x.trim()).filter(Boolean) : [],
       tags: flags.tag ? String(flags.tag).split(',').map((x) => x.trim()).filter(Boolean) : [],
     });
     out(`coding zadatak ${zadatak.data.id} (${zadatak.data.status}) cilj: ${zadatak.data.code_target}`);
