@@ -1,0 +1,23 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]:   0 - 8  
++ actual - expected
+
+  {
++   from: null,
+-   from: 0,
+    to: 8
+  }
+
+    at file:///tmp/agent2-code-TASK-101-1792092622037-2qh34/.agent-review/control.mjs:8:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: { from: null, to: 8 },
+  expected: { from: 0, to: 8 },
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.8.2

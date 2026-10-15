@@ -1,0 +1,14 @@
+
+> test
+> node --test tests/
+
+✔ tests/granice.test.js (57.551278ms)
+✔ tests/range.test.js (51.277882ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 74.025021

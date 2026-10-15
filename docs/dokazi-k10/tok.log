@@ -1,0 +1,25 @@
+=== K10 zavrsni coding ogled: 2026-10-15T21:28:24+02:00 | kontrolna revizija 242b4d0 | cilj /home/gru/k10-target base 2a53c54d54a6d77a4418775a30bb34e7bfefa09b ===
+[agentctl] code: TASK-101 (Nula se gubi u parseRange) za /home/gru/k10-target
+coding zadatak TASK-101 (ready) cilj: /home/gru/k10-target
+osnova: 2a53c54d54a6d77a4418775a30bb34e7bfefa09b  opseg: src/**, tests/**
+provera: npm test
+[agentctl] code: TASK-101 reprodukcija OK (repro pada na 2a53c54d)
+[agentctl] code: TASK-101 memorija izvezena (1 beleške, 502 B)
+[agentctl] poziv uloge programer (harness:dsh) u /tmp/agent2-code-TASK-101-1792092504254-nll89
+[agentctl] code: TASK-101 izmena c9a3ed8c (2 fajlova)
+[agentctl] code: TASK-101 -> verified (test prolazi posle popravke, pada pre)
+[agentctl] krug 1/8: 1 akcija, promena=true
+[agentctl] poziv uloge reviewer (harness:codex) u /tmp/agent2-code-TASK-101-1792092622037-2qh34
+[agentctl] code: TASK-101 nezavisan pregled codex -> pass
+[agentctl] krug 2/8: 1 akcija, promena=true
+[agentctl] code: TASK-101 zapis u memoriju: wiki/Izmene/TASK-101.md
+[agentctl] code: TASK-101 -> prihvaćeno u main @ b8495e2a
+[agentctl] krug 3/8: 1 akcija, promena=true
+[agentctl] krug 4/8: 0 akcija, promena=false
+FAZA  ZADATAK   ISHOD
+----  --------  -----
+code  TASK-101  ok   
+code  TASK-101  ok   
+code  TASK-101  ok   
+krugova: 4, akcija: 3
+=== kraj: 2026-10-15T21:30:58+02:00 ===
