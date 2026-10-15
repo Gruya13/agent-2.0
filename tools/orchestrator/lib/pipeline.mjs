@@ -134,6 +134,8 @@ export function createPipeline(config, options = {}) {
    */
   const BOOKKEEPING_ALLOW = [
     /^tasks\/(inbox|active|review|completed)\/TASK-\d+\.md$/,
+    // Evidencija coding toka: nalaz nezavisnog pregleda i reviewer-ov scenario.
+    /^tasks\/reviews\//,
     /^tasks\/events\.jsonl$/,
     /^wiki\/Index\.md$/,
     /^\.agents\/raw-manifest\.json$/,

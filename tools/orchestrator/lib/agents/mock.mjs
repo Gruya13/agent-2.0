@@ -568,6 +568,15 @@ async function programer(config, { cwd }) {
  */
 async function reviewer(config, { task, cwd, now }) {
   const rel = `.agent-review/${task.data.id}.md`;
+  // Reviewer pravi i SOPSTVENI kontrolni scenario; kontrolni sloj ga čuva kao
+  // dokaz, pa test proverava da je preživeo brisanje radnog stabla.
+  await writeFileAtomic(path.join(cwd, '.agent-review', 'reviewer-control.js'), [
+    "// sopstveni kontrolni slučaj nezavisnog pregleda (mock)",
+    "import assert from 'node:assert/strict';",
+    "// mock ne poziva pravi kod; scenario postoji da bi se dokazalo čuvanje",
+    "assert.ok(true);",
+    '',
+  ].join('\n'));
   await writeFileAtomic(path.join(cwd, rel), [
     `# Nezavisan pregled ${task.data.id}`,
     '',

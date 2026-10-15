@@ -13,6 +13,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
+import { exists } from '../tools/orchestrator/lib/fsx.mjs';
 import { createStore } from '../tools/orchestrator/lib/store.mjs';
 import { createCodingPipeline } from '../tools/orchestrator/lib/coding.mjs';
 import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
@@ -113,6 +114,9 @@ test('code: ceo tok — reprodukcija, popravka, test, nezavisan pregled, prihvat
     t = await store.get(zadatak.data.id);
     assert.equal(t.data.status, 'verified');
     assert.ok(t.data.code_evidence.review.verdict === 'pass');
+    // Reviewer-ov scenario je sačuvan uz evidenciju, ne samo opisan u nalazu.
+    const scenario = path.join(vault.root, 'tasks', 'reviews', 'TASK-101-review', 'reviewer-control.js');
+    assert.equal(await exists(scenario), true, 'scenario nezavisnog pregleda mora biti sačuvan');
 
     const prihvatanje = await coding.runCodeTask(zadatak.data.id);
     assert.equal(prihvatanje.ok, true, JSON.stringify(prihvatanje));

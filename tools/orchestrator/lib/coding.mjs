@@ -20,7 +20,7 @@ import os from 'node:os';
 import { promises as fs } from 'node:fs';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { exists, writeFileAtomic } from './fsx.mjs';
+import { exists, walkFiles, writeFileAtomic } from './fsx.mjs';
 import { git } from './git.mjs';
 import { buildPrompt, identityFor, runAgent } from './agents/index.mjs';
 import { matchesScope } from './scope.mjs';
@@ -324,6 +324,20 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         },
       });
       const rezultat = await runAgent(config, { role: ROLE_REVIEW, task, cwd: dir, prompt, now: now(), logger });
+      // Reviewer-ov SOPSTVENI scenario je dokaz: čuva se uz evidenciju PRE nego
+      // što se radno stablo obriše, inače ostaje samo opis u nalazu.
+      const scenarioDir = path.join(config.paths.reviews, `${id}-review`);
+      await fs.rm(scenarioDir, { recursive: true, force: true });
+      const agentReview = path.join(dir, '.agent-review');
+      if (await exists(agentReview)) {
+        await fs.mkdir(scenarioDir, { recursive: true });
+        // `walkFiles` vraća RELATIVNE putanje u odnosu na koren.
+        for (const rel of await walkFiles(agentReview)) {
+          const cilj = path.join(scenarioDir, rel);
+          await fs.mkdir(path.dirname(cilj), { recursive: true });
+          await fs.copyFile(path.join(agentReview, rel), cilj);
+        }
+      }
       const put = path.join(dir, '.agent-review', `${id}.md`);
       const imaNalaz = await exists(put);
       const telo = imaNalaz ? await fs.readFile(put, 'utf8') : `_Nema nalaza; harnes izlaz:\n\n${String(rezultat.output).slice(0, 4000)}_`;
