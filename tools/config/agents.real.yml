@@ -83,6 +83,6 @@ agents:
   # izricito navodi koji je vendor stvarno pregledao.
   reviewer:
     adapter: harness
-    harness: agy
+    harness: codex
     model: null
     timeoutMs: 900000
