@@ -1,0 +1,7 @@
+fixture {"mode":"consolidate","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-LI18Ni"}
+runResearch {"phase":"research","task":"TASK-101","ok":true,"artifacts":["wiki/drafts/Own_Document.md"],"commit":"17df85783b6a0e04d32ddeb2f32790432c72ff08","branch":"agent/researcher/TASK-101"}
+runVerify {"phase":"verify","task":"TASK-101","ok":true,"verdict":"pass","commit":"619d2f472e150a5e9c89f70570461c195a8528ee"}
+runChallenge {"phase":"challenge","task":"TASK-101","ok":true,"verdict":"clean","revision":"10201b62edee34c346446bb63ad95ee6e0744fda","falsePositives":0,"correlationRisk":true}
+consolidate {"phase":"consolidate","task":"TASK-101","ok":false,"reason":"linter","errors":1}
+ERROR 128 Command failed: git -C /home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/clone-ni9evk/repo cat-file -t dokaz/TASK-101-verify
+fatal: Not a valid ob

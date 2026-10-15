@@ -1,0 +1,5 @@
+fixture {"mode":"ready","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-N7IHRh"}
+cli {"code":0,"stdout":"zadatak TASK-101: blocked -> ready (fixture)\n","stderr":"[agentctl] ne komitujem tude izmene: wiki/Foreign.md, wiki/New.md\n"}
+committed "agentctl: TASK-101 vraćen u opticaj (fixture)\n\ntasks/events.jsonl\ntasks/inbox/TASK-101.md\nagentctl: unos zadatka TASK-101 (raw/dokument.md)\n\n.agents/raw-manifest.json\ntasks/events.jsonl\ntasks/inbox/TASK-101.md"
+dirty " M wiki/Foreign.md\n?? wiki/New.md"
+preserved {"dirty":true,"new":true}

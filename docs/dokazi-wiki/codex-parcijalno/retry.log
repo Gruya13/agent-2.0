@@ -1,0 +1,8 @@
+fixture {"mode":"retry","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-TPtyp3"}
+runResearch {"phase":"research","task":"TASK-101","ok":true,"artifacts":["wiki/drafts/Own_Document.md"],"commit":"3ff0cd0434af4ac34b7ea6f9d731ec04a43b9783","branch":"agent/researcher/TASK-101"}
+runVerify {"phase":"verify","task":"TASK-101","ok":true,"verdict":"pass","commit":"16b634751d73f55c934eff05e0fc1a74de0a0e57"}
+runChallenge {"phase":"challenge","task":"TASK-101","ok":true,"verdict":"clean","revision":"09fe2affe000e409416471dfc9a174d56d039f8b","falsePositives":0,"correlationRisk":true}
+rejected {"phase":"consolidate","task":"TASK-101","ok":false,"reason":"linter","errors":1}
+artifacts-same true
+consolidate {"phase":"consolidate","task":"TASK-101","ok":false,"reason":"linter","errors":1}
+ERROR 128 Command failed: git -C /home/gru/.agent-worktrees/verify-sessi

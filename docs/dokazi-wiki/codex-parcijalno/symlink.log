@@ -1,0 +1,6 @@
+fixture {"mode":"symlink","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-KA1uO3"}
+write beleška wiki/Link/Escape.md izlazi iz korena preko simboličkog linka: /home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-KA1uO3/wiki/Link/Escape.md -> /home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/out-OgMZDq/Escape.md
+outside []
+committed ""
+dirty " M wiki/Foreign.md\n?? wiki/Link\n?? wiki/New.md"
+preserved {"dirty":true,"new":true}

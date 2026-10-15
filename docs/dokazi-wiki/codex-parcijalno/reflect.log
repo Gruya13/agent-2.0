@@ -1,0 +1,5 @@
+fixture {"mode":"reflect","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-TNpHSF"}
+reflect {"phase":"reflect","ok":true,"notes":2,"indexChanged":true,"manifest":{"added":1,"total":1},"commit":"a306dc9e24502567bd66f67cec501f56b0641200","history":["a306dc9 agentctl agentctl: reflect (indeks + manifest izvora)","03f675e f fixture","1be94a8 fixture fixture: pocetno stanje"]}
+committed "agentctl: reflect (indeks + manifest izvora)\n\n.agents/raw-manifest.json\nwiki/Index.md"
+dirty " M wiki/Foreign.md\n?? tasks/\n?? wiki/New.md"
+preserved {"dirty":true,"new":true}

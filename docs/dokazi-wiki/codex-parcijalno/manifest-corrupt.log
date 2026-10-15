@@ -1,0 +1,4 @@
+fixture {"mode":"manifest-corrupt","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-4DW8V3"}
+reflect {"phase":"reflect","ok":true,"notes":2,"indexChanged":true,"manifest":{"added":1,"total":1},"commit":"1be6fa3ff93a7d8e428b50423257552f4cea1bcd","history":["1be6fa3 agentctl agentctl: reflect (indeks + manifest izvora)","2e4fa4e agentctl agentctl: reflect (indeks + manifest izvora)","09951cc f fixture","6c94b48 fixture fixture: pocetno stanje"]}
+manifest {"before":"7cd4db8c0ed737c0d1b481edc908ca962ca02ced97d41d0fe4ed1b989508ec82","after":"6a5a64ab2c5e8fd9cc68ba048c6e0d08549b4a8d199af9c9e6163550f62f0584","findings":[{"level":"error","code":"raw.git-diff","target":"raw/raw/dokument.md","message":"git prijavljuje izmenu izvora (M); raw/ je nepromenljiv"}]}
+committed "agentctl: reflect (indeks + manifest izvora)\n\n.agents/raw-manifest.json\ntasks/ev

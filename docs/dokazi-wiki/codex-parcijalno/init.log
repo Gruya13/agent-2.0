@@ -1,0 +1,5 @@
+fixture {"mode":"init","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-xkUT3N"}
+cli {"code":0,"stdout":"init: vault=/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-xkUT3N\nmanifest: 1 zapisa (.agents/raw-manifest.json)\nindex: 2 belešaka\n","stderr":"[agentctl] ne komitujem tude izmene: wiki/Foreign.md, .agents/FOREIGN.txt, wiki/New.md\n"}
+committed "agentctl: init (ugovor i alati u git)\n\n.agents/FOREIGN.txt\nagentctl: reflect (indeks + manifest izvora)\n\n.agents/raw-manifest.json\nwiki/Index.md"
+dirty " M wiki/Foreign.md\n?? tasks/\n?? wiki/New.md"
+preserved {"dirty":true,"new":true}

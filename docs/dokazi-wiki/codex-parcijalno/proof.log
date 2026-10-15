@@ -1,0 +1,8 @@
+fixture {"mode":"proof","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-EGwpEO"}
+runResearch {"phase":"research","task":"TASK-101","ok":true,"artifacts":["wiki/drafts/Own_Document.md"],"commit":"f4baa7c20616960d39d37f3863f3f867b12d6d72","branch":"agent/researcher/TASK-101"}
+runVerify {"phase":"verify","task":"TASK-101","ok":true,"verdict":"pass","commit":"9e765dff81f986c6b2a7f77fbf860bcf840f67e6"}
+runChallenge {"phase":"challenge","task":"TASK-101","ok":true,"verdict":"clean","revision":"e295911097f2e2b95f27887fd5e05035ce862409","falsePositives":0,"correlationRisk":true}
+proof-failure {"phase":"consolidate","task":"TASK-101","ok":false,"reason":"linter","errors":1}
+proof-state review null
+ERROR NOT_VERIFIED TASK-101 nije u stanju verified (review)
+committed "agentctl: TASK-101 -> review (neuspeh faze consolidator)\n\ntasks/events.jsonl\ntasks/

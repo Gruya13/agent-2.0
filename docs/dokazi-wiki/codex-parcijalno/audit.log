@@ -1,0 +1,5 @@
+fixture {"mode":"audit","vault":"/home/gru/.agent-worktrees/verify-session-08b4-codex/.verification/tmp/agent2-vault-R8V6fJ"}
+audit ready
+committed "agentctl: revizorski zadatak TASK-101 (wiki/Foreign.md)\n\ntasks/events.jsonl\ntasks/inbox/TASK-101.md"
+dirty " M wiki/Foreign.md\n?? wiki/New.md"
+preserved {"dirty":true,"new":true}
