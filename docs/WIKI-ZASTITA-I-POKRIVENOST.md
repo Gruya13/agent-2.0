@@ -41,6 +41,7 @@ znanje tiho i nijedan neuspeh ne ostaje prikriven.
 | publikacija | nacrt bez važeće provere ne ulazi u produkciju; retry ne širi dozvoljene mete | `pipeline.test.mjs` (odbijena konsolidacija), `coding-robustness.test.mjs` (R3, R14) |
 | audit | samo postojeće beleške u preciznom opsegu | `pipeline.test.mjs`, `scope.test.mjs` |
 | knjigovodstvo | tuđi prljav fajl ne ulazi u komit, ne briše se | **W1–W3** (novo) |
+| zapis u memoriju | postojeća beleška na putanji zapisa se ne prepisuje | **W7** (nalaz Codex scenarija \`code-collision\`) |
 | izvedeni indeks | odgovara dogovorenom sadržaju i regeneriše se | `vault.test.mjs`, `cli.test.mjs` |
 | dokaz | reference proverljive u svežem klonu; neuspeh čuvanja nije uspeh | `pipeline.test.mjs` (dokaz u klonu), R9, W4 |
 | memorija → kod | tačno izabrane beleške se izvoze; projektni fajlovi netaknuti; kontekst se ne objavljuje | `coding.test.mjs` (memorija), R8 |
