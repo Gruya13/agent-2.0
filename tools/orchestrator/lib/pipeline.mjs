@@ -1221,6 +1221,14 @@ export function createPipeline(config, options = {}) {
 
     const tasks = await store.list();
     const pick = (status) => tasks.filter((t) => t.data.status === status).map((t) => t.data.id);
+    // Coding zadatak ima tri pod-koraka (izrada -> nezavisan pregled ->
+    // prihvatanje), pa ga faza `code` uzima i iz `verified`. Bez toga petlja
+    // stane posle izrade (dokazano stvarnim prolazom).
+    const pickCode = () => tasks
+      .filter((t) => (t.data.kind ?? '') === 'code')
+      .filter((t) => t.data.status === 'ready'
+        || (t.data.status === 'verified' && !t.data.code_evidence?.accept))
+      .map((t) => t.data.id);
 
     const phases = only ? [only] : ['code', 'consolidate', 'verify', 'challenge', 'audit', 'extract', 'research'];
     for (const phase of phases) {
@@ -1231,7 +1239,7 @@ export function createPipeline(config, options = {}) {
         // `verified`, gde ga čeka nezavisan pregled i prihvatanje).
         code: 'ready',
       }[phase];
-      for (const id of pick(status)) {
+      for (const id of (phase === 'code' ? pickCode() : pick(status))) {
         const role = ROLE_OF_PHASE[phase];
         // Stanje se čita iznova: faza `extract` u istom krugu pušta `research`.
         const fresh = await store.tryGet(id);

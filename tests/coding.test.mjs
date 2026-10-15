@@ -15,6 +15,7 @@ import path from 'node:path';
 import { loadConfig } from '../tools/orchestrator/lib/config.mjs';
 import { createStore } from '../tools/orchestrator/lib/store.mjs';
 import { createCodingPipeline } from '../tools/orchestrator/lib/coding.mjs';
+import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
 import { gitExec, makeVault } from './helpers/vault.mjs';
 
 const PARSE_SA_BUGOM = [
@@ -126,6 +127,39 @@ test('code: ceo tok — reprodukcija, popravka, test, nezavisan pregled, prihvat
     const merge = (await gitExec(cilj.root, ['log', '--oneline', '-1'])).stdout;
     assert.match(merge, /prihvacena popravka/);
     assert.deepEqual(t.data.artifacts.sort(), ['src/parse.js', 'tests/parse.zero.test.js']);
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+
+test('code: kontrolna petlja vodi zadatak kroz sva tri koraka do prihvatanja', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  const store = createStore(config);
+  const pipeline = createPipeline(config, { store });
+  const coding = createCodingPipeline(config, { store });
+  const cilj = await napraviCiljniRepo();
+  const reproSkript = "import('./src/parse.js').then((m) => { const v = m.broj('0', null); if (v !== 0) process.exit(1); })";
+  await coding.dodajCodeZadatak({
+    title: 'Nula se gubi u broj()',
+    requirement: 'Funkcija broj(tekst, podrazumevano) mora da vrati 0 kada je tekst "0".',
+    target: cilj.root,
+    base: cilj.base,
+    scope: ['src/**', 'tests/**'],
+    testCommand: 'npm test',
+    reproCommand: `node -e ${JSON.stringify(reproSkript)}`,
+  });
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    let status = '';
+    for (let i = 0; i < 6; i += 1) {
+      await pipeline.runOnce();
+      status = (await store.get('TASK-101')).data.status;
+      if (status === 'consolidated') break;
+    }
+    // Petlja mora sama da izvede izradu, pregled i prihvatanje.
+    assert.equal(status, 'consolidated');
   } finally {
     delete process.env.AGENT_2_0_MOCK_CODE_CMD;
     await vault.cleanup();
