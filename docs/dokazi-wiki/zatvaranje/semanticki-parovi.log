@@ -1,10 +1,11 @@
-=== semantika: 2026-10-16T10:23:40+02:00 | revizija bfd1aed ===
+=== semantika: 2026-10-16T11:14:31+02:00 | revizija 7b5f47a ===
 | par | očekivano | dobijeno | ishod |
 |---|---|---|---|
 | P1 dozvoljena parafraza | pass | pass | OK |
 | P2 prihvatljivo pitanje | pass | pass | OK |
 | P3 promenjen broj | fail | fail | OK |
 | P4 neosnovana definicija | fail | fail | OK |
+| P6 definicija uloge koju izvor ne daje | fail | fail | OK |
 | P5 jača tvrdnja od izvora | fail | fail | OK |
-SVI PAROVI USKLAĐENI (5/5)
-=== kraj: 2026-10-16T10:29:12+02:00 ===
+SVI PAROVI USKLAĐENI (6/6)
+=== kraj: 2026-10-16T11:19:38+02:00 ===
