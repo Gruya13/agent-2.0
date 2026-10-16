@@ -11,6 +11,7 @@ import { loadConfig } from '../orchestrator/lib/config.mjs';
 import { createStore } from '../orchestrator/lib/store.mjs';
 import { createPipeline } from '../orchestrator/lib/pipeline.mjs';
 import { writeNote } from '../orchestrator/lib/vault.mjs';
+import { commitWorktree, createWorktree } from '../orchestrator/lib/worktree.mjs';
 
 const root = process.argv[2];
 if (!root) { console.error('upotreba: semantika.mjs <vault-root>'); process.exit(2); }
@@ -48,7 +49,9 @@ const PAROVI = [
   },
 ];
 
-const config = await loadConfig(root);
+// Pravi harnesi: bez ovoga bi se koristio default (mock) i nalaz ne bi ništa
+// dokazivao.
+const config = await loadConfig(root, { configFile: path.join(root, 'tools', 'config', 'agents.real.yml') });
 const store = createStore(config);
 const pipeline = createPipeline(config, { store });
 
@@ -63,14 +66,17 @@ for (const [i, par] of PAROVI.entries()) {
   const zadatak = await pipeline.ingest({ source: izvorRel, title: par.ime });
   const id = zadatak.data.id;
 
-  // Nacrt upisuje sam fixture (kao da ga je istraživač ostavio) — ne menjamo pečat.
-  await writeNote(root, `wiki/drafts/${slug}.md`, {
+  // Nacrt upisuje sam fixture na GRANU ISTRAŽIVAČA (kao da ga je researcher
+  // ostavio) — verifikator radi nad tom granom, a pečat ostaje kontrolnog sloja.
+  const wt = await createWorktree(config, { id, role: 'researcher', base: 'main' });
+  await writeNote(wt.path, `wiki/drafts/${slug}.md`, {
     frontmatter: {
       title: par.ime, created: nov, updated: nov, authors: ['researcher'],
       status: 'draft', tags: ['semantika'],
     },
     body: `# ${par.ime}\n\n${par.nacrt}\n`,
   });
+  await commitWorktree(config, id, `researcher(${id}): nacrt (${slug})`, { actor: 'researcher', role: 'researcher' });
   const claim = await store.claim(id, 'agentctl');
   await store.release(id, 'agentctl', { toStatus: 'review', token: claim.leaseToken, note: 'fixture: nacrt spreman' });
   await store.attachArtifacts(id, [`wiki/drafts/${slug}.md`], { actor: 'agentctl' });
