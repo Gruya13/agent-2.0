@@ -217,6 +217,15 @@ async function requireTaskContext(relative) {
   if (!(await exists(path.join(TASK_ROOT, '.agents', 'AGENTS.md')))) {
     throw new AccessError(`kontrolni koren ${TASK_ROOT} ne nosi ugovor .agents/AGENTS.md — upis je odbijen`);
   }
+  // Skladište koje se piše mora biti U TOM kontrolnom korenu (sam koren ili
+  // njegovo radno stablo). Bez ovoga bi tuđi, validan kontrolni koren sa svojim
+  // zadatkom i tokenom odobrio upis u naše skladište (nalaz nezavisne provere).
+  const uKorenu = VAULT === TASK_ROOT || VAULT.startsWith(TASK_ROOT + path.sep);
+  if (!uKorenu) {
+    throw new AccessError(
+      `skladište ${VAULT} nije u kontrolnom korenu ${TASK_ROOT} — upis je odbijen`,
+    );
+  }
   if (!TASK_ID) {
     throw new AccessError(`upis u "${relative}" zahteva OBSIDIAN_TASK (id zadatka) — bez njega nema zakupa ni verifikacije`);
   }

@@ -147,9 +147,15 @@ const COMMANDS = {
     // `.runtime/task-context.json` izgleda kao tuđa izmena i challenge faza
     // pada) ni `.agents/AGENTS.md` (pa MCP preskoči sloj zadatka i zakupa).
     // Dokazano na tri čista vault-a pripremljena samo sa `agentctl init`.
+    // Komituju se TAČNO fajlovi ugovora i alat — ne cela `.agents/` stabla, jer
+    // bi se tako tuđi fajl u toj zoni tiho komitovao (nalaz nezavisne provere).
     await commitPaths(
       config.root,
-      ['.gitignore', '.agents', 'tools', 'package.json'],
+      [
+        '.gitignore', 'package.json', 'tools',
+        '.agents/AGENTS.md',
+        ...ROLES.map((uloga) => `.agents/roles/${uloga}.md`),
+      ],
       'agentctl: init (ugovor i alati u git)',
       { actor: 'agentctl' },
     );

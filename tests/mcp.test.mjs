@@ -571,3 +571,24 @@ test('MCP: CLI režim radi bez pokrenutog Obsidiana', async () => {
   );
   await vault.cleanup();
 });
+test('MCP: tuđi kontrolni koren ne odobrava upis u naše skladište', async (t) => {
+  const nas = await seededVault();
+  const tudj = await seededVault();
+  await makeTask(nas, { id: 'TASK-101', owner: 'agy' });
+  await makeTask(tudj, { id: 'TASK-201', owner: 'other' });
+
+  // Zakup iz NEPOVEZANOG kontrolnog korena ne sme da odobri upis u naše skladište.
+  const c = await connect(nas.root, 'researcher', 'other', t, {
+    OBSIDIAN_TASK_ROOT: tudj.root,
+    OBSIDIAN_TASK: 'TASK-201',
+    OBSIDIAN_LEASE_TOKEN: 'tudji-token',
+  });
+  const rezultat = await c.callTool('obsidian_write_note', {
+    path: 'wiki/drafts/tudji-koren.md', content: '# proba\n',
+  });
+  assert.equal(rezultat.isError, true, 'tuđi kontrolni koren ne sme da odobri upis');
+  assert.match(rezultat.content[0].text, /error:/);
+  c.close();
+  await nas.cleanup();
+  await tudj.cleanup();
+});

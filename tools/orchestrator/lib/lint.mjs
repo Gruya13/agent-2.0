@@ -12,6 +12,7 @@ import { execFile } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { promisify } from 'node:util';
 import { exists, sha256, sha256Bytes, sha256File, walkFiles } from './fsx.mjs';
+import { git } from './git.mjs';
 import { listTasks, TASK_STATUSES, canTransition, validateTaskData } from './task.mjs';
 import { noteFrontmatterProblems, noteName, normalizeName, readNote, listNotes, extractWikilinks } from './vault.mjs';
 
@@ -267,12 +268,26 @@ export async function lintTasks(config) {
 export async function updateRawManifest(config) {
   const manifestFile = path.join(config.root, RAW_MANIFEST);
   let manifest = { version: 2, files: {} };
+  let ostecen = false;
   if (await exists(manifestFile)) {
     try {
       manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8'));
       manifest.files ??= {};
     } catch {
-      manifest = { version: 2, files: {} };
+      ostecen = true;
+    }
+  } else {
+    ostecen = true;
+  }
+  // Ako je manifest POSTOJAO u git istoriji, njegov gubitak/oštećenje je gubitak
+  // dokazne osnove, a ne dozvola da se iz trenutnog (možda izmenjenog) stanja
+  // tiho uspostavi nova osnova. Odluka je ljudska.
+  if (ostecen) {
+    const uGitu = await git(config.root, ['cat-file', '-e', `HEAD:${RAW_MANIFEST}`], { allowFailure: true });
+    if (uGitu.code === 0) {
+      throw new Error(
+        `${RAW_MANIFEST} je oštećen ili nedostaje, a postojao je u istoriji — nova osnova se ne uspostavlja automatski`,
+      );
     }
   }
   const files = await rawFiles(config);

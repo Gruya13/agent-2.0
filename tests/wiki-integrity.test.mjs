@@ -10,7 +10,7 @@ import { createStore } from '../tools/orchestrator/lib/store.mjs';
 import { createPipeline } from '../tools/orchestrator/lib/pipeline.mjs';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { gitExec, makeVault } from './helpers/vault.mjs';
+import { gitExec, makeVault, runCli } from './helpers/vault.mjs';
 import { exists } from '../tools/orchestrator/lib/fsx.mjs';
 import { ISPRAVKA, pripremiCoding, skriptaProgramera } from './helpers/coding-fixture.mjs';
 
@@ -207,6 +207,43 @@ test('W7: postojeća beleška na putanji zapisa se ne prepisuje', async () => {
     assert.equal((await store.get(zadatak.data.id)).data.status, 'consolidated');
   } finally {
     delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+test('W9: oštećen ili izgubljen manifest nije dozvola za novu osnovu', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  const store = createStore(config);
+  const pipeline = createPipeline(config, { store });
+  const manifest = path.join(vault.root, '.agents', 'raw-manifest.json');
+  try {
+    await pipeline.ingest({ source: 'raw/dokument.md', title: 'Doc' });
+    assert.equal(await exists(manifest), true, 'manifest postoji posle ingest-a');
+
+    // Izvor je promenjen, a manifest je izgubljen.
+    await vault.write('raw/dokument.md', '# Izmenjen izvor\n');
+    await fs.rm(manifest, { force: true });
+
+    await assert.rejects(() => pipeline.reflect(), /manifest/i);
+    assert.equal(await exists(manifest), false, 'nova osnova se ne uspostavlja tiho');
+  } finally {
+    await vault.cleanup();
+  }
+});
+
+test('W10: init ne komituje tuđe fajlove u .agents', async () => {
+  const vault = await makeVault();
+  try {
+    await vault.write('.agents/FOREIGN.txt', 'tuđe\n');
+    const r = await runCli(vault.root, ['init']);
+    assert.equal(r.code, 0, r.stderr);
+
+    const komitovano = (await gitExec(vault.root, ['show', '--name-only', '--pretty=format:', 'HEAD']))
+      .stdout.split('\n').filter(Boolean);
+    assert.equal(komitovano.includes('.agents/FOREIGN.txt'), false, 'tuđi fajl ne sme u init komit');
+    assert.equal(await exists(path.join(vault.root, '.agents', 'FOREIGN.txt')), true, 'tuđi rad ostaje');
+    assert.equal(await exists(path.join(vault.root, '.agents', 'AGENTS.md')), true, 'ugovor mora ostati u gitu');
+  } finally {
     await vault.cleanup();
   }
 });
