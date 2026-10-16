@@ -218,9 +218,12 @@ async function requireTaskContext(relative) {
     throw new AccessError(`kontrolni koren ${TASK_ROOT} ne nosi ugovor .agents/AGENTS.md — upis je odbijen`);
   }
   // Skladište koje se piše mora biti U TOM kontrolnom korenu (sam koren ili
-  // njegovo radno stablo). Bez ovoga bi tuđi, validan kontrolni koren sa svojim
-  // zadatkom i tokenom odobrio upis u naše skladište (nalaz nezavisne provere).
-  const uKorenu = VAULT === TASK_ROOT || VAULT.startsWith(TASK_ROOT + path.sep);
+  // njegovo radno stablo). Poredi se REALNA putanja: tekstualno poređenje je
+  // zaobilazilo granicu preko symlink-a unutar tuđeg korena (dokazano).
+  const realno = async (p) => { try { return await fs.realpath(p); } catch { return path.resolve(p); } };
+  const vaultReal = await realno(VAULT);
+  const korenReal = await realno(TASK_ROOT);
+  const uKorenu = vaultReal === korenReal || vaultReal.startsWith(korenReal + path.sep);
   if (!uKorenu) {
     throw new AccessError(
       `skladište ${VAULT} nije u kontrolnom korenu ${TASK_ROOT} — upis je odbijen`,

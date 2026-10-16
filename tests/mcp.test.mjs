@@ -592,3 +592,43 @@ test('MCP: tuđi kontrolni koren ne odobrava upis u naše skladište', async (t)
   await nas.cleanup();
   await tudj.cleanup();
 });
+test('MCP: symlink unutar tuđeg korena ne zaobilazi granicu skladišta', async (t) => {
+  const nas = await seededVault();
+  const tudj = await seededVault();
+  await makeTask(nas, { id: 'TASK-101', owner: 'agy' });
+  await makeTask(tudj, { id: 'TASK-201', owner: 'other' });
+
+  // Symlink UNUTAR tuđeg korena pokazuje na naše skladište.
+  const link = path.join(tudj.root, 'link');
+  await fs.symlink(nas.root, link, 'dir');
+
+  const c = await connect(link, 'researcher', 'other', t, {
+    OBSIDIAN_TASK_ROOT: tudj.root,
+    OBSIDIAN_TASK: 'TASK-201',
+    OBSIDIAN_LEASE_TOKEN: 'tudji-token',
+  });
+  const rezultat = await c.callTool('obsidian_write_note', {
+    path: 'wiki/drafts/preko-linka.md', content: '# proba\n',
+  });
+  assert.equal(rezultat.isError, true, 'symlink ne sme da zaobiđe granicu kontrolnog korena');
+  c.close();
+  await nas.cleanup();
+  await tudj.cleanup();
+});
+
+test('MCP: radno stablo unutar kontrolnog korena i dalje prolazi', async (t) => {
+  const vault = await seededVault();
+  const id = await makeTask(vault, { id: 'TASK-101', owner: 'agy' });
+  const wt = path.join(vault.root, '.worktrees', 'TASK-101-researcher');
+  await fs.mkdir(wt, { recursive: true });
+  await fs.cp(path.join(vault.root, 'wiki'), path.join(wt, 'wiki'), { recursive: true });
+  await fs.cp(path.join(vault.root, '.agents'), path.join(wt, '.agents'), { recursive: true });
+
+  const c = await connect(wt, 'researcher', 'agy', t, { OBSIDIAN_TASK: id, OBSIDIAN_TASK_ROOT: vault.root });
+  const rezultat = await c.callTool('obsidian_write_note', {
+    path: 'wiki/drafts/iz-radnog-stabla.md', content: '# proba\n',
+  });
+  assert.equal(rezultat.isError, false, `radno stablo mora ostati dozvoljeno: ${rezultat.content?.[0]?.text}`);
+  c.close();
+  await vault.cleanup();
+});
