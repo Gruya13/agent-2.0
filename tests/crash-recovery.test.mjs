@@ -144,6 +144,45 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
 
     const log = (await gitExec(cilj.root, ['log', '--oneline'])).stdout;
     assert.equal((log.match(/prihvacena popravka/g) ?? []).length, 1, 'merge nije dupliran');
+
+    // Evidencija mora biti potpuna: i prihvatanje i zapis (inače sledeći poziv
+    // baca NOT_READY, a zapis je već obavljen).
+    assert.ok(krajnje.data.code_evidence.memory_write, 'memory_write mora biti zabeležen');
+    const posleZapisa = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(posleZapisa.step, 'done', 'završen zadatak se ne obrađuje ponovo');
+  } finally {
+    delete process.env.AGENT_2_0_MOCK_CODE_CMD;
+    await vault.cleanup();
+  }
+});
+test('CR3: merge u Gitu bez evidencije o prihvatanju — oporavak dopunjuje zapis', async () => {
+  const { vault, coding, cilj, store, zadatak } = await pripremiCoding({ lease: { ttlMs: 60000, heartbeatMs: 5000 } });
+  process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
+  try {
+    await coding.runCodeTask(zadatak.data.id); // izrada
+    await coding.runCodeTask(zadatak.data.id); // pregled
+    const pre = await store.get(zadatak.data.id);
+    const pregledan = pre.data.code_evidence.review.sha;
+
+    // Simuliraj prekid IZMEDJU merge-a i upisa evidencije: merge je u Gitu,
+    // a `accept` nije zabeležen.
+    await gitExec(cilj.root, ['-c', 'user.name=agentctl', '-c', 'user.email=agentctl@local', 'merge', '--no-ff', '-m', `agentctl(${zadatak.data.id}): prihvacena popravka`, pregledan]);
+    await store.setFields(zadatak.data.id, {
+      code_evidence: { ...pre.data.code_evidence, accept: null },
+    }, { actor: 'agentctl', note: 'fixture: prekid pre evidencije' });
+
+    const r = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.recovered, true, 'nastavak mora prepoznati merge iz Gita');
+    const posle = await store.get(zadatak.data.id);
+    assert.equal(posle.data.status, 'consolidated');
+    assert.ok(posle.data.code_evidence.memory_write, 'zapis mora biti u evidenciji');
+    assert.equal(posle.data.code_evidence.accept.recovered, true);
+    const log = (await gitExec(cilj.root, ['log', '--oneline'])).stdout;
+    assert.equal((log.match(/prihvacena popravka/g) ?? []).length, 1, 'merge nije dupliran');
+    // Ponovni poziv ne radi ništa (nema NOT_READY).
+    const opet = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(opet.step, 'done');
   } finally {
     delete process.env.AGENT_2_0_MOCK_CODE_CMD;
     await vault.cleanup();

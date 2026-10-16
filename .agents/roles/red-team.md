@@ -25,8 +25,8 @@ kriterijumu:
 1. Značenje se ocenjuje u kontekstu **celog izvora**, ne po identičnosti reči.
 2. Razumna parafraza, prevod i razrešenje subjekta iz naslova nisu sami po sebi
    nalaz.
-3. Nova činjenica, jači uslov, broj ili definicija kojih izvor ne nosi **jesu**
-   nalaz (ili moraju biti označeni kao nepotvrđeni).
+3. Nova činjenica, jači uslov, broj, **definicija ili uloga entiteta** kojih
+   izvor ne nosi **jesu** nalaz (ili moraju biti označeni kao nepotvrđeni).
 4. Otvoreno pitanje ne sme u svojoj formulaciji pretpostaviti nedokazanu
    činjenicu.
 5. Skript mora pokazati **šta je pogrešno u tvrdnji**, a ne samo da se

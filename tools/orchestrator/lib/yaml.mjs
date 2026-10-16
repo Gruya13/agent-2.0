@@ -177,9 +177,9 @@ function parseBlockScalar(lines, index, indent, style) {
   let blockIndent = null;
   while (i < lines.length) {
     const entry = lines[i];
-    // Prazna linija pripada bloku (čuva se kao prazan red), osim pre početka.
+    // Prazna linija pripada bloku, uključujući vodeće (indikator bloka je već
+    // viđen), pa se čuva kao prazan red.
     if (entry.prazna) {
-      if (blockIndent === null) { i += 1; continue; }
       collected.push('');
       i += 1;
       continue;

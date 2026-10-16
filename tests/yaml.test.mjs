@@ -129,3 +129,10 @@ test('Y2: round-trip je idempotentan za višelinijski tekst', () => {
   const drugi = stringifyFrontmatter({ summary: data.summary }, 'telo\n');
   assert.equal(prvi, drugi);
 });
+test('Y3: vodeće prazne linije u blok skalaru se čuvaju', () => {
+  const summary = '\n\nprva linija\n\ndruga linija';
+  const tekst = stringifyFrontmatter({ summary }, 'telo\n');
+  const { data } = parseFrontmatter(tekst);
+  assert.equal(data.summary.startsWith('\n\nprva linija'), true, JSON.stringify(data.summary));
+  assert.equal(data.summary.includes('\n\ndruga linija'), true);
+});

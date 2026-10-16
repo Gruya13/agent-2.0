@@ -725,6 +725,11 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         };
         await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: 'prihvatanje prepoznato iz Gita' });
         const zapis = await pokusajZapisa(id, task, ev, token);
+        // Evidencija mora da ponese i ishod zapisa: bez toga zadatak ostaje bez
+        // `memory_write`, iako je zapis obavljen (nalaz nezavisne provere).
+        if (zapis.ok) {
+          await store.setFields(id, { code_evidence: zapis.ev }, { actor: OWNER, note: 'zapis u memoriju (oporavak)' });
+        }
         if (!zapis.ok) {
           return {
             phase: 'code', task: id, ok: false, merge: mainSha,

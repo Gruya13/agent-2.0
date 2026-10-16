@@ -27,9 +27,11 @@ Pre nego što nešto prijaviš kao nalaz, primeni ovaj kriterijum:
 2. **Razumna parafraza nije greška.** Prevod, sinonim i razrešenje subjekta iz
    naslova ili okolnog teksta (npr. „sistem" umesto ponavljanja imena) nisu sami
    po sebi nalaz.
-3. **Dodato mora biti potkrepljeno.** Nova činjenica, jači uslov, broj ili
-   definicija kojih izvor ne nosi jesu nalaz — ili moraju biti jasno odvojeni
-   kao nepotvrđeni.
+3. **Dodato mora biti potkrepljeno.** Nova činjenica, jači uslov, broj,
+   **definicija ili uloga entiteta** kojih izvor ne nosi jesu nalaz — ili moraju
+   biti jasno odvojeni kao nepotvrđeni. To važi i za uvodnu rečenicu koja
+   entitet opisuje (npr. „X je sistem za pakovanje" kada izvor govori samo o
+   pokretanju): opis mora imati osnovu u izvoru.
 4. **Pitanje ne sme pretpostaviti nedokazano.** Formulacija otvorenog pitanja ne
    sme u sebi nositi tvrdnju koju izvor ne daje.
 5. **Dokaz mora pogoditi tvrdnju.** Ako koristiš skript ili citat, on mora

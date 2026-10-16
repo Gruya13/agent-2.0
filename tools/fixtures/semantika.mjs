@@ -42,6 +42,12 @@ const PAROVI = [
     nacrt: 'Aplikacije zahtevaju dozvole za Bluetooth, zvuk, mrežu i fajlove. Dozvole se realizuju kroz XDG Desktop Portals, standardni mehanizam za komunikaciju sa sandbox-om.',
   },
   {
+    ime: 'P6 definicija uloge koju izvor ne daje',
+    ocekivano: 'fail',
+    izvor: 'Flatpak aplikacije se pokreću u sandbox okruženju. Za instalaciju su potrebni Bubblewrap i OSTree.',
+    nacrt: 'Flatpak je sistem za pakovanje i pokretanje aplikacija. Aplikacije se pokreću u sandbox okruženju; za instalaciju su potrebni Bubblewrap i OSTree.',
+  },
+  {
     ime: 'P5 jača tvrdnja od izvora',
     ocekivano: 'fail',
     izvor: 'Moguće je hostovati Flatpak repozitorijum koji je nezavisan od Flathub-a.',
