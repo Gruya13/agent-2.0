@@ -239,7 +239,10 @@ async function consolidator(config, { task, cwd, now }) {
 
   const draft = await readNote(cwd, draftRel);
   const slug = noteName(draftRel);
-  const productionRel = `wiki/${slug}.md`;
+  // Testni režim: konsolidator upiše DRUGU produkcionu putanju (npr. ime po
+  // izvoru). Služi da se dokaže da zonska kapija odbija svaku metu koja nije
+  // deklarisani artefakt zadatka.
+  const productionRel = process.env.AGENT_2_0_MOCK_CONSOLIDATE_PATH ?? `wiki/${slug}.md`;
 
   const frontmatter = {
     ...(draft.frontmatter ?? {}),

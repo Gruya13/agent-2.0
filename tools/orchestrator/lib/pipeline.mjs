@@ -111,6 +111,18 @@ export function createPipeline(config, options = {}) {
    * nacrt od produkcije, pa bi `researcher` mogao da upise produkcionu belesku —
    * dokazano skriptom NALAZ-2 drugog red-team prolaza.
    */
+  /**
+   * Tačne produkcione putanje izvedene iz artefakata zadatka. Isti izvor istine
+   * koriste i zonska kapija i prompt konsolidatora — bez toga model bira ime po
+   * izvoru (npr. `wiki/tabela.md`), kapija ga odbija, a tok staje bez objave.
+   */
+  function productionPathsFor(task) {
+    const data = task.data ?? task;
+    return (data.artifacts ?? [])
+      .filter((rel) => rel.startsWith('wiki/') && !rel.startsWith('wiki/drafts/fragments/'))
+      .map((rel) => (rel.startsWith('wiki/drafts/') ? `wiki/${path.basename(rel)}` : rel));
+  }
+
   function zonePolicyFor(task) {
     const data = task.data ?? task;
     if ((data.kind ?? 'ingest') === 'audit') {
@@ -118,10 +130,7 @@ export function createPipeline(config, options = {}) {
     }
     // Artefakt moze biti nacrt (`wiki/drafts/X.md` -> `wiki/X.md`) ili vec
     // produkciona beleska (kada je konsolidator upise pre merge-a).
-    const production = (data.artifacts ?? [])
-      .filter((rel) => rel.startsWith('wiki/') && !rel.startsWith('wiki/drafts/fragments/'))
-      .map((rel) => (rel.startsWith('wiki/drafts/') ? 'wiki/' + path.basename(rel) : rel));
-    return { production };
+    return { production: productionPathsFor(data) };
   }
 
   /**
@@ -1046,7 +1055,12 @@ export function createPipeline(config, options = {}) {
       task: claimed,
       extra: {
         worktree: wt,
-        instructions: `Nacrt(i): ${(claimed.data.artifacts ?? []).join(', ')}. Premesti u ${config.vault.production}/ i regeneriši ${config.vault.index}.`,
+        instructions: [
+          `Nacrt(i): ${(claimed.data.artifacts ?? []).join(', ') || '(nema)'}.`,
+          `Dozvoljena produkciona putanja je TAČNO: ${productionPathsFor(claimed).join(', ') || '(nema)'}.`,
+          `Ne upisuj nijednu drugu putanju u ${config.vault.production}/ — zonska kapija odbija svaku drugu.`,
+          `Regeneriši ${config.vault.index}.`,
+        ].join('\n'),
       },
     });
 
@@ -1332,7 +1346,7 @@ export function createPipeline(config, options = {}) {
   return {
     config, store, clock, logger,
     ingest, audit, runAudit, runExtract, runResearch, runVerify, runChallenge, runConsolidate, reflect, runOnce, run, status,
-    evaluateReadiness, failPhase, commitBookkeeping,
+    evaluateReadiness, failPhase, commitBookkeeping, productionPathsFor,
   };
 }
 
