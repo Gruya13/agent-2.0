@@ -150,6 +150,11 @@ function tokenize(text) {
     const raw = lines[i];
     const indentRaw = raw.match(/^[ \t]*/)[0].replace(/\t/g, '  ').length;
     if (blokIndent !== null) {
+      // Tabulator u uvlačenju bloka je YAML greška; bez ove provere se tiho
+      // odsecao deo sadržaja (npr. "\talpha" -> "lpha").
+      if (/^\s*\t/.test(raw) || / \t/.test(raw.match(/^[ \t]*/)[0])) {
+        throw new YamlError('tabulator u YAML-u nije dozvoljen', i + 1);
+      }
       if (raw.trim() !== '' && indentRaw < blokIndent) {
         blokIndent = null;
       } else {

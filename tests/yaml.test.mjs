@@ -158,3 +158,8 @@ test('Y6: prazan string i string samo od preloma', () => {
   const prelomi = parseFrontmatter(stringifyFrontmatter({ s: '\n\n' }, 't\n')).data.s;
   assert.equal(prelomi, '\n\n');
 });
+test('Y7: tab u uvlačenju bloka se odbija', () => {
+  assert.throws(() => parseYaml('value: |-\n\talpha\nnext: x\n'), YamlError);
+  // Običan tab van bloka se takođe odbija.
+  assert.throws(() => parseYaml('a:\n\tb: 1\n'), YamlError);
+});
