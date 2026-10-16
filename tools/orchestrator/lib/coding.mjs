@@ -136,6 +136,25 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
   }
 
   /**
+   * Ukloni zaostala radna stabla ovog zadatka (posle naglog prekida procesa).
+   * `git worktree prune` sam ne uklanja stablo koje još postoji na disku.
+   */
+  async function ocistiZaostalaStabla(root, id) {
+    const lista = (await git(root, ['worktree', 'list', '--porcelain'], { allowFailure: true })).stdout;
+    for (const blok of lista.split(/\n{2,}/).filter(Boolean)) {
+      const dir = /^worktree (.+)$/m.exec(blok)?.[1];
+      const branch = /^branch (.+)$/m.exec(blok)?.[1];
+      if (!dir) continue;
+      const nas = (branch && branch.endsWith(`/code/${id}`))
+        || path.basename(dir).startsWith(`agent2-code-${id}-`);
+      if (!nas) continue;
+      await git(root, ['worktree', 'remove', '--force', dir], { actor: OWNER, allowFailure: true });
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+    await git(root, ['worktree', 'prune'], { actor: OWNER, allowFailure: true });
+  }
+
+  /**
    * Izmene u radnom stablu ciljnog repoa (bez kontrolnog `.runtime`).
    *
    * Uzima i nepraćene/izmenjene fajlove i razliku prema početnoj reviziji: ako je
@@ -361,7 +380,9 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     // pregled grane koja ne postoji (nalaz W6).
     let impl = null;
     try {
-      await git(root, ['worktree', 'prune'], { actor: OWNER, allowFailure: true });
+      // Nagli prekid (SIGKILL) ne izvršava `finally`: zaostaje radno stablo i
+      // grana. Bez ovog čišćenja nastavak pada na "already used by worktree".
+      await ocistiZaostalaStabla(root, id);
       await git(root, ['branch', '-D', granaZa(id)], { actor: OWNER, allowFailure: true });
       dir = await napraviStablo(root, id, { rev: task.data.code_base, grana: granaZa(id) });
 
@@ -690,6 +711,31 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         return await odbij(id, ev, `grana je promenjena posle pregleda (${granaSha.slice(0, 8)} != ${String(ev.review.sha).slice(0, 8)})`, token);
       }
       const mainSha = (await git(root, ['rev-parse', 'main'])).stdout.trim();
+      // Oporavak: ako je pregledani SHA već predak main-a, merge je obavljen u
+      // ranijem procesu (koji je prekinut pre evidencije/zapisa). Ne spajaj
+      // ponovo i ne traži nov pregled — dopuni evidenciju i dovrši zapis.
+      const vecSpojen = (await git(root, ['merge-base', '--is-ancestor', ev.review.sha, 'main'], { allowFailure: true })).code === 0;
+      if (vecSpojen) {
+        ev = {
+          ...ev,
+          accept: {
+            merge: mainSha, branch: grana, reviewed: ev.review.sha,
+            tag: `dokaz/${id}-accept`, recovered: true, at: now(),
+          },
+        };
+        await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: 'prihvatanje prepoznato iz Gita' });
+        const zapis = await pokusajZapisa(id, task, ev, token);
+        if (!zapis.ok) {
+          return {
+            phase: 'code', task: id, ok: false, merge: mainSha,
+            reason: `prihvatanje je već u Gitu, ali zapis u memoriju nije prošao: ${zapis.error.message}`,
+          };
+        }
+        await store.transition(id, 'consolidated', { actor: 'agentctl', note: `oporavak: ${mainSha.slice(0, 8)}` });
+        await store.emit('code.accepted', { task: id, merge: mainSha, branch: grana, recovered: true });
+        logger(`code: ${id} -> consolidated (oporavak posle prekida)`);
+        return { phase: 'code', task: id, ok: true, step: 'memory', recovered: true };
+      }
       const osnovaPromenjena = Boolean(ev.review.base) && mainSha !== ev.review.base;
       // Definicija: nova osnovica znači da pregled više ne pokriva rezultat koji
       // se prihvata — traži se NOV pregled, a ne automatski rebase (Codex).
@@ -765,6 +811,10 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
           tree: drvo, integration_tree: proba.rezultat.tree, at: now(),
         },
       };
+      // Prihvatanje se upisuje ODMAH posle merge-a: ako proces pogine pre wiki
+      // zapisa, nastavak mora da vidi da je promena već prihvaćena (test CR2).
+      await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: `prihvaćeno: ${sha.slice(0, 8)}` });
+
       // Zadatak vraća ishod u memoriju; piše kontrolni sloj, ne agent.
       const zapis = await pokusajZapisa(id, task, ev, token);
       ev = zapis.ev;
