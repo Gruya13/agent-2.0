@@ -192,7 +192,18 @@ function parseBlockScalar(lines, index, indent, style) {
   }
   if (blockIndent === null) blockIndent = indent + 2;
   const folded = style.startsWith('>');
-  let value = folded ? collected.join(' ') : collected.join('\n');
+  let value;
+  if (folded) {
+    // Fold: susedne neprazne linije se spajaju razmakom, a prazna linija je
+    // granica pasusa (prelom) — `join(' ')` je brisao granice pasusa.
+    value = '';
+    for (const lin of collected) {
+      if (lin === '') { value += '\n'; continue; }
+      value += value === '' || value.endsWith('\n') ? lin : ` ${lin}`;
+    }
+  } else {
+    value = collected.join('\n');
+  }
   const chomp = style.slice(1);
   if (chomp === '-') value = value.replace(/\n+$/, '');
   else if (chomp === '+') value += '\n';
@@ -392,6 +403,8 @@ function dumpValue(value, indent, out) {
 
 function dumpBlockText(text, indent, out) {
   const pad = ' '.repeat(indent);
+  // Uvek se skida TAČNO jedan završni prelom; stil (|-, |, |+) određuje koliko
+  // ih parser vrati, pa round-trip čuva i završne prazne linije.
   const cleaned = text.endsWith('\n') ? text.slice(0, -1) : text;
   const lines = cleaned.split('\n');
   // Vodeća indentacija se normalizuje na prvu liniju: ako bi prva linija imala
@@ -408,7 +421,11 @@ function dumpBlockText(text, indent, out) {
 function dumpEntry(key, value, indent, out) {
   const pad = ' '.repeat(indent);
   if (typeof value === 'string' && value.includes('\n')) {
-    out.push(`${pad}${dumpKey(key)}: |-`);
+    // Stil se bira prema broju završnih preloma da parse vrati isti string:
+    // 0 -> |- (strip), 1 -> | (clip), 2+ -> |+ (keep).
+    const zavrsnih = /(\n+)$/.exec(value)?.[1].length ?? 0;
+    const stil = zavrsnih === 0 ? '|-' : zavrsnih === 1 ? '|' : '|+';
+    out.push(`${pad}${dumpKey(key)}: ${stil}`);
     dumpBlockText(value, indent + 2, out);
     return;
   }

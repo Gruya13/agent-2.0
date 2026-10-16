@@ -136,3 +136,25 @@ test('Y3: vodeće prazne linije u blok skalaru se čuvaju', () => {
   assert.equal(data.summary.startsWith('\n\nprva linija'), true, JSON.stringify(data.summary));
   assert.equal(data.summary.includes('\n\ndruga linija'), true);
 });
+test('Y4: round-trip čuva završne prazne linije (|, |+, samo prelomi)', () => {
+  for (const ulaz of ['a\nb', 'a\nb\n', 'a\nb\n\n', '\n\n', '\nprva\n\ndruga\n\n\n']) {
+    const tekst = stringifyFrontmatter({ s: ulaz }, 't\n');
+    const { data } = parseFrontmatter(tekst);
+    assert.equal(data.s, ulaz, `round-trip za ${JSON.stringify(ulaz)}`);
+  }
+});
+
+test('Y5: folded > čuva granice pasusa', () => {
+  const ulaz = '---\nsummary: >\n\n  prvi red\n  drugi red\n\n  treci pasus\n---\n\ntelo\n';
+  const { data } = parseFrontmatter(ulaz);
+  assert.match(data.summary, /prvi red drugi red/);
+  assert.match(data.summary, /\n/);
+  assert.equal(data.summary.includes('prvi red drugi red\ntreci pasus'), true, JSON.stringify(data.summary));
+});
+
+test('Y6: prazan string i string samo od preloma', () => {
+  const prazan = parseFrontmatter(stringifyFrontmatter({ s: '' }, 't\n')).data.s;
+  assert.equal(prazan, '');
+  const prelomi = parseFrontmatter(stringifyFrontmatter({ s: '\n\n' }, 't\n')).data.s;
+  assert.equal(prelomi, '\n\n');
+});
