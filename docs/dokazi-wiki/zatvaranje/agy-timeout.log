@@ -1,0 +1,10 @@
+=== K12 PDF ogled: 2026-10-16T09:50:51+02:00 | revizija 48dad89 | sha256 PDF e52b02387398d280 ===
+[agentctl] ingest: TASK-101 <- raw/tabela.pdf (manifest: +0)
+zadatak TASK-101 (ready) <- raw/tabela.pdf
+[agentctl] poziv uloge extractor (harness:agy) u /home/gru/k12-pdf-vault/.worktrees/TASK-101-extractor
+[agentctl] krug 1/8: 1 akcija, promena=false
+FAZA     ZADATAK   ISHOD                   
+-------  --------  ------------------------
+extract  TASK-101  neuspeh: nema fragmenata
+krugova: 1, akcija: 1
+=== kraj: 2026-10-16T09:55:51+02:00 ===

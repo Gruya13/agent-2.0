@@ -1,0 +1,23 @@
+=== K12e dokumentni ogled: 2026-10-16T10:46:30+02:00 | revizija a77ebd6 ===
+[agentctl] ingest: TASK-101 <- raw/ostree2.md (manifest: +0)
+zadatak TASK-101 (ready) <- raw/ostree2.md
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k12e-vault/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/OSTree-i-Flatpak.md (agy)
+[agentctl] krug 1/12: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k12e-vault/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> fail (pokušaj 1)
+[agentctl] krug 2/12: 1 akcija, promena=true
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k12e-vault/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/OSTree-i-Flatpak.md (agy)
+[agentctl] krug 3/12: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k12e-vault/.worktrees/TASK-101-verifier
+[agentctl] greška u fazi verify za TASK-101: /home/gru/k12e-vault/tasks/active/TASK-101.md: neispravan frontmatter: neočekivana indentacija: **Izvor:** `raw/ostree2.md`, sha256 `3d0ec5d7…10e8e` — poklapa se sa `.agents/raw-manifest.json`, izvor nije menjan. Nacrt je jedina revizija `ff200a6`. (linija 41)
+[agentctl] krug 4/12: 1 akcija, promena=false
+FAZA      ZADATAK   ISHOD  
+--------  --------  -------
+research  TASK-101  ok     
+verify    TASK-101  neuspeh
+research  TASK-101  ok     
+verify    TASK-101  neuspeh
+krugova: 4, akcija: 4
+=== kraj: 2026-10-16T10:54:49+02:00 ===
