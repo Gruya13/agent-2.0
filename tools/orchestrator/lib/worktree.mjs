@@ -219,7 +219,7 @@ export async function mergeIntoMain(config, {
     // Izvedeni artefakti se neutrališu PRE rebase-a (inace rebase pukne na
     // konfliktu tipa add/add), pa tek onda ide rebase na aktuelni main.
     if (generatedPaths.length) await alignGeneratedPaths(config, worktreeDir, generatedPaths);
-    const rebase = await rebaseBranchOntoMain(config, { branch, worktreeDir });
+    const rebase = await rebaseBranchOntoMain(config, { branch, worktreeDir, generatedPaths });
     if (!rebase.rebased) {
       return { merged: false, conflict: Boolean(rebase.conflict), branch, files: rebase.files ?? [], reason: rebase.reason };
     }
@@ -309,7 +309,7 @@ export async function branchChangedPaths(config, branch, base = MAIN_BRANCH) {
  * would be overwritten"). Rebase zadržava autorstvo komita, a kontrolnom sloju
  * daje aktuelno stanje kao osnovu.
  */
-export async function rebaseBranchOntoMain(config, { branch, worktreeDir, base = MAIN_BRANCH } = {}) {
+export async function rebaseBranchOntoMain(config, { branch, worktreeDir, base = MAIN_BRANCH, generatedPaths = [] } = {}) {
   if (!worktreeDir || !(await exists(worktreeDir))) {
     return { rebased: false, reason: `radno stablo za granu ${branch} ne postoji` };
   }
@@ -317,7 +317,23 @@ export async function rebaseBranchOntoMain(config, { branch, worktreeDir, base =
   if (dirty.length) {
     return { rebased: false, reason: `radno stablo grane ${branch} je prljavo: ${dirty.slice(0, 3).join(', ')}` };
   }
-  const result = await git(worktreeDir, ['rebase', base], { actor: 'agentctl', allowFailure: true });
+  const izvedeni = new Set([...(generatedPaths ?? []), config.vault.index, '.agents/raw-manifest.json']);
+  let result = await git(worktreeDir, ['rebase', base], { actor: 'agentctl', allowFailure: true });
+
+  // Konflikt SAMO na izvedenim fajlovima (npr. `wiki/Index.md`, koji menja i
+  // konsolidator i kontrolni `reflect`) rešava se u korist `main`: te fajlove
+  // kontrolni sloj regeneriše posle merge-a. Konflikt na bilo kom drugom fajlu
+  // ostaje odbijanje — tiha izmena tuđeg sadržaja nije dozvoljena.
+  for (let krug = 0; result.code !== 0 && krug < 20; krug += 1) {
+    const sukob = (await git(worktreeDir, ['diff', '--name-only', '--diff-filter=U'], { allowFailure: true })).stdout
+      .split('\n').filter(Boolean);
+    if (!sukob.length || !sukob.every((f) => izvedeni.has(f))) break;
+    for (const rel of sukob) {
+      await git(worktreeDir, ['checkout', '--ours', '--', rel], { actor: 'agentctl', allowFailure: true });
+      await git(worktreeDir, ['add', '--', rel], { actor: 'agentctl', allowFailure: true });
+    }
+    result = await git(worktreeDir, ['-c', 'core.editor=true', 'rebase', '--continue'], { actor: 'agentctl', allowFailure: true });
+  }
   if (result.code === 0) return { rebased: true, branch };
 
   const conflicted = (await git(worktreeDir, ['diff', '--name-only', '--diff-filter=U'], { allowFailure: true })).stdout
