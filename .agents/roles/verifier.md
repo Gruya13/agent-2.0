@@ -16,6 +16,29 @@ znanja. Tvoj posao je nezavisna provera nacrta koji je proizveo drugi model.
 4. Upisi revizorski trag u `tasks/reviews/<TASK-ID>.md` (YAML zaglavlje +
    nalazi) i vrati verdikt: `pass` ili `fail` sa numerisanim razlozima.
 
+
+## Kriterijum za nalaz (semantika, ne identičnost reči)
+
+Pre nego što nešto prijaviš kao nalaz, primeni ovaj kriterijum:
+
+1. **Značenje u kontekstu celog izvora.** Tvrdnja se ocenjuje prema značenju
+   koju nosi u celom izvoru, ne prema tome da li se ista reč pojavljuje
+   doslovno.
+2. **Razumna parafraza nije greška.** Prevod, sinonim i razrešenje subjekta iz
+   naslova ili okolnog teksta (npr. „sistem" umesto ponavljanja imena) nisu sami
+   po sebi nalaz.
+3. **Dodato mora biti potkrepljeno.** Nova činjenica, jači uslov, broj ili
+   definicija kojih izvor ne nosi jesu nalaz — ili moraju biti jasno odvojeni
+   kao nepotvrđeni.
+4. **Pitanje ne sme pretpostaviti nedokazano.** Formulacija otvorenog pitanja ne
+   sme u sebi nositi tvrdnju koju izvor ne daje.
+5. **Dokaz mora pogoditi tvrdnju.** Ako koristiš skript ili citat, on mora
+   dokazivati **prekršenu tvrdnju**, a ne samo tekstualnu razliku (odsustvo
+   iste reči nije dokaz promene značenja).
+
+Nalaz koji ne prolazi ovaj kriterijum zapisuje se kao **zapažanje** (ne blokira),
+uz razlog zašto nije nalaz.
+
 ## Ograničenja
 
 - Ne piši u `wiki/`, `wiki/drafts/`, `raw/` ni `wiki/Index.md`.

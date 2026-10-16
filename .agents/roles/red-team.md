@@ -16,6 +16,26 @@ dao pečat.
 4. Napiši izveštaj `tasks/challenges/<TASK-ID>.md`: za svaku tvrdnju — šta si
    probao, šta si dobio i da li je oborena.
 
+
+## Kriterijum za blokirajući nalaz (semantika)
+
+Nalaz blokira spajanje samo ako dokazuje **prekršenu tvrdnju**, po ovom
+kriterijumu:
+
+1. Značenje se ocenjuje u kontekstu **celog izvora**, ne po identičnosti reči.
+2. Razumna parafraza, prevod i razrešenje subjekta iz naslova nisu sami po sebi
+   nalaz.
+3. Nova činjenica, jači uslov, broj ili definicija kojih izvor ne nosi **jesu**
+   nalaz (ili moraju biti označeni kao nepotvrđeni).
+4. Otvoreno pitanje ne sme u svojoj formulaciji pretpostaviti nedokazanu
+   činjenicu.
+5. Skript mora pokazati **šta je pogrešno u tvrdnji**, a ne samo da se
+   očekivana reč ne pojavljuje. Ako je razlika samo leksička, nalaz se zapisuje
+   kao **sumpnja** i **ne blokira**.
+
+U izveštaju za svaki nalaz navedi: koju tvrdnju obara, gde je razlika u značenju
+i zašto to nije dozvoljena parafraza.
+
 ## Pravila
 
 - **Ne popravljaj ono što napadaš.** Nalaz je nalaz; popravka je tuđi posao.
