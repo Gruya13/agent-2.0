@@ -1,106 +1,95 @@
 # Završni izveštaj — zaštita wiki memorije i zaokruživanje slojeva
 
-[Dokumentacija](README.md) · [Putanje i matrica](WIKI-ZASTITA-I-POKRIVENOST.md) · [Codex parcijalni dokazi](dokazi-wiki/codex-parcijalno/) · [Uputstvo](PORUKA-ZA-DSH-WIKI-I-ZAVRSNA-PROVERA.md)
+[Dokumentacija](README.md) · [Putanje i matrica](WIKI-ZASTITA-I-POKRIVENOST.md) · [Dokazi ogleda](dokazi-wiki/ogledi/) · [Uputstvo](PORUKA-ZA-DSH-WIKI-I-ZAVRSNA-PROVERA.md)
 
-Datum: 15/16. oktobar 2026.
+Datum: 16. oktobar 2026.
 
 ## 1. Revizija i model poverenja
 
 | | |
 |---|---|
 | Polazna revizija (uputstvo) | `95d2b4a` |
-| Završna revizija | `9f9afb6` |
-| Testni skup | **181/181**, dva uzastopna izvođenja |
+| Završna revizija | `6081944` |
+| Testni skup | **186/186**, dva uzastopna izvođenja |
 | Okruženje | Node v26.8.2, Git 2.55.0, Linux |
 
 **Model poverenja (ograničen):** podržani **lokalni režim**, jedan OS korisnik.
 Kontrolni sloj i MCP nisu OS izolacija; proces istog korisnika može direktno da
-menja fajlove. Tvrdi se samo: nijedan *podržani* tok ne publikuje tuđe znanje
-tiho i nijedan neuspeh nije prikriven. **Potpuna sigurnost nije dokazana.**
+menja fajlove. Tvrdi se: nijedan *podržani* tok ne publikuje tuđe znanje tiho i
+nijedan neuspeh nije prikriven. **Potpuna sigurnost nije dokazana.**
 
-## 2. Status faze: DELIMIČNO ZAVRŠENA (prekid zbog kvote provajdera)
+## 2. Status: faza ZAVRŠENA (uz otvorena ograničenja u odeljku 6)
 
-Po odeljku 9.E uputstva: **Codex je ostao bez kvote** i agentski pozivi su
-zaustavljeni.
-
-- Agent: `codex` (nit `verify`, `mode: full`), zadatak: nezavisna provera
-  zaštite wiki-ja i matrice, revizija `7d656cb`.
-- Poruka provajdera: `You've hit your usage limit. Upgrade to Pro … or try again
-  at Oct 16th, 2026 12:43 AM.`
-- Log: [provider-log.log](dokazi-wiki/codex-parcijalno/provider-log.log)
-  (`codex-mva09x57-f8207357`, status `failed` posle 48 s).
-
-Codex **nije** stigao da napiše finalni verdikt. Njegovi scenariji su ipak
-izvršeni do kraja pre prekida i sačuvani su kao **parcijalan nezavisan dokaz** u
-[dokazi-wiki/codex-parcijalno](dokazi-wiki/codex-parcijalno/) (15 modova +
-negativna i pozitivna kontrola).
+Sve stavke iz odeljka 7 uputstva imaju dokaz ili poimenično iskazan nedostatak.
+Nezavisna provera je izvršena u **tri runde**; poslednja relevantna korekcija
+(symlink granica) ima potvrdu.
 
 ## 3. Potvrđeni nalazi i minimalne korekcije
 
-Svi nalazi su prvo potvrđeni testom koji je **pao na neispravnom kodu**, pa
-popravljeni u postojećim modulima (bez novih uloga, servisa ili sloja).
+Svaki nalaz je prvo potvrđen testom koji je **pao na neispravnom kodu**.
 
 | # | Nalaz | Dokaz (pre) | Korekcija |
 |---|---|---|---|
-| 1 | Coding zapis u wiki komituje **tuđu** nekomitovanu belešku (`git add -A -- wiki`) | W1 pao | komituje se tačno `wiki/Izmene/<ID>.md` |
-| 2 | Knjigovodstvo pre merge-a komituje **cela stabla** (`tasks/wiki/raw`) | W2 pao | `mergeIntoMain` prima `bookkeepingPaths`; bez njih ne komituje ništa |
-| 3 | CLI `ready` koristi grubo `['tasks','wiki']` knjigovodstvo | (isti obrazac) | ide kroz `pipeline.commitBookkeeping` (allow-lista) |
-| 4 | Neuspeh zapisa u memoriju se **guta**: status `consolidated`, `ok:true` | W4 pao, Codex `code-failure` | `memory_write_error` + događaj; zadatak ostaje `verified`; ponovni pokušaj samo zapisa |
-| 5 | Neuspeo pokušaj izrade ostavlja **granu** i `implement` u evidenciji | W6 pao | grana se briše; `implement` se upisuje tek pri uspehu (dijagnostika ostaje u `outside_scope`) |
-| 6 | Zapis **prepisuje postojeću** belešku na istoj putanji | Codex `code-collision` (`existing-survives false`) | marker u zapisu; tuđa beleška se ne prepisuje (`MEMORY_PATH_TAKEN`) |
-| 7 | Instrukcija u sadržaju ne sme da proširi opseg | W5 (kontrola) | opseg zadatka se ne menja sadržajem memorije |
+| 1 | Coding zapis komituje **tuđu** wiki belešku (`git add -A -- wiki`) | W1 pao | komituje tačno `wiki/Izmene/<ID>.md` |
+| 2 | Knjigovodstvo pre merge-a komituje **cela stabla** | W2 pao | `mergeIntoMain` prima `bookkeepingPaths`; bez njih ne komituje ništa |
+| 3 | CLI `ready` grubo `['tasks','wiki']` | isti obrazac | ide kroz `pipeline.commitBookkeeping` (allow-lista) |
+| 4 | Neuspeh wiki zapisa se **guta** (`consolidated`, `ok:true`) | W4 pao, Codex `code-failure` | `memory_write_error` + događaj; zadatak `verified`; ponavlja se samo zapis |
+| 5 | Neuspeo pokušaj ostavlja **granu** i `implement` | W6 pao | grana se briše; `implement` tek pri uspehu |
+| 6 | Zapis **prepisuje postojeću** belešku | Codex `code-collision` | marker + odbijanje (`MEMORY_PATH_TAKEN`) |
+| 7 | **Oštećen/nestao manifest** tiho uspostavlja novu osnovu | W9 pao, Codex `manifest-*` | ako je manifest postojao u istoriji — greška, bez nove osnove |
+| 8 | **Tuđ validan kontrolni koren** odobrava upis (MCP) | W8 (MCP) pao | skladište mora biti u tom korenu |
+| 9 | Isto zaobilazeno **symlink-om** unutar tuđeg korena | Codex `linked-vault` | porede se **realne** putanje (`fs.realpath`) |
+| 10 | `init` komituje **tuđi** fajl u `.agents/` | W10 pao | komituje tačno ugovor (`AGENTS.md`, `roles/<uloga>.md`) i alat |
+| 11 | Instrukcija u sadržaju ne sme da proširi opseg | W5 (kontrola) | opseg ostaje iz zadatka |
 
-Novi testovi: `tests/wiki-integrity.test.mjs` (**W1–W7**). Ukupno **181**.
+## 4. Nezavisne provere (Codex, nit `verify`)
 
-## 4. Autorovi i nezavisni dokazi (odvojeno)
+| Runda | Kandidat | Log | Ishod |
+|---|---|---|---|
+| 1 | `7c524e7` | `codex-mval8c1o-1399b8b5` | potvrđeno 5 tvrdnji; **oboreno 3** (manifest, tuđi koren, init) |
+| 2 | `9f61db8` | `codex-mvalg62q-4ffdf942` | manifest ✓, init ✓; tuđi koren **oboren preko symlink-a** |
+| 3 | `6081944` | `codex-mvannjey-574ee75b` | symlink granica ✓ (5 varijanti), artefakti ogleda ✓; jedan **semantički** nalaz otvoren |
 
-**Autor (dsh) — izvršeno i ponovljivo lokalno:**
+Puni odgovori: [codex-finalni-pregled.md](dokazi-wiki/codex-finalni-pregled.md),
+[codex-potvrda-tri-nalaza.md](dokazi-wiki/codex-potvrda-tri-nalaza.md),
+[codex-zavrsna-provera.md](dokazi-wiki/codex-zavrsna-provera.md).
+U rundo 1 je Codex bio bez kvote; prekid je zabeležen, a njegovi scenariji su
+sačuvani ([codex-parcijalno](dokazi-wiki/codex-parcijalno/)).
 
-- `tests/wiki-integrity.test.mjs` W1–W7; ceo skup 181/181 (2×).
-- Negativna kontrola za svaki nalaz: test je padao pre popravke (zabeleženo u
-  istoriji komitova `9639409`, `249e08a`, `49e8040`, `9f9afb6`).
+## 5. Realni povezani ogledi (revizija `6081944`)
 
-**Nezavisno (Codex) — parcijalno, prekinuto kvotom:**
+| Ogled | Rezultat | Dokaz |
+|---|---|---|
+| **A — coding sa wiki memorijom** | **uspešno**: `main @ 3c7cf7cd`; reviewer `codex` `pass`; `review.sha = accept.reviewed = 428a7ec6…`; u ciljni repo ušla samo `src/range.js`, `tests/range-zero.test.js`; projektni `MEMORY.md` nedirnut; zapis `wiki/Izmene/TASK-101.md` | [A-coding.log](dokazi-wiki/ogledi/A-coding.log) |
+| **B — dokumentni unos do objave** | **blokiran (legitimno)**: 9 poziva, 24 min; challenge `reproducible`, verifikacija `fail` 3×, `blocked` („nacrt odbijen 4 puta“); nema produkcione beleške ni zakupa | [B-dokumentni.log](dokazi-wiki/ogledi/B-dokumentni.log) |
+| **C — ekstrakcija malog PDF-a** | **ekstrakcija uspešna**: fragment nosi `700000`, Bluetooth, PipeWire, Bubblewrap, OSTree, ChromeOS; konsolidacija **odbijena** jer je konsolidator ciljao `wiki/tabela.md` van deklarisanog artefakta (zonska kapija radila) | [C-fragment.md](dokazi-wiki/ogledi/C-fragment.md), [C-pdf.log](dokazi-wiki/ogledi/C-pdf.log) |
+| **D — audit u preciznom opsegu** | **uspešno**: librarian menjao samo `wiki/Flatpak.md` (u opsegu), verifikacija `pass`, challenge `clean`, revizorski merge `main @ 416aa59f` | [D-audit.log](dokazi-wiki/ogledi/D-audit.log) |
+| **E — prekid i nastavak** | **pokriveno**: W6 (neuspeo pokušaj ne ostavlja granu, `implement` ni zakup; nastavak prolazi) | `tests/wiki-integrity.test.mjs` |
 
-| Scenario | Rezultat (Codex-ov izlaz) |
-|---|---|
-| `negative.log` | **W1 i W2 padaju na starom kodu** → testovi padaju iz očekivanog razloga |
-| `positive.log` | W1 prolazi na kandidatu |
-| `code-clean` | ceo coding tok: implement → review `pass` → accept → `consolidated` |
-| `code-failure` | `accept ok:false`, status `verified`, greška zapisa zabeležena |
-| `code-collision` | **nalaz**: `existing-survives false` (postojeća beleška prepisana) |
-| `code-memory` | projektni `MEMORY.md` sačuvan; kontekst u `.agent-context/` |
-| `reflect`, `init`, `ready`, `symlink` | bez prijavljene greške |
-| `manifest-missing`, `manifest-corrupt` | pokrenuti; zaključak nije napisan (prekid) |
-| `retry`, `proof`, `consolidate` | pokrenuti; sadrže `linter`/`ERROR 128` izlaze **bez Codex-ovog zaključka** |
+Codex je u trećoj rundi sam klonirao sve vault-ove i potvrdio da su sačuvani
+zadaci **bajt-identični** klonovima i da nema aktivnih zakupa.
 
-## 5. Šta NIJE urađeno (otvoreno)
+## 6. Otvorena ograničenja
 
-1. **Finalni nezavisni verdikt** nad revizijom `9f9afb6` (i nad korekcijom
-   nalaza 6) **nedostaje** — kvota. Po odeljku 9.B/9.E to se ne sme
-   predstavljati kao potvrđeno.
-2. **Realni povezani ogledi iz 6.E nisu izvršeni**: stvarni coding prolaz na
-   `9f9afb6`, dokumentni unos do objave, ekstrakcija malog PDF-a/tabele, audit
-   nad nekoliko belešaka. Raniji realni ogledi ([K10](dokazi-k10/),
-   [K8](DOKAZI-ZAVRSNI-PROLaz.md)) ostaju dokazi **svojih** revizija.
-3. **`retry`/`proof`/`consolidate` scenariji** iz Codex-ovog skupa nisu
-   protumačeni do zaključka (linter/`ERROR 128` izlazi). Prva akcija za nastavak
-   je reprodukovati ih u mirnodopskom okruženju i utvrditi da li prijavljuju
-   stvarni problem ili artefakt fixture-a.
-4. **Poznata ograničenja** (i dalje otvorena): race prozor pred `git merge` u
-   coding prihvatanju; `stat`→`rm` prozor u `withFileLock`; MCP proveren
-   simulacijom okruženja, ne živim klijentom; `init` namerno komituje `tools/`.
+1. **Semantički kriterijum red-team nalaza (ogled B)**: reprodukovani NALAZ-1
+   dokazuje odsustvo reči u jednoj rečenici, ne nužno promenu značenja. Kapija je
+   ispravno blokirala po svom pravilu, ali **opravdanost tog kriterijuma ostaje
+   spor** i nije menjan u ovoj fazi.
+2. **TOCTOU prozori**: race prozor pred `git merge` u coding prihvatanju;
+   konkurentna zamena putanje između provere i upisa u MCP; `stat`→`rm` u
+   `withFileLock`. Nijedan nije nazvan zatvorenim.
+3. **MCP** je proveren stvarnim stdio protokolom iz testova, ali ne živim
+   harnes klijentom u produkcionom okruženju.
+4. **`init` komituje `tools/`** namerno (radna stabla moraju imati alat);
+   operatorska komanda, ne agentska putanja.
+5. Ogled C pokazuje da konsolidator može izabrati ime produkcione beleške koje
+   ne odgovara deklarisanom artefaktu — kapija to odbija, ali tok tada staje bez
+   objave.
 
-## 6. Prva akcija za nastavak (tačno)
+## 7. Prva akcija za nastavak
 
-1. Sačekati povratak kvote (poruka provajdera: **16. oktobar 2026, 00:43**).
-2. Poslati Codex-u isti zahtev (odeljak 9.A + 9.C) na **`9f9afb6`**, uz
-   [parcijalne dokaze](dokazi-wiki/codex-parcijalno/) i nalaz iz `code-collision`
-   koji je on sam prijavio.
-3. Zatim izvršiti realne oglede iz 6.E na istoj reviziji i dati ih Codex-u na
-   pregled artefakata (9.D).
-4. Ako zatreba, nastaviti od reference `refs/heads/main` = `9f9afb6`; radno
-   stablo je čisto, nema aktivnih zakupa ni zaostalih grana u kontrolnom repou.
-
-**Ništa nije objavljeno na udaljeni repozitorijum i nijedan override nije
-korišćen.** Zadatak je označen kao **nedovršen zbog resursa**, ne kao prolaz.
+Nema blokirajućeg nalaza. Sledeći korak je zadatak iz odeljka 7 uputstva:
+**jedan mali stvarni bug u zasebnom postojećem projektu** korisnika, sa unapred
+definisanim zahtevom i opsegom; zatim nezavisan pregled tog rezultata.
+Preporučeno je da se pre toga razreši spor iz odeljka 6.1 (kriterijum red-team
+nalaza), jer on određuje koliko će tok stajati na semantičkim nalazima.

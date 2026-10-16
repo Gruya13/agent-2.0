@@ -1,0 +1,26 @@
+=== K11-C PDF ekstrakcija: 2026-10-16T09:05:40+02:00 | revizija 6081944 ===
+[agentctl] ingest: TASK-101 <- raw/tabela.pdf (manifest: +0)
+zadatak TASK-101 (ready) <- raw/tabela.pdf
+[agentctl] poziv uloge extractor (harness:agy) u /home/gru/k11c-vault/.worktrees/TASK-101-extractor
+[agentctl] extract: TASK-101 -> 1 fragment(a) (agy)
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k11c-vault/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/Flatpak_tabela.md (agy)
+[agentctl] krug 1/6: 2 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k11c-vault/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> pass
+[agentctl] krug 2/6: 1 akcija, promena=true
+[agentctl] poziv uloge red-team (harness:dsh) u /home/gru/k11c-vault/.worktrees/TASK-101-red-team
+[agentctl] challenge: TASK-101 -> clean (0 skripti, 0 lažnih, korelacioni rizik)
+[agentctl] krug 3/6: 1 akcija, promena=true
+[agentctl] poziv uloge consolidator (harness:codex) u /home/gru/k11c-vault/.worktrees/TASK-101-consolidator
+[agentctl] consolidate: TASK-101 -> KONFLIKT/ODBIJENO (grana menja zone van dozvole: wiki/tabela.md)
+[agentctl] krug 4/6: 1 akcija, promena=false
+FAZA         ZADATAK   ISHOD                                                
+-----------  --------  -----------------------------------------------------
+extract      TASK-101  ok                                                   
+research     TASK-101  ok                                                   
+verify       TASK-101  ok                                                   
+challenge    TASK-101  ok                                                   
+consolidate  TASK-101  neuspeh: grana menja zone van dozvole: wiki/tabela.md
+krugova: 4, akcija: 5
+=== kraj: 2026-10-16T09:20:24+02:00 ===

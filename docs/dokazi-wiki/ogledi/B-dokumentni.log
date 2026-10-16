@@ -1,0 +1,43 @@
+=== K11-B dokumentni ogled: 2026-10-16T08:40:33+02:00 | revizija 6081944 ===
+[agentctl] ingest: TASK-101 <- raw/ostree.md (manifest: +0)
+zadatak TASK-101 (ready) <- raw/ostree.md
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k11b-vault/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/OSTree_i_Flatpak.md (agy)
+[agentctl] krug 1/10: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k11b-vault/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> pass
+[agentctl] krug 2/10: 1 akcija, promena=true
+[agentctl] poziv uloge red-team (harness:dsh) u /home/gru/k11b-vault/.worktrees/TASK-101-red-team
+[agentctl] challenge: TASK-101 -> reproducible (3 nalaza)
+[agentctl] krug 3/10: 1 akcija, promena=true
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k11b-vault/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/OSTree_i_Flatpak.md (agy)
+[agentctl] krug 4/10: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k11b-vault/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> fail (pokušaj 2)
+[agentctl] krug 5/10: 1 akcija, promena=true
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k11b-vault/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/OSTree_i_Flatpak.md (agy)
+[agentctl] krug 6/10: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k11b-vault/.worktrees/TASK-101-verifier
+[agentctl] verify: TASK-101 -> fail (pokušaj 3)
+[agentctl] krug 7/10: 1 akcija, promena=true
+[agentctl] poziv uloge researcher (harness:agy) u /home/gru/k11b-vault/.worktrees/TASK-101-researcher
+[agentctl] research: TASK-101 -> wiki/drafts/OSTree_i_Flatpak.md (agy)
+[agentctl] krug 8/10: 1 akcija, promena=true
+[agentctl] poziv uloge verifier (harness:dsh) u /home/gru/k11b-vault/.worktrees/TASK-101-verifier
+[agentctl] krug 9/10: 1 akcija, promena=true
+[agentctl] krug 10/10: 0 akcija, promena=false
+FAZA       ZADATAK   ISHOD  
+---------  --------  -------
+research   TASK-101  ok     
+verify     TASK-101  ok     
+challenge  TASK-101  neuspeh
+research   TASK-101  ok     
+verify     TASK-101  neuspeh
+research   TASK-101  ok     
+verify     TASK-101  neuspeh
+research   TASK-101  ok     
+verify     TASK-101  neuspeh
+krugova: 10, akcija: 9
+=== kraj: 2026-10-16T09:05:24+02:00 ===

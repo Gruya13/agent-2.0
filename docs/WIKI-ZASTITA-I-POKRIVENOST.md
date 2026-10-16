@@ -35,7 +35,7 @@ znanje tiho i nijedan neuspeh ne ostaje prikriven.
 |---|---|---|
 | zone i identitet | dozvoljeni pisac prolazi; tuđa uloga/vlasnik/token odbijeni | `mcp.test.mjs`, `pipeline.test.mjs` (zone), R4 |
 | zakup | istekao/preuzet zakup ne dozvoljava upis ni prihvatanje; obnova radi | `task-store.test.mjs` (16), R2, R15, R16, R19 |
-| putanje | `../`, symlink i realna putanja ne zaobilaze granicu | `worktree.test.mjs` (putanja izvan vault-a), R7, `lint.test.mjs` (raw symlink) |
+| putanje | `../`, symlink i realna putanja ne zaobilaze granicu | `worktree.test.mjs`, R7, `lint.test.mjs`, **MCP W8** (realpath) |
 | izvor | promena teksta/bajtova/brisanje/link se detektuje | `lint.test.mjs` (17) |
 | manifest | nedostajući/oštećen manifest nije tiha nova osnova | `lint.test.mjs`, `pipeline.test.mjs` |
 | publikacija | nacrt bez važeće provere ne ulazi u produkciju; retry ne širi dozvoljene mete | `pipeline.test.mjs` (odbijena konsolidacija), `coding-robustness.test.mjs` (R3, R14) |
@@ -62,9 +62,9 @@ znanje tiho i nijedan neuspeh ne ostaje prikriven.
 | Librarian audit | precizan opseg kroz ceo tok | `pipeline.test.mjs`, `scope.test.mjs` | — |
 | Coding tok | reprodukcija, baseline assertion, očuvanje testova, pass, pregledan SHA, integracija | `coding.test.mjs` (6), `coding-robustness.test.mjs` (19) | — |
 | Wiki memorija | oba smera, granice sadržaja, indeks | `wiki-integrity.test.mjs` (**7**), `vault.test.mjs` (9) | — |
-| CLI, init, status, lint, oporavak | komande i nastavak posle prekinute faze | `cli.test.mjs` (11), W6 | — |
+| CLI, init, status, lint, oporavak | komande i nastavak posle prekinute faze | `cli.test.mjs` (11), W6, W10 | — |
 
-Skup: **181 testova** u 15 fajlova (`npm test`, dva uzastopna izvođenja).
+Skup: **186 testova** u 15 fajlova (`npm test`, dva uzastopna izvođenja).
 
 Završni izveštaj faze (uključujući prekid zbog kvote provajdera):
 [ZAVRSNI-IZVESTAJ-WIKI-FAZA.md](ZAVRSNI-IZVESTAJ-WIKI-FAZA.md).
