@@ -143,8 +143,20 @@ function isListItem(text) {
 function tokenize(text) {
   const lines = text.split(/\r?\n/);
   const out = [];
+  // Indentacija blok skalara u toku (npr. `summary: |-`). Prazne linije unutar
+  // bloka se NE preskaču — inače parser tiho gubi prazne redove iz izveštaja.
+  let blokIndent = null;
   for (let i = 0; i < lines.length; i += 1) {
     const raw = lines[i];
+    const indentRaw = raw.match(/^[ \t]*/)[0].replace(/\t/g, '  ').length;
+    if (blokIndent !== null) {
+      if (raw.trim() !== '' && indentRaw < blokIndent) {
+        blokIndent = null;
+      } else {
+        out.push({ indent: indentRaw, text: raw.trim(), raw, line: i + 1, prazna: raw.trim() === '' });
+        continue;
+      }
+    }
     if (raw.trim() === '') continue;
     if (/^\s*#/.test(raw)) continue;
     if (/^\s*\.\.\.\s*$/.test(raw)) break;
@@ -153,7 +165,8 @@ function tokenize(text) {
     }
     const indent = raw.match(/^\s*/)[0].replace(/\t/g, '  ').length;
     if (/\t/.test(raw)) throw new YamlError('tabulator u YAML-u nije dozvoljen', i + 1);
-    out.push({ indent, text: raw.trim(), line: i + 1 });
+    out.push({ indent, text: raw.trim(), raw, line: i + 1 });
+    if (/[|>][-+]?\s*$/.test(raw.trim())) blokIndent = raw.trim().startsWith('- ') ? indent + 1 : indent + 1;
   }
   return out;
 }
@@ -164,10 +177,17 @@ function parseBlockScalar(lines, index, indent, style) {
   let blockIndent = null;
   while (i < lines.length) {
     const entry = lines[i];
+    // Prazna linija pripada bloku (čuva se kao prazan red), osim pre početka.
+    if (entry.prazna) {
+      if (blockIndent === null) { i += 1; continue; }
+      collected.push('');
+      i += 1;
+      continue;
+    }
     if (entry.indent <= indent && !(blockIndent !== null && entry.indent >= blockIndent)) break;
     if (blockIndent === null) blockIndent = entry.indent;
     if (entry.indent < blockIndent) break;
-    collected.push(entry.text);
+    collected.push(entry.raw === undefined ? entry.text : entry.raw.slice(blockIndent));
     i += 1;
   }
   if (blockIndent === null) blockIndent = indent + 2;
@@ -373,7 +393,16 @@ function dumpValue(value, indent, out) {
 function dumpBlockText(text, indent, out) {
   const pad = ' '.repeat(indent);
   const cleaned = text.endsWith('\n') ? text.slice(0, -1) : text;
-  for (const line of cleaned.split('\n')) out.push(line === '' ? '' : `${pad}${line}`);
+  const lines = cleaned.split('\n');
+  // Vodeća indentacija se normalizuje na prvu liniju: ako bi prva linija imala
+  // veći uvlačenje od ostalih, YAML bi prijavio "neočekivana indentacija" i ceo
+  // frontmatter bi postao nečitljiv (dokazano na tekstu izveštaja verifikatora).
+  const base = /^[ \t]*/.exec(lines[0])?.[0] ?? '';
+  for (const line of lines) {
+    if (line.trim() === '') { out.push(''); continue; }
+    const ostatak = line.startsWith(base) ? line.slice(base.length) : line.trimStart();
+    out.push(`${pad}${ostatak}`);
+  }
 }
 
 function dumpEntry(key, value, indent, out) {

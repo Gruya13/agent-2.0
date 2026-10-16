@@ -113,3 +113,19 @@ test('frontmatter: redosled polja je stabilan (bez šuma u diff-u)', () => {
   assert.equal(lines[3], 'status: ready');
   assert.equal(lines[4], 'extra: 1');
 });
+test('Y1: tekst izveštaja sa neujednačenom indentacijom ostaje validan', () => {
+  const summary = ' prva linija uvucena\n    druga jos uvlacenija\n\ntreca bez uvucenja';
+  const tekst = stringifyFrontmatter({ title: 'x', verification: { verdict: 'fail', summary } }, '# telo\n');
+  const { data } = parseFrontmatter(tekst);
+  assert.equal(data.verification.verdict, 'fail');
+  assert.equal(data.verification.summary.includes('prva linija uvucena'), true);
+  assert.equal(data.verification.summary.includes('treca bez uvucenja'), true);
+});
+
+test('Y2: round-trip je idempotentan za višelinijski tekst', () => {
+  const summary = '  uvod\n    detalj\n\n  zakljucak';
+  const prvi = stringifyFrontmatter({ summary }, 'telo\n');
+  const { data } = parseFrontmatter(prvi);
+  const drugi = stringifyFrontmatter({ summary: data.summary }, 'telo\n');
+  assert.equal(prvi, drugi);
+});
