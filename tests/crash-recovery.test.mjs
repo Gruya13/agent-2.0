@@ -118,14 +118,19 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
     await fs.chmod(hook, 0o755);
 
     const p = pokreni(vault.root, zadatak.data.id, { AGENT_2_0_MOCK_CODE_CMD: process.env.AGENT_2_0_MOCK_CODE_CMD });
-    // Čekamo da merge u ciljnom repou postoji (prihvatanje je prošlo).
-    const kraj = Date.now() + 20000;
+    // Kill tek kada je prihvatanje ZABELEŽENO (accept) a zapis NIJE (memory_write):
+    // inače test može pasti u prozoru pre upisa accept-a (nalaz nezavisne provere).
+    const kraj = Date.now() + 30000;
+    let prozor = false;
     let spojeno = false;
-    while (Date.now() < kraj && !spojeno) {
-      const log = (await gitExec(cilj.root, ['log', '--oneline'])).stdout;
-      spojeno = /prihvacena popravka/.test(log);
-      if (!spojeno) await cekaj(100);
+    while (Date.now() < kraj && !prozor) {
+      const stanje = await store.get(zadatak.data.id);
+      const ev = stanje.data.code_evidence ?? {};
+      spojeno = Boolean(ev.accept?.merge);
+      prozor = spojeno && !ev.memory_write;
+      if (!prozor) await cekaj(50);
     }
+    assert.equal(prozor, true, 'nije uhvaćen prozor: prihvatanje zabeleženo, zapis nije');
     assert.equal(spojeno, true, 'merge u ciljnom repou nije nastao pre prekida');
 
     try { process.kill(-p.child.pid, 'SIGKILL'); } catch { p.child.kill('SIGKILL'); }
