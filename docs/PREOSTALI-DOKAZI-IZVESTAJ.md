@@ -100,6 +100,16 @@ Korekcije u 4406d72 (deterministički CR2 prozor + --test-concurrency=4) NISU do
 - Nema OS izolacije; nema tvrdnje o potpunoj sigurnosti ni otpornosti na prompt injection.
 - Semantički kriterijum zavisi od modela; K14 je pokazao da ista klasa grešaka može da se ponovi.
 
+
+### Zabeležen jednokratni pad skupa
+
+Posle commita konfiguracije, prvo izvođenje skupa dalo je 202/203 (jedan test pao),
+a svako sledeće 203/203. Izlaz prvog izvođenja nije sačuvan, pa test nije
+identifikovan. Pad NIJE reprodukovan u 11 uzastopnih izvođenja, uključujući tri
+izvođenja pod opterećenjem od 8 CPU procesa. Uzrok nije definitivno utvrđen;
+zabeležen je ovde umesto da bude prećutan. Prethodno utvrđeni i popravljeni
+flaky uzroci (CR2 trka i resursna iscrpljenost na 16 jezgara) ostaju popravljeni.
+
 ---
 
 ## 6. Prva akcija nastavka
