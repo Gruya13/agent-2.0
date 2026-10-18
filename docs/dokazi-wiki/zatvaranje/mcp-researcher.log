@@ -1,5 +1,5 @@
 === MCP ogled: uloga=researcher klijent=agy 2026-10-18T17:07:19+02:00 revizija=958d3a6 ===
-priprema: {"vault":"/home/gru/k13-mcp-researcher","id":"TASK-101","worktree":"/home/gru/k13-mcp-researcher/.worktrees/TASK-101-researcher","token":"57e2cfdd-de44-4d12-8bde-93d720965117","role":"researcher","agent":"agy"}
+priprema: {"vault":"/home/gru/k13-mcp-researcher","id":"TASK-101","worktree":"/home/gru/k13-mcp-researcher/.worktrees/TASK-101-researcher","token":"[redigovano]","role":"researcher","agent":"agy"}
 Rezultati oba poziva MCP alata `obsidian_write_note`:
 
 1. **Poziv za [Kroz_klijenta.md](file:///home/gru/k13-mcp-researcher/.worktrees/TASK-101-researcher/wiki/drafts/Kroz_klijenta.md)** (`path="wiki/drafts/Kroz_klijenta.md"`, `content="# MCP proba kroz stvarni klijent"`):

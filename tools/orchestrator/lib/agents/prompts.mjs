@@ -45,6 +45,21 @@ function taskContext(config, task, { role, extra = {} }) {
     `- Radi u isključivo svom radnom stablu: ${extra.worktree ?? '(nepoznato)'}`,
     '- Ne izlazi iz svog radnog stabla i ne pozivaj `git merge`.',
   ];
+  // Prethodno odbijanje MORA biti u promptu: bez toga istraživač ponavlja iste
+  // premise posle obrazloženog fail-a (potvrđeno na K14: četiri nacrta sa istom
+  // definicijom i istim pretpostavkama u pitanjima).
+  if (data.verification?.verdict === 'fail') {
+    const sazetak = String(data.verification.summary ?? '').trim();
+    lines.push(
+      '',
+      '## Prethodno odbijanje — obavezno pre novog nacrta',
+      '',
+      `- verdikt: fail (harnes: ${data.verification.harness ?? '?'}, revizija: ${data.verification.commit ?? '(nema)'})`,
+      '- Ove premise su odbijene. UKLONI ih ili ispravi prema izvoru; oznaka `nepotvrđeno` NIJE dovoljna:',
+      '',
+      ...(sazetak ? sazetak.split('\n').slice(0, 80).map((l) => `  ${l}`) : ['  (sažetak nije sačuvan — vidi tasks/reviews/)']),
+    );
+  }
   if (extra.instructions) lines.push('', extra.instructions);
   return lines.join('\n');
 }

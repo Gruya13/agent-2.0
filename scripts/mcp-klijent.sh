@@ -23,7 +23,8 @@ git -C "$V" -c user.name=op -c user.email=o@local commit -q -m izvor || true
 
 echo "=== MCP ogled: uloga=$ULOGA klijent=$AGENT $(date -Is) revizija=$(git rev-parse --short HEAD) ===" >> "$LOG"
 PRI=$(node tools/fixtures/mcp-pripremi.mjs "$V" "$ULOGA" "$AGENT")
-echo "priprema: $PRI" >> "$LOG"
+# Token zakupa se NE upisuje u log (rediguje se pre ispisa).
+echo "priprema: $(printf '%s' "$PRI" | python3 -c "import json,sys;d=json.load(sys.stdin);d.pop('token',None);print(json.dumps(d))")" >> "$LOG"
 WT=$(printf '%s' "$PRI" | python3 -c "import json,sys;print(json.load(sys.stdin)['worktree'])")
 TOKEN=$(printf '%s' "$PRI" | python3 -c "import json,sys;print(json.load(sys.stdin)['token'])")
 ID=$(printf '%s' "$PRI" | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")

@@ -1,5 +1,5 @@
 === MCP ogled: uloga=extractor klijent=agy 2026-10-18T17:08:05+02:00 revizija=958d3a6 ===
-priprema: {"vault":"/home/gru/k13-mcp-extractor","id":"TASK-101","worktree":"/home/gru/k13-mcp-extractor/.worktrees/TASK-101-extractor","token":"b62ce63d-db68-4990-a507-3889167a9ed3","role":"extractor","agent":"agy"}
+priprema: {"vault":"/home/gru/k13-mcp-extractor","id":"TASK-101","worktree":"/home/gru/k13-mcp-extractor/.worktrees/TASK-101-extractor","token":"[redigovano]","role":"extractor","agent":"agy"}
 Rezultati oba poziva alata `obsidian_write_note`:
 
 1. **`path="wiki/drafts/fragments/Kroz_klijenta.md"`, `content="# MCP proba kroz stvarni klijent"`**

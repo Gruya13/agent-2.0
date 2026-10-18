@@ -1,5 +1,5 @@
 === MCP ogled: uloga=librarian klijent=codex 2026-10-18T17:10:14+02:00 revizija=958d3a6 ===
-priprema: {"vault":"/home/gru/k13-mcp-librarian","id":"TASK-101","worktree":"/home/gru/k13-mcp-librarian/.worktrees/TASK-101-librarian","token":"ec7d1e3f-a9f8-4276-a56b-51f1ccf6c6ea","role":"librarian","agent":"codex"}
+priprema: {"vault":"/home/gru/k13-mcp-librarian","id":"TASK-101","worktree":"/home/gru/k13-mcp-librarian/.worktrees/TASK-101-librarian","token":"[redigovano]","role":"librarian","agent":"codex"}
 WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/tmp.fCSRDHdSKq"))
 Reading additional input from stdin...
 OpenAI Codex v0.163.0

@@ -1,5 +1,5 @@
 === MCP ogled (stvarni dsh klijent, uloga verifier): 2026-10-16T10:30:50+02:00 | revizija bfd1aed ===
-priprema: {"vault":"/home/gru/k12-mcp-dsh","id":"TASK-101","worktree":"/home/gru/k12-mcp-dsh/.worktrees/TASK-101-verifier","token":"dbae2ef7-d8d8-4db8-ac44-55f821c67564","role":"verifier","agent":"dsh"}
+priprema: {"vault":"/home/gru/k12-mcp-dsh","id":"TASK-101","worktree":"/home/gru/k12-mcp-dsh/.worktrees/TASK-101-verifier","token":"[redigovano]","role":"verifier","agent":"dsh"}
 [obsidian-mcp:dsh/verifier] servira | vault=/home/gru/k12-mcp-dsh/.worktrees/TASK-101-verifier | role=verifier
 dsh: reasoning:
 The user wants me to use the MCP tool obsidian_write_note exactly twice, and show the result of each call.
