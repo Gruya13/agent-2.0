@@ -191,6 +191,10 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     // ✖ ne sme koristiti kao dokaz tvrdnje (Codex: TypeError je prošao kao assertion).
     if (/SyntaxError|TypeError|ReferenceError|RangeError|Cannot find module|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|ERR_REQUIRE_ESM/.test(tekst)) return 'error';
     if (/AssertionError|ERR_ASSERTION/.test(tekst)) return 'assertion';
+    // Node 26 podrazumevani runner za grešku učitavanja test fajla ispisuje SAMO
+    // 'test failed' (bez AssertionError). To nije tvrdnja o ponašanju nego greška
+    // izvršavanja, pa se ne sme prihvatiti kao dokaz buga.
+    if (/'test failed'|\btest failed\b/.test(tekst)) return 'error';
     return 'unknown';
   }
 
@@ -362,7 +366,16 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     });
     // Komituje se TAČNO ova beleška. `['wiki']` bi kroz `git add -A` povukao i
     // tuđe nekomitovane izmene u wiki-ju (potvrđeno testom W1).
-    await commitPaths(config.root, [rel], `agentctl: zapis o izmeni ${id} u memoriju`, { actor: 'agentctl' });
+    const commit = await commitPaths(config.root, [rel], `agentctl: zapis o izmeni ${id} u memoriju`, { actor: 'agentctl' });
+    if (commit.lockCleared) {
+      // Dokumentuj da je uklonjen zaostali git lock (posle naglog prekida), da
+      // oporavak ne bude tih.
+      await store.updateBody(id, {
+        actor: 'agentctl',
+        append: `### Uklonjen zaostali git index.lock (${now()})\n\nPrethodni proces je prekinut tokom git upisa; lock nije nestao posle 2 s i uklonjen je pre zapisa.`,
+        note: 'zaostali git index.lock uklonjen',
+      });
+    }
     return rel;
   }
 

@@ -108,8 +108,10 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
   );
   process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
   try {
-    await coding.runCodeTask(zadatak.data.id); // izrada
-    await coding.runCodeTask(zadatak.data.id); // pregled
+    const izrada = await coding.runCodeTask(zadatak.data.id); // izrada
+    assert.equal(izrada.ok, true, `izrada nije prošla: ${JSON.stringify(izrada)}`);
+    const pregled = await coding.runCodeTask(zadatak.data.id); // pregled
+    assert.equal(pregled.ok, true, `pregled nije prošao: ${JSON.stringify(pregled)}`);
 
     // Uspori wiki zapis: pre-commit hook u KONTROLNOM repou spava.
     const hook = path.join(vault.root, '.git', 'hooks', 'pre-commit');
@@ -178,8 +180,10 @@ test('CR3: merge u Gitu bez evidencije o prihvatanju — oporavak dopunjuje zapi
   const { vault, coding, cilj, store, zadatak } = await pripremiCoding({ lease: { ttlMs: 60000, heartbeatMs: 5000 } });
   process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
   try {
-    await coding.runCodeTask(zadatak.data.id); // izrada
-    await coding.runCodeTask(zadatak.data.id); // pregled
+    const izrada = await coding.runCodeTask(zadatak.data.id); // izrada
+    assert.equal(izrada.ok, true, `izrada nije prošla: ${JSON.stringify(izrada)}`);
+    const pregled = await coding.runCodeTask(zadatak.data.id); // pregled
+    assert.equal(pregled.ok, true, `pregled nije prošao: ${JSON.stringify(pregled)}`);
     const pre = await store.get(zadatak.data.id);
     const pregledan = pre.data.code_evidence.review.sha;
 

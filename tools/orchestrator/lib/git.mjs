@@ -116,9 +116,28 @@ async function knownPaths(dir, paths) {
  * put>` bi tada ostavio polovinu rename-a u indeksu. Pre commit-a se zato tvrdo
  * proverava da u indeksu nema ničega van zadatih zona.
  */
+async function ocistiZaostaliIndexLock(dir) {
+  const relativna = (await git(dir, ['rev-parse', '--git-path', 'index.lock'], { allowFailure: true })).stdout.trim();
+  if (!relativna) return false;
+  const lock = path.resolve(dir, relativna);
+  const postoji = () => fs.access(lock).then(() => true).catch(() => false);
+  if (!(await postoji())) return false;
+  // Kratko čekanje pokriva slučaj kada je git proces u toku.
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise((r) => setTimeout(r, 100));
+    if (!(await postoji())) return false;
+  }
+  // Nagli prekid (SIGKILL) ne ostavlja vremena git-u da ukloni lock. U lokalnom
+  // režimu jedan pisac drži zakup, pa lock koji ni posle 2 s nije nestao je
+  // artefakt mrtvog procesa; bez ovoga svaki sledeći upis trajno pada.
+  await fs.rm(lock, { force: true });
+  return true;
+}
+
 export async function commitPaths(dir, paths, message, { actor = 'agentctl' } = {}) {
   const targets = await knownPaths(dir, paths);
   if (!targets.length) return { committed: false, sha: null, files: [] };
+  const lockCleared = await ocistiZaostaliIndexLock(dir);
 
   const insideTargets = (file) => targets.some((target) => file === target || file.startsWith(`${target}/`));
   const preStaged = (await git(dir, ['diff', '--cached', '--name-only', '--no-renames'], { allowFailure: true })).stdout
@@ -141,7 +160,7 @@ export async function commitPaths(dir, paths, message, { actor = 'agentctl' } = 
     throw new GitError(`git commit nije uspeo: ${commit.stderr || commit.stdout}`, commit);
   }
   const { stdout } = await git(dir, ['rev-parse', 'HEAD']);
-  return { committed: true, sha: stdout, files: staged };
+  return { committed: true, sha: stdout, files: staged, lockCleared };
 }
 
 export async function headSha(dir, ref = 'HEAD') {

@@ -97,9 +97,11 @@ test('W4: neuspeh wiki zapisa ne daje lažan potpun uspeh i može da se ponovi',
     await coding.runCodeTask(zadatak.data.id); // izrada
     await coding.runCodeTask(zadatak.data.id); // pregled
 
-    // Blokiraj kontrolni git upis: zaostao index.lock.
-    const lock = path.join(vault.root, '.git', 'index.lock');
-    await fs.writeFile(lock, '', 'utf8');
+    // Blokiraj upis na TAČNU putanju zapisa: direktorijum na mestu fajla je
+    // stvarna greška upisa. (Zaostali git index.lock se sada čisti u produkciji,
+    // pa nije dobra simulacija trajne smetnje — vidi CR2.)
+    const smetnja = path.join(vault.root, 'wiki', 'Izmene', 'TASK-101.md');
+    await fs.mkdir(smetnja, { recursive: true });
 
     const prvi = await coding.runCodeTask(zadatak.data.id);
     const posle = await store.get(zadatak.data.id);
@@ -109,7 +111,7 @@ test('W4: neuspeh wiki zapisa ne daje lažan potpun uspeh i može da se ponovi',
     assert.notEqual(posle.data.status, 'consolidated', 'zadatak čeka zapis u memoriju');
 
     // Oporavak: ukloni smetnju i ponovi.
-    await fs.rm(lock, { force: true });
+    await fs.rm(smetnja, { recursive: true, force: true });
     const drugi = await coding.runCodeTask(zadatak.data.id);
     assert.equal(drugi.ok, true, JSON.stringify(drugi));
     const kraj = await store.get(zadatak.data.id);

@@ -206,6 +206,17 @@ test('R11: TypeError na osnovi nije dokaz buga', async () => {
   try {
     assert.equal(coding.klasifikujPad({ stdout: '✖ test', stderr: 'TypeError: x is not a function' }), 'error');
     assert.equal(coding.klasifikujPad({ stdout: '✖ test\nAssertionError [ERR_ASSERTION]', stderr: '' }), 'assertion');
+    // Node 26: greška učitavanja test fajla daje samo 'test failed' — to je
+    // greška izvršavanja, ne tvrdnja o ponašanju (moraju ostati razlikovani).
+    assert.equal(coding.klasifikujPad({ stdout: "✖ test\n  'test failed'", stderr: '' }), 'error');
+    // Assertion sa ERR_ASSERTION ostaje assertion i kada se pojavi 'test failed'.
+    assert.equal(
+      coding.klasifikujPad({ stdout: "✖ test\nERR_ASSERTION\n  'test failed'", stderr: '' }),
+      'assertion',
+    );
+    assert.equal(coding.klasifikujPad({ stdout: '', stderr: 'ERR_MODULE_NOT_FOUND' }), 'error');
+    // Nenulti izlaz bez ikakvog signala nije dokaz buga.
+    assert.equal(coding.klasifikujPad({ stdout: '', stderr: '', exitCode: 1 }), 'unknown');
   } finally {
     await vault.cleanup();
   }
