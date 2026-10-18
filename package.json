@@ -12,7 +12,7 @@
     "obsidian-mcp": "./tools/mcp/obsidian-mcp.mjs"
   },
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test --test-concurrency=4 tests/",
     "lint": "node tools/orchestrator/cli.mjs lint",
     "index": "node tools/orchestrator/cli.mjs index",
     "status": "node tools/orchestrator/cli.mjs status",
