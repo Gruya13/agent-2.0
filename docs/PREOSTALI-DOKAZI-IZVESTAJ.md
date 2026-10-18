@@ -87,12 +87,19 @@ Flakiness pronađen i popravljen u ovom obimu:
 | PDF i SIGKILL dokazi povezani sa revizijama | ZATVORENO za navedene revizije; PDF nije ponovljen na novoj reviziji i razlog je naveden |
 | Završni skup na završnoj reviziji | ZATVORENO — 203/203 više puta |
 
-### Poslednja korekcija bez nezavisne potvrde
+### Poslednja korekcija — NEZAVISNO POTVRĐENA
 
-Korekcije u 4406d72 (deterministički CR2 prozor + --test-concurrency=4) NISU dobile završnu nezavisnu potvrdu: Codex je u toj rundi ostao bez kvote (poruka provajdera: try again at 7:33 PM) posle 15 izvršenih radnji. Zato:
+Korekcije u `4406d72` (deterministički CR2 prozor + `--test-concurrency=4`) potvrdio je Codex u ciljanoj rundi `codex-mved69mt` (nastavak posle vraćene kvote):
 
-- ne tvrdi se da su te dve korekcije nezavisno potvrđene;
-- stanje je sačuvano, a prva akcija nastavka je ponoviti istu proveru na 4406d72 kada kvota vrati.
+| Tvrdnja | Ishod |
+|---|---|
+| Novi CR2 uslov uklanja raniju trku (ne samo pomera) | POTVRĐENO — reprodukovao raniji kontraprimer: stari uslov okida, novi ne |
+| Ako se `accept` nikad ne pojavi, test pada jasnom porukom (ne večno čeka) | POTVRĐENO — pad posle 30 s sa jasnim AssertionError |
+| `--test-concurrency=4` menja raspored, ne obuhvat | POTVRĐENO — 17 test fajlova, 203 testa, tri puta 203/203 |
+| Produkcioni kod nije izmenjen | POTVRĐENO — `git diff -- tools` prazan |
+| Poslednja relevantna korekcija nezavisno proverena | POTVRĐENO u ciljnom obimu |
+
+Ograničenje koje Codex navodi: tri uspešna izvršavanja ne dokazuju da se resursni pad nikad neće ponoviti, a `store.get` u petlji nema sopstveni timeout (ceo ciklus je ograničen na 30 s).
 
 ### Ostale granice (nepromenjene)
 
