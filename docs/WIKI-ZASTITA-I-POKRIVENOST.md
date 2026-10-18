@@ -64,10 +64,10 @@ znanje tiho i nijedan neuspeh ne ostaje prikriven.
 | Wiki memorija | oba smera, granice sadržaja, indeks | `wiki-integrity.test.mjs` (**7**), `vault.test.mjs` (9) | — |
 | CLI, init, status, lint, oporavak | komande i nastavak posle prekinute faze | `cli.test.mjs` (11), W6, W10 | — |
 
-Skup: **201 testova** u 19 fajlova (`npm test`, dva uzastopna izvođenja).
+Skup: **203 testa** u 17 test fajlova (konkurentnost 4) (`npm test`, dva uzastopna izvođenja).
 
 Završni izveštaj faze (uključujući prekid zbog kvote provajdera):
-[ZAVRSNI-IZVESTAJ-WIKI-FAZA.md](ZAVRSNI-IZVESTAJ-WIKI-FAZA.md) · [Zatvaranje faze](ZATVARANJE-WIKI-FAZE-IZVESTAJ.md).
+[ZAVRSNI-IZVESTAJ-WIKI-FAZA.md](ZAVRSNI-IZVESTAJ-WIKI-FAZA.md) · [Zatvaranje faze](ZATVARANJE-WIKI-FAZE-IZVESTAJ.md) · [Preostali dokazi](PREOSTALI-DOKAZI-IZVESTAJ.md).
 
 ## 4. Otvorena ograničenja
 
