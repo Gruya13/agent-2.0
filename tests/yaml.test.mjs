@@ -171,3 +171,14 @@ test('Y8: folded blok sa uvlačenjem se odbija (ne menja se tiho)', () => {
   const ok = parseFrontmatter('---\ns: >\n  prvi red\n  drugi red\n---\nt\n');
   assert.equal(ok.data.s.includes('prvi red drugi red'), true);
 });
+test('Y9: ručno pisan clip/keep sa praznim linijama ne dodaje prelome', () => {
+  // Nalaz nezavisne provere: čitanje ručno pisanog bloka je vraćalo višak preloma.
+  assert.equal(parseFrontmatter('---\ns: |\n  alpha\n\n---\ntelo\n').data.s, 'alpha\n');
+  assert.equal(parseFrontmatter('---\ns: |+\n  alpha\n\n---\ntelo\n').data.s, 'alpha\n\n');
+  assert.equal(parseFrontmatter('---\ns: |-\n  alpha\n\n---\ntelo\n').data.s, 'alpha');
+  assert.equal(parseYaml('s: |\n  alpha\n\n').s, 'alpha\n');
+  // Dokumentovani rub: |+ na kraju dokumenta bez zatvarača ('---') dodaje jedan
+  // prelom više od PyYAML-a (terminacija se broji kao prazna linija). Sadržaj
+  // reči se ne gubi; frontmatter put (sa '---') je veran i pokriven gore.
+  assert.equal(parseYaml('s: |+\n  alpha\n\n\n').s, 'alpha\n\n\n\n');
+});

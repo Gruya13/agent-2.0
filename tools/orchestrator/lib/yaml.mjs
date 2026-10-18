@@ -196,6 +196,13 @@ function parseBlockScalar(lines, index, indent, style) {
     i += 1;
   }
   if (blockIndent === null) blockIndent = indent + 2;
+  // Završne prazne linije se izdvajaju: chomp pravila ih tretiraju posebno, pa
+  // se bez ovoga dodavao višak preloma (nalaz nezavisne provere).
+  let trailing = 0;
+  while (collected.length && collected[collected.length - 1] === '') {
+    collected.pop();
+    trailing += 1;
+  }
   const folded = style.startsWith('>');
   // Folded blok sa uvlačenjem (linija dublja od prve) ne čitamo verno: viša
   // indentacija menja značenje (zadržava prelome), a naša aproksimacija bi je
@@ -217,8 +224,11 @@ function parseBlockScalar(lines, index, indent, style) {
   }
   const chomp = style.slice(1);
   if (chomp === '-') value = value.replace(/\n+$/, '');
-  else if (chomp === '+') value += '\n';
-  else value = collected.length ? `${value}\n` : value;
+  // Keep (|+): prazne linije su već prelomi; finalni prelom se dodaje samo ako
+  // postoji bar jedna neprazna linija (inače bi se prelom duplirao).
+  else if (chomp === '+') value = value === '' ? '\n'.repeat(trailing) : value + '\n'.repeat(trailing + 1);
+  // Clip (|) daje tačno jedan završni prelom.
+  else value = collected.length || trailing ? `${value}\n` : value;
   return [value, i];
 }
 
