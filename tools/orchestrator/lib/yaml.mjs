@@ -197,6 +197,12 @@ function parseBlockScalar(lines, index, indent, style) {
   }
   if (blockIndent === null) blockIndent = indent + 2;
   const folded = style.startsWith('>');
+  // Folded blok sa uvlačenjem (linija dublja od prve) ne čitamo verno: viša
+  // indentacija menja značenje (zadržava prelome), a naša aproksimacija bi je
+  // tiho pretvorila u razmake. Bolje je odbiti ulaz nego izmeniti sadržaj.
+  if (folded && collected.some((lin) => lin !== '' && /^[ \t]/.test(lin))) {
+    throw new YamlError('folded blok (">") sa uvlacenjem nije podrzan; koristi "|-" ili "|"');
+  }
   let value;
   if (folded) {
     // Fold: susedne neprazne linije se spajaju razmakom, a prazna linija je

@@ -1,0 +1,16 @@
+=== MCP ogled: uloga=extractor klijent=agy 2026-10-18T17:08:05+02:00 revizija=958d3a6 ===
+priprema: {"vault":"/home/gru/k13-mcp-extractor","id":"TASK-101","worktree":"/home/gru/k13-mcp-extractor/.worktrees/TASK-101-extractor","token":"b62ce63d-db68-4990-a507-3889167a9ed3","role":"extractor","agent":"agy"}
+Rezultati oba poziva alata `obsidian_write_note`:
+
+1. **`path="wiki/drafts/fragments/Kroz_klijenta.md"`, `content="# MCP proba kroz stvarni klijent"`**
+   - **Rezultat (uspeh):**
+     `upisano wiki/drafts/fragments/Kroz_klijenta.md (170 B) uloga=extractor`
+   - Fajl: [Kroz_klijenta.md](file:///home/gru/k13-mcp-extractor/.worktrees/TASK-101-extractor/wiki/drafts/fragments/Kroz_klijenta.md)
+
+2. **`path="wiki/drafts/Nije_fragment.md"`, `content="# x"`**
+   - **Rezultat (odbijeno greškom):**
+     `error: uloga "extractor" ne sme da piše u zonu "draft" (wiki/drafts/Nije_fragment.md); dozvoljene zone: fragment`
+--- provere ---
+DOZVOLJEN_UPIS: OK (wiki/drafts/fragments/Kroz_klijenta.md)
+NEDOZVOLJEN_UPIS: ODBIJEN (wiki/drafts/Nije_fragment.md)
+=== kraj: 2026-10-18T17:08:53+02:00 ===

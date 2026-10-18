@@ -163,3 +163,11 @@ test('Y7: tab u uvlačenju bloka se odbija', () => {
   // Običan tab van bloka se takođe odbija.
   assert.throws(() => parseYaml('a:\n\tb: 1\n'), YamlError);
 });
+test('Y8: folded blok sa uvlačenjem se odbija (ne menja se tiho)', () => {
+  const frontmatter = '---\ntitle: X\nsummary: >\n  alpha\n    indented\n  omega\n---\ntelo\n';
+  assert.throws(() => parseFrontmatter(frontmatter), YamlError);
+  assert.throws(() => parseYaml('note: >\n  alpha\n    indented\n  omega\n'), YamlError);
+  // Folded bez uvlačenja i dalje radi.
+  const ok = parseFrontmatter('---\ns: >\n  prvi red\n  drugi red\n---\nt\n');
+  assert.equal(ok.data.s.includes('prvi red drugi red'), true);
+});

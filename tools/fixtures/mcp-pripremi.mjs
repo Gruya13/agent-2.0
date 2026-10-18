@@ -43,6 +43,60 @@ if (uloga === 'verifier') {
   process.exit(0);
 }
 
+// 2a-researcher) istraživač: draft zona
+if (uloga === 'researcher') {
+  const wt = await createWorktree(config, { id, role: 'researcher', base: 'main' });
+  await store.setFields(id, { artifacts: [] }, { actor: 'agentctl', note: 'fixture' });
+  const c = await store.claim(id, agent);
+  await fs.mkdir(path.join(wt.path, '.runtime'), { recursive: true });
+  await fs.writeFile(path.join(wt.path, '.runtime', 'task-context.json'), JSON.stringify({
+    task: id, taskRoot: root, role: 'researcher', agent, leaseToken: c.leaseToken, status: 'in_progress', writtenAt: nov,
+  }, null, 2) + '\\n', 'utf8');
+  console.log(JSON.stringify({ vault: root, id, worktree: wt.path, token: c.leaseToken, role: 'researcher', agent }));
+  process.exit(0);
+}
+
+// 2a-extractor) ekstraktor: samo fragment zona
+if (uloga === 'extractor') {
+  const wt = await createWorktree(config, { id, role: 'extractor', base: 'main' });
+  await store.setFields(id, { artifacts: [] }, { actor: 'agentctl', note: 'fixture' });
+  const c = await store.claim(id, agent);
+  await fs.mkdir(path.join(wt.path, '.runtime'), { recursive: true });
+  await fs.writeFile(path.join(wt.path, '.runtime', 'task-context.json'), JSON.stringify({
+    task: id, taskRoot: root, role: 'extractor', agent, leaseToken: c.leaseToken, status: 'in_progress', writtenAt: nov,
+  }, null, 2) + '\\n', 'utf8');
+  console.log(JSON.stringify({ vault: root, id, worktree: wt.path, token: c.leaseToken, role: 'extractor', agent }));
+  process.exit(0);
+}
+
+// 2a-red-team) red-team: zona challenge
+if (uloga === 'red-team') {
+  const wt = await createWorktree(config, { id, role: 'red-team', base: 'main' });
+  await store.setFields(id, { artifacts: [] }, { actor: 'agentctl', note: 'fixture' });
+  const c = await store.claim(id, agent);
+  await fs.mkdir(path.join(wt.path, '.runtime'), { recursive: true });
+  await fs.writeFile(path.join(wt.path, '.runtime', 'task-context.json'), JSON.stringify({
+    task: id, taskRoot: root, role: 'red-team', agent, leaseToken: c.leaseToken, status: 'in_progress', writtenAt: nov,
+  }, null, 2) + '\\n', 'utf8');
+  console.log(JSON.stringify({ vault: root, id, worktree: wt.path, token: c.leaseToken, role: 'red-team', agent }));
+  process.exit(0);
+}
+
+// 2a-librarian) revizor: kind audit + precizan opseg
+if (uloga === 'librarian') {
+  await store.setFields(id, {
+    kind: 'audit', audit_scope: ['wiki/Flatpak.md'], artifacts: [],
+  }, { actor: 'agentctl', note: 'fixture' });
+  const wt = await createWorktree(config, { id, role: 'librarian', base: 'main' });
+  const c = await store.claim(id, agent);
+  await fs.mkdir(path.join(wt.path, '.runtime'), { recursive: true });
+  await fs.writeFile(path.join(wt.path, '.runtime', 'task-context.json'), JSON.stringify({
+    task: id, taskRoot: root, role: 'librarian', agent, leaseToken: c.leaseToken, status: 'in_progress', writtenAt: nov,
+  }, null, 2) + '\\n', 'utf8');
+  console.log(JSON.stringify({ vault: root, id, worktree: wt.path, token: c.leaseToken, role: 'librarian', agent }));
+  process.exit(0);
+}
+
 // 2b) verifikatorova grana sa pečatom
 const vw = await createWorktree(config, { id, role: 'verifier', base: `agent/researcher/${id}` });
 await writeNote(vw.path, `tasks/reviews/${id}.md`, {
