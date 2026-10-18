@@ -30,10 +30,14 @@ async function cekajFajl(put, timeoutMs = 15000) {
 }
 
 function pokreni(vaultRoot, id, env) {
+  // `detached` daje zasebnu procesnu grupu: SIGKILL na grupu ubija i `git` decu
+  // (npr. `git commit` koji visi u pre-commit hook-u), inače dete ostane živo i
+  // drži `.git/index.lock`, pa sledeći pokušaj pada — flaky CR2.
   const child = spawn(process.execPath, [RUNNER, vaultRoot, id], {
     cwd: PACKAGE_ROOT,
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
   });
   let out = '';
   let err = '';
@@ -62,7 +66,8 @@ test('CR1: kill tokom izrade — zakup istekne, zadatak nije zarobljen, nastavak
     assert.ok(uTok.data.lease_expires_at, 'zakup mora biti zabeležen');
     const stariToken = uTok.data.lock_token;
 
-    p.child.kill('SIGKILL');
+    // Ubij CELU procesnu grupu (i `git` decu), ne samo node proces.
+    try { process.kill(-p.child.pid, 'SIGKILL'); } catch { p.child.kill('SIGKILL'); }
     await new Promise((r) => p.child.on('close', r));
 
     // Zakup istekne po postojećim pravilima i novi proces ga vraća u opticaj.
@@ -86,7 +91,9 @@ test('CR1: kill tokom izrade — zakup istekne, zadatak nije zarobljen, nastavak
     assert.equal((await store.get(zadatak.data.id)).data.status, 'verified');
   } finally {
     delete process.env.AGENT_2_0_MOCK_CODE_CMD;
-    if (p.child.exitCode === null) p.child.kill('SIGKILL');
+    if (p.child.exitCode === null) {
+      try { process.kill(-p.child.pid, 'SIGKILL'); } catch { p.child.kill('SIGKILL'); }
+    }
     await vault.cleanup();
   }
 });
@@ -121,9 +128,16 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
     }
     assert.equal(spojeno, true, 'merge u ciljnom repou nije nastao pre prekida');
 
-    p.child.kill('SIGKILL');
+    try { process.kill(-p.child.pid, 'SIGKILL'); } catch { p.child.kill('SIGKILL'); }
     await new Promise((r) => p.child.on('close', r));
     await fs.rm(hook, { force: true });
+    // Zaostali `git` iz ubijene grupe ne sme da drži lock; ako ga ipak ima,
+    // sačekaj kratko da nestane (ne uklanjaj lock ručno — to bi prikrilo uzrok).
+    const lock = path.join(vault.root, '.git', 'index.lock');
+    for (let i = 0; i < 40; i += 1) {
+      if (!(await fs.access(lock).then(() => true).catch(() => false))) break;
+      await cekaj(50);
+    }
 
     // Mrtav proces drži zakup do isteka TTL-a; nov proces ga opoziva po pravilima.
     await cekaj(2000);
