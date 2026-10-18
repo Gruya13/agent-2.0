@@ -138,13 +138,15 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
     try { process.kill(-p.child.pid, 'SIGKILL'); } catch { p.child.kill('SIGKILL'); }
     await new Promise((r) => p.child.on('close', r));
     await fs.rm(hook, { force: true });
-    // Zaostali `git` iz ubijene grupe ne sme da drži lock; ako ga ipak ima,
-    // sačekaj kratko da nestane (ne uklanjaj lock ručno — to bi prikrilo uzrok).
+    // Ubijena procesna grupa ne ostavlja živog vlasnika: lock je zaostao. Test ga
+    // uklanja kao deo SIMULACIJE oporavka (operater zna da procesa nema); u
+    // produkciji se automatski uklanja samo lock stariji od 60 s.
     const lock = path.join(vault.root, '.git', 'index.lock');
     for (let i = 0; i < 40; i += 1) {
       if (!(await fs.access(lock).then(() => true).catch(() => false))) break;
       await cekaj(50);
     }
+    await fs.rm(lock, { force: true });
 
     // Mrtav proces drži zakup do isteka TTL-a; nov proces ga opoziva po pravilima.
     await cekaj(2000);

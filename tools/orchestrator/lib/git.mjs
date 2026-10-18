@@ -127,9 +127,13 @@ async function ocistiZaostaliIndexLock(dir) {
     await new Promise((r) => setTimeout(r, 100));
     if (!(await postoji())) return false;
   }
-  // Nagli prekid (SIGKILL) ne ostavlja vremena git-u da ukloni lock. U lokalnom
-  // režimu jedan pisac drži zakup, pa lock koji ni posle 2 s nije nestao je
-  // artefakt mrtvog procesa; bez ovoga svaki sledeći upis trajno pada.
+  // Lock mlađi od 60 s može držati ŽIV spor git proces (npr. git add sa clean
+  // filterom) — brisanje bi ga oborilo (dokazani kontraprimer). Uklanja se samo
+  // lock koji je dokazano star: nijedna git operacija u ovom sistemu ne traje
+  // toliko, pa je takav lock artefakt mrtvog procesa.
+  const st = await fs.stat(lock).catch(() => null);
+  if (!st) return false;
+  if (Date.now() - st.mtimeMs < 60_000) return false;
   await fs.rm(lock, { force: true });
   return true;
 }
