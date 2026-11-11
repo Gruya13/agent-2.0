@@ -37,6 +37,40 @@ Ako je `bwrap` dostupan, kod pokušava izolaciju procesa, mreže i upisivog klon
 
 Greška kloniranja/interpretera/sandbox-a može biti zabeležena kao unreproduced, pa njen operativni uzrok ne treba pomešati sa dokazom da tvrdnja nije oboriva. `challengeExecute: false` trenutno može proizvesti clean bez izvršavanja skripti koje su unutar limita. U dnevniku uvek proveri executed, timedOut, unexecuted i pojedinačne rezultate.
 
+## Izolovane DSH kopije (worker)
+
+Worker je jednokratna kopija DSH-a u Docker kontejneru, namenjena izvršavanju
+zadataka pod tvrdom granicom. Orkestrator ga diže alatom `spawn_worker` ili
+skriptom `~/.dsh/docker/spawn-worker.mjs`; worker piše samo svoju granu i ne
+vidi pravi repozitorijum.
+
+| Sloj | Šta je | Šta dobija |
+|---|---|---|
+| fajl sistem | `--read-only` rootfs + dva montirana direktorijuma | `/work` (svež git klon) i `/brief` (read-only) |
+| identitet | uid 1000, `--cap-drop=ALL`, `no-new-privileges` | nema roota, nema sposobnosti |
+| mreža | `internal` Docker mreža | samo sidecar proxy `172.20.0.10:8765`; nema interneta, nema DNS-a |
+| tajne | proxy kontejner drži DeepSeek ključ | worker dobija samo lažni `DEEPSEEK_API_KEY=worker-proxy` |
+| git | bare single-branch mirror po runu | worker vidi jednu granu i ništa drugo; izlaz je `git push` u mirror |
+| resursi | `--pids-limit`, `--memory`, `--cpus`, `--init` | nema fork bomb, nema preuzimanja hosta |
+
+`NARB_DISABLE_NATIVE_CACHE=1` je deo granice: native binding se učitava iz
+read-only slike, a ne kopira u izvršivi tmpfs. Ovaj uslov je otkriven
+proverom (`verify.mjs`), ne pretpostavkom.
+
+**Granica:** Docker deli kernel. Worker štiti od slučajne štete i od
+nepoverljivih instrukcija, ali ne od protivnika sa kernel exploitom — za to su
+potrebni rootless Docker ili gVisor. Worker ne dobija MCP servere ni korisničke
+pluginove; ako zadatak traži MCP, to je nova odluka o sandboxu, ne tiho
+proširenje.
+
+Provera celog lanca, uključujući jedan model poziv:
+
+```bash
+node ~/.dsh/docker/verify.mjs          # 15 provera: slika, proxy, izolacija, e2e
+node ~/.dsh/docker/verify.mjs --no-e2e # bez model poziva
+```
+
+Detalji: `docs/IZOLACIJA-KOPIJA.md` i `~/.dsh/docker/README.md`.
 ## Granice zaštite
 
 - Git worktree nije OS sandbox i proces istog korisnika može pristupiti drugim putanjama.

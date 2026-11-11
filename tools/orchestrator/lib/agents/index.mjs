@@ -37,7 +37,7 @@ export const TASK_CONTEXT_FILE = '.runtime/task-context.json';
 /**
  * Identitet koji se upisuje kao vlasnik zakupa i kao autor Git komita.
  *
- * Za prave harnese to je IME VENDORA (`agy`, `dsh`, `codex`), pa revizorski trag
+ * Za prave harnese to je IME VENDORA (`agy`, `dsh`), pa revizorski trag
  * kaže koji je model stvarno doprineo — ne samo koja uloga. Isti identitet mora
  * da vidi i MCP server (`OBSIDIAN_AGENT`), inače bi legitimni upis bio odbijen.
  * Deterministički zamenik se predstavlja kao `mock-<uloga>`, da se nikad ne
@@ -94,7 +94,7 @@ export async function runAgent(config, { role, task, cwd, prompt, now, logger = 
       env: agentEnv({ role, harness: spec.harness, cwd, task, config }),
       config,
     });
-    if (result.harness === 'dsh' || result.harness === 'codex' || result.harness === 'agy') {
+    if (result.harness === 'dsh' || result.harness === 'agy') {
       // Verdikt se čita iz izlaza samo za ulogu verifikatora; ostalo odlučuje
       // kontrolni sloj nad artefaktima.
       const { parseVerdict } = await import('./harness.mjs');

@@ -34,8 +34,8 @@ Za audit, izlaz iz čistog challenge-a ide direktno u kontrolisani merge provere
 | researcher | agy | `wiki/drafts/`, bez fragments | izvor → nacrt i veze ka znanju |
 | verifier | dsh | `tasks/reviews/` | nezavisna provera i verdikt |
 | red-team | dsh | `tasks/challenges/` | napad na tvrdnje na zamrznutoj reviziji |
-| librarian | codex | `wiki/` u audit opsegu, `tasks/audits/` | održavanje postojeće baze |
-| consolidator | codex | nove vršne `wiki/*.md` beleške | promocija verifikovanih artefakata |
+| librarian | dsh | `wiki/` u audit opsegu, `tasks/audits/` | održavanje postojeće baze |
+| consolidator | agy | nove vršne `wiki/*.md` beleške | promocija verifikovanih artefakata |
 | agentctl | Node kontrolni sloj | stanje zadataka, događaji, izvedeni artefakti | zakup, faze, komiti i spajanje |
 
 Imena harnesa nisu dokaz različitih modela. Podrazumevano verifier i red-team koriste istog vendora; sistem beleži korelacioni rizik. Mock adapteri nose identitet `mock-<uloga>`.
@@ -98,7 +98,7 @@ docs/                        tehnička dokumentacija
 | `yaml.mjs` | ograničeni YAML/frontmatter parser i serializer |
 | `fsx.mjs` | atomski upisi, realne putanje, hash, JSONL i file-lock |
 | `agents/index.mjs` | izbor adaptera, identitet i kontekst procesa |
-| `agents/harness.mjs` | procesi agy/dsh/codex, vreme i prekid |
+| `agents/harness.mjs` | procesi agy/dsh, vreme i prekid |
 | `agents/mock.mjs` | deterministički adapteri |
 | `agents/prompts.mjs` | brief i stanje zadatka kao prompt |
 

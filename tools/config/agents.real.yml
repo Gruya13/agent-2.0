@@ -1,6 +1,7 @@
 # Konfiguracija kontrolnog sloja (agentctl).
 #
-# PRAVI harnesi: researcher -> agy, verifier -> dsh, consolidator -> codex.
+# PRAVI harnesi: researcher/extractor -> agy, verifier/red-team -> dsh,
+# consolidator -> agy, librarian -> dsh. OpenAI Codex je uklonjen iz sistema.
 #
 #   node tools/orchestrator/cli.mjs run --config tools/config/agents.real.yml
 #
@@ -62,27 +63,25 @@ agents:
     timeoutMs: 900000
   librarian:
     adapter: harness
-    harness: codex
+    harness: dsh
     model: null
     timeoutMs: 900000
   consolidator:
     adapter: harness
-    harness: codex
+    harness: agy
     model: null
     timeoutMs: 900000
   # Coding tok: programer (dsh) piše popravku i regresioni test, reviewer
-  # (codex) je nezavisan vendor i pravi sopstveni kontrolni slučaj.
+  # (agy) je nezavisan vendor i pravi sopstveni kontrolni slučaj.
   programer:
     adapter: harness
     harness: dsh
     model: null
     timeoutMs: 900000
   # Nezavisan pregled: MORA biti vendor razlicit od autora popravke.
-  # Autor je `dsh`, pa je prvi izbor `codex`. Kada je Codex nedostupan zbog
-  # potrosene kvote (spoljna prepreka), koristi se `agy` — i tada se u izvestaju
-  # izricito navodi koji je vendor stvarno pregledao.
+  # Autor je `dsh`, pa je jedini preostali drugi vendor `agy`.
   reviewer:
     adapter: harness
-    harness: codex
+    harness: agy
     model: null
     timeoutMs: 900000

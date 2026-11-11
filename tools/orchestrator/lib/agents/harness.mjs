@@ -22,19 +22,15 @@ export class HarnessError extends Error {
 }
 
 /**
- * Deklarativni opis komandi. `dsh` i `codex` su neinteraktivni režimi iz
+ * Deklarativni opis komandi. `dsh` je neinteraktivni headless režim iz
  * arhitekture; `agy` je print režim istog SDK-a koji stoji iza Antigravity.
+ * OpenAI Codex je uklonjen iz sistema (vidi docs/PLAN-BEZ-CODEX.md).
  */
 export const HARNESS_COMMANDS = {
   dsh: {
     bin: 'dsh',
     build: (prompt) => ['--profile', 'headless', prompt],
     note: 'DeepSeek Harness, headless profil: jedan zadatak, jedan strukturisani odgovor.',
-  },
-  codex: {
-    bin: 'codex',
-    build: (prompt, cwd) => ['exec', '--sandbox', 'workspace-write', '-C', cwd, prompt],
-    note: 'OpenAI Codex, neinteraktivno izvršavanje sa izolacijom radnog prostora.',
   },
   agy: {
     // `--print` je flag SA VREDNOŠĆU (prompt se lepi uz njega). Ako bi prompt

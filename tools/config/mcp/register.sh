@@ -5,8 +5,8 @@
 #   ./tools/config/mcp/register.sh --agy       # registruj kod Antigravity (agy mcp add)
 #   ./tools/config/mcp/register.sh --check     # proveri da su serveri registrovani
 #
-# DSH i Codex se ne menjaju automatski: DSH profil je korisnički fajl, a
-# ~/.codex/config.toml je deljen sa drugim projektima, pa skripta ispisuje
+# DSH se ne menja automatski: njegov profil je korisnički fajl, pa skripta
+# ispisuje
 # gotov blok i ostavlja odluku operateru.
 set -euo pipefail
 
@@ -25,8 +25,6 @@ case "$MODE" in
     echo "## agy (~/.gemini/config/mcp_config.json ili: agy mcp add)"
     render "$VAULT/tools/config/mcp/agy.json"
     echo
-    echo "## codex (~/.codex/config.toml)"
-    render "$VAULT/tools/config/mcp/codex.toml"
     echo
     echo "## dsh (cordis.patch.yml profila ili: dsh --patch <fajl>)"
     render "$VAULT/tools/config/mcp/dsh.patch.yml"

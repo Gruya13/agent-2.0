@@ -2,7 +2,7 @@
 /**
  * obsidian-mcp — MCP (stdio, JSON-RPC) server nad Obsidian skladištem znanja.
  *
- * Ovo je programski sloj preko koga harnesi (dsh, codex, agy) čitaju i menjaju
+ * Ovo je programski sloj preko koga harnesi (dsh, agy) čitaju i menjaju
  * beleške, bez pisanja skripti specifičnih za svaki harnes. Server radi i kada
  * grafička aplikacija Obsidian nije pokrenuta.
  *
@@ -10,7 +10,7 @@
  * korisnik, pa samo server koji odbija operaciju može da razdvoji uloge.
  *
  *   OBSIDIAN_VAULT       koren skladišta (radno stablo agenta)  (default: cwd)
- *   OBSIDIAN_AGENT       identitet agenta, npr. "codex"         (default: anonymous)
+ *   OBSIDIAN_AGENT       identitet agenta, npr. "agy"           (default: anonymous)
  *   OBSIDIAN_ROLE        researcher|verifier|consolidator|readonly
  *   OBSIDIAN_TASK        id zadatka (TASK-NNN) koji nosi zakup   (obavezan za upis)
  *   OBSIDIAN_TASK_ROOT   kontrolni koren sa `tasks/` (default: OBSIDIAN_VAULT)
@@ -58,7 +58,7 @@ const ROLE = process.env.OBSIDIAN_ROLE || 'readonly';
  * Kontekst zadatka koji je kontrolni sloj materijalizovao u radnom stablu.
  *
  * Ne može se osloniti na nasleđeno okruženje: pokazalo se da neki harnesi
- * (npr. Codex) prosleđuju MCP serveru samo svoju `env` tabelu, pa bi
+ * (npr. agy) prosleđuju MCP serveru samo svoju `env` tabelu, pa bi
  * `OBSIDIAN_TASK` tiho nestao i legitimni upis bio odbijen. Fajl je u
  * `.runtime/` (gitignore), pa ne ulazi u granu.
  *

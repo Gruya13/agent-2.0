@@ -4,7 +4,10 @@
 # `adapter: harness` poziva pravi CLI iz tabele HARNESS_COMMANDS:
 #   researcher   -> agy  (Google Antigravity / Gemini)
 #   verifier     -> dsh  (DeepSeek Harness, headless profil)
-#   consolidator -> codex (OpenAI Codex, codex exec)
+#   consolidator -> agy  (Google Antigravity / Gemini)
+#   librarian    -> dsh  (DeepSeek Harness, headless profil)
+#
+# OpenAI Codex je uklonjen iz sistema; vidi docs/PLAN-BEZ-CODEX.md.
 #
 # Prelazak na prave harnese je izmena isključivo ovog fajla; kod se ne dira.
 
@@ -62,11 +65,11 @@ agents:
     timeoutMs: 900000
   librarian:
     adapter: mock
-    harness: codex
+    harness: dsh
     model: null
     timeoutMs: 900000
   consolidator:
     adapter: mock
-    harness: codex
+    harness: agy
     model: null
     timeoutMs: 900000

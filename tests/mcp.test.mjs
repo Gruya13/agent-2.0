@@ -160,12 +160,12 @@ test('MCP: pretraga, čitanje zaglavlja, backlinkovi', async (t) => {
 
 test('MCP: zone upisa se sprovode po ulozi, uz važeći zakup', async (t) => {
   const vault = await seededVault();
-  // Zakup je vezan za identitet harnesa (`agy`/`dsh`/`codex`), ne za ime uloge.
+  // Zakup je vezan za identitet harnesa (`agy`/`dsh`), ne za ime uloge.
   const cases = [
     { role: 'researcher', agent: 'agy', owner: 'agy', status: 'in_progress', allowed: ['wiki/drafts/Produkcija.md'], denied: ['wiki/Produkcija.md', 'raw/x.md', 'tasks/reviews/R.md'] },
     { role: 'verifier', agent: 'dsh', owner: 'dsh', status: 'in_progress', allowed: ['tasks/reviews/TASK-101.md'], denied: ['wiki/Produkcija.md', 'wiki/drafts/Produkcija.md', 'raw/x.md'] },
-    { role: 'consolidator', agent: 'codex', owner: 'codex', status: 'verified', allowed: ['wiki/Produkcija.md'], denied: ['raw/x.md', 'tasks/inbox/TASK-101.md', 'wiki/Druga.md'] },
-    { role: 'readonly', agent: 'codex', owner: 'codex', status: 'verified', allowed: [], denied: ['wiki/Produkcija.md', 'wiki/drafts/Produkcija.md', 'tasks/reviews/R.md'] },
+    { role: 'consolidator', agent: 'agy', owner: 'agy', status: 'verified', allowed: ['wiki/Produkcija.md'], denied: ['raw/x.md', 'tasks/inbox/TASK-101.md', 'wiki/Druga.md'] },
+    { role: 'readonly', agent: 'agy', owner: 'agy', status: 'verified', allowed: [], denied: ['wiki/Produkcija.md', 'wiki/drafts/Produkcija.md', 'tasks/reviews/R.md'] },
   ];
 
   for (const [index, entry] of cases.entries()) {
@@ -196,7 +196,7 @@ test('MCP: upis bez zadatka, sa isteklim zakupom ili pogrešnim stanjem je odbij
   const vault = await seededVault();
 
   // 1. Nema OBSIDIAN_TASK.
-  const bezZadatka = await connect(vault.root, 'consolidator', 'codex', t, {});
+  const bezZadatka = await connect(vault.root, 'consolidator', 'agy', t, {});
   const noTask = await bezZadatka.callTool('obsidian_write_note', { path: 'wiki/Neproverena.md', content: '# x\n' });
   assert.equal(noTask.isError, true, 'upis bez zadatka mora biti odbijen');
   assert.match(noTask.content[0].text, /OBSIDIAN_TASK/);

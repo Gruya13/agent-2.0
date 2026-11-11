@@ -16,6 +16,8 @@ Agent 2.0 pretvara izvore u povezanu Markdown bazu znanja. Šest uloga koordinir
 | [Model podataka](MODEL-PODATAKA.md) | zadaci, automat stanja, beleške, manifest i događaji |
 | [MCP referenca](MCP.md) | osam alata, protokol, registracija i lokalni CLI |
 | [Bezbednost i ograničenja](BEZBEDNOST.md) | kapije, izvršavanje skripti i granice zaštite |
+| [Izolovane kopije DSH-a](IZOLACIJA-KOPIJA.md) | worker u Dockeru: granica, tok, provera i ograničenja |
+| [Plan bez Codex-a](PLAN-BEZ-CODEX.md) | uklanjanje OpenAI Codex-a, nove uloge i dokazi |
 | [Operacije i rešavanje problema](OPERACIJE.md) | nadzor, zakupi, blokade, oporavak i rezervne kopije |
 | [Razvoj i testiranje](RAZVOJ.md) | interni API, proširivanje i testni skup |
 | [Izveštaj provere](PROVERA.md) | rezultat proveravanja dokumentacije i postojećeg sistema |

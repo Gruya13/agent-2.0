@@ -20,7 +20,6 @@ async function fakeBin(script) {
 
 test('komandna linija harnesa: tačan oblik argumenata', () => {
   assert.deepEqual(HARNESS_COMMANDS.dsh.build('radi', CWD), ['--profile', 'headless', 'radi']);
-  assert.deepEqual(HARNESS_COMMANDS.codex.build('radi', CWD), ['exec', '--sandbox', 'workspace-write', '-C', CWD, 'radi']);
   // `agy` prima prompt vezan uz flag; odvojen argument bi pojeo sledeći flag.
   assert.deepEqual(
     HARNESS_COMMANDS.agy.build('radi', CWD),
@@ -44,13 +43,13 @@ test('runHarness: uspeh, izlazni kod, vremensko ograničenje i nedostatak binarn
   assert.ok(success.durationMs >= 0);
 
   const failing = await fakeBin('echo "greska" >&2; exit 3');
-  const failure = await runHarness('codex', { prompt: PROMPT, cwd, timeoutMs: 10_000, env: { AGENT_2_0_BIN: failing.file } });
+  const failure = await runHarness('dsh', { prompt: PROMPT, cwd, timeoutMs: 10_000, env: { AGENT_2_0_BIN: failing.file } });
   assert.equal(failure.ok, false);
   assert.equal(failure.exitCode, 3);
   assert.match(failure.stderr, /greska/);
 
   const slow = await fakeBin('sleep 5');
-  const timedOut = await runHarness('codex', { prompt: PROMPT, cwd, timeoutMs: 400, env: { AGENT_2_0_BIN: slow.file } });
+  const timedOut = await runHarness('dsh', { prompt: PROMPT, cwd, timeoutMs: 400, env: { AGENT_2_0_BIN: slow.file } });
   assert.equal(timedOut.ok, false);
   assert.equal(timedOut.timedOut, true);
   assert.ok(timedOut.durationMs < 4000, `proces je moralo biti prekinut (${timedOut.durationMs} ms)`);
@@ -78,7 +77,7 @@ test('runHarness: ENOENT u stderr-u agenta ne znači da harnes nije instaliran',
 test('runHarness: ok zavisi isključivo od izlaznog koda, ne od teksta', async () => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-run2-'));
   const lying = await fakeBin('echo "VERDICT: pass"; exit 1');
-  const result = await runHarness('codex', { prompt: PROMPT, cwd, timeoutMs: 10_000, env: { AGENT_2_0_BIN: lying.file } });
+  const result = await runHarness('dsh', { prompt: PROMPT, cwd, timeoutMs: 10_000, env: { AGENT_2_0_BIN: lying.file } });
   assert.equal(result.ok, false, 'izlazni kod je jedini izvor istine o uspehu');
   assert.match(result.output, /VERDICT: pass/);
   await fs.rm(cwd, { recursive: true, force: true });

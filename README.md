@@ -2,7 +2,7 @@
 
 Implementacija arhitekture opisane u
 [`raw/arhitektura-asinhronog-multi-agentskog-sistema.md`](raw/arhitektura-asinhronog-multi-agentskog-sistema.md):
-DeepSeek Harness (`dsh`), Google Antigravity (`agy`) i OpenAI Codex (`codex`) ne
+DeepSeek Harness (`dsh`) i Google Antigravity (`agy`) ne
 razmenjuju poruke direktno, već koordinišu **isključivo stanjem fajlova u
 Obsidian skladištu** koje je istovremeno crna tabla (Blackboard), Git
 repozitorijum i baza znanja.
@@ -32,9 +32,9 @@ Povezana tehnička i operativna dokumentacija nalazi se u [`docs/README.md`](doc
 | Baza znanja | [`lib/vault.mjs`](tools/orchestrator/lib/vault.mjs) | beleške, frontmatter, Vikilinkovi, backlinkovi, izvedeni indeks |
 | Linter | [`lib/lint.mjs`](tools/orchestrator/lib/lint.mjs) | nepromenljivost `raw/`, šema zadataka, frontmatter, prekinuti linkovi |
 | MCP server | [`tools/mcp/obsidian-mcp.mjs`](tools/mcp/obsidian-mcp.mjs) | `obsidian_search_notes`, `obsidian_read_notes`, `obsidian_patch_note`, `obsidian_backlinks` |
-| Adapteri | [`lib/agents/`](tools/orchestrator/lib/agents/) | `dsh headless`, `codex exec`, `agy --print`, deterministički `mock` |
+| Adapteri | [`lib/agents/`](tools/orchestrator/lib/agents/) | `dsh headless`, `agy --print`, deterministički `mock` |
 | Konfiguracija | [`tools/config/agents.yml`](tools/config/agents.yml) | uloga → adapter/harnes; prelazak na prave harnese je izmena ovog fajla |
-| MCP konfiguracije | [`tools/config/mcp/`](tools/config/mcp/) | gotovi blokovi za dsh, codex i agy + `register.sh` |
+| MCP konfiguracije | [`tools/config/mcp/`](tools/config/mcp/) | gotovi blokovi za dsh i agy + `register.sh` |
 
 ## Kako se pokreće
 
@@ -73,7 +73,7 @@ raw/<izvor>.md
    │  3. verify      dsh/DeepSeek → tasks/reviews/TASK-NNN.md + VERDICT: pass|fail
    ▼
 .git worktrees/TASK-NNN-consolidator (grana nad verifikatorovom)
-   │  4. consolidate codex → wiki/<Slug>.md, status consolidated
+   │  4. consolidate agy → wiki/<Slug>.md, status consolidated
    │                  rebase na main → merge --no-ff → čišćenje grana i stabala
    ▼
 main: wiki/<Slug>.md + wiki/Index.md       5. reflect → izvedeni indeks i manifest
@@ -97,7 +97,7 @@ posle `maxRevisions` pokušaja zadatak ide u `blocked` (nikad u produkcioni
 | „Vikilinkovi `[[…]]` grade semantički graf" | `vault.extractWikilinks/findBacklinks`, `lint: note.broken-link` |
 | „zakup: `lock_owner`, `locked_at`, `lease_expires_at`" | `lease.mjs`, testovi isteka i otimanja |
 | „izolacija kroz `git worktree`" | `worktree.mjs`, `tests/worktree.test.mjs` (izolacija, konflikt, merge) |
-| „Gemini sintetiše, DeepSeek arbitrira, Codex integriše" | `agents.yml` + `agents/index.mjs` (dispečer po ulozi) |
+| „Gemini sintetiše i konsoliduje, DeepSeek verifikuje i održava" | `agents.yml` + `agents/index.mjs` (dispečer po ulozi) |
 | „MCP server sa tipiziranim alatima" | `tools/mcp/obsidian-mcp.mjs` + `tests/mcp.test.mjs` (pravi JSON-RPC preko stdio) |
 | „pre modifikacije baze harness mora imati važeći zakup" | MCP proverava `OBSIDIAN_TASK` + status + zakup + pečat pre svakog upisa |
 | „`raw/` je nepromenljiv" i za binarne izvore | manifest v2 hashira bajtove (`sha256Bytes`), test sa `.pdf` bajtom 0x80 → 0x81 |
@@ -115,8 +115,8 @@ obrazloženje i dokaz; svi odgovori su u [KONSULTACIJA-ULOGA.md](KONSULTACIJA-UL
 | `researcher` | `agy` | `wiki/drafts/` | dekomponuje izvor u enciklopedijski nacrt sa Vikilinkovima |
 | `verifier` | `dsh` | `tasks/reviews/` | nezavisno obara ili potvrđuje tuđi rad, svaki nalaz sa dokazom |
 | `red-team` | `dsh` | `tasks/challenges/` | posle pečata napada artefakt na **zamrznutoj reviziji**; nalaz je skript koji kontrolni sloj sam izvrši |
-| `librarian` | `codex` | `wiki/` u opsegu + `tasks/audits/` | održava postojeću bazu: duplikati, siročići, oznake, pokvarene veze |
-| `consolidator` | `codex` | `wiki/` (bez `Index.md`) | premešta verifikovan nacrt u produkciju i uređuje strukturu |
+| `librarian` | `dsh` | `wiki/` u opsegu + `tasks/audits/` | održava postojeću bazu: duplikati, siročići, oznake, pokvarene veze |
+| `consolidator` | `agy` | `wiki/` (bez `Index.md`) | premešta verifikovan nacrt u produkciju i uređuje strukturu |
 
 `extractor` je bio **jednoglasan** (svi su ga predložili agy-ju, jer fragmenti
 ostaju u njegovoj zoni). `librarian` nije tražio niko, pa je dodeljen kodexu kao
@@ -140,7 +140,7 @@ node tools/orchestrator/cli.mjs run --rounds 4 \
 ```
 
 [`tools/config/agents.real.yml`](tools/config/agents.real.yml) je isti config sa
-`adapter: harness` (`agy` → `dsh` → `codex`). Izlazni kod harnesa nije dokaz
+`adapter: harness` (`agy` → `dsh`). Izlazni kod harnesa nije dokaz
 uspeha: faza se priznaje samo ako je artefakt stvarno nastao u njenoj zoni.
 
 ### Pravi tok je izvršen (TASK-101)
@@ -153,7 +153,7 @@ Mali izvor `raw/operativni-vodic.md` (26 redova) prošao je kroz sva tri modela:
 | verify (1) | `dsh` (DeepSeek) | **fail, 3 dokazana nalaza** → zadatak vraćen istraživaču |
 | research (2) | `agy` | prerađen nacrt na svežem radnom stablu |
 | verify (2) | `dsh` | **pass, 0 nalaza**, eksplicitno potvrđeno da su N1–N3 otklonjeni |
-| consolidate | `codex` | produkciona beleška u `wiki/`, merge u `main` (`a186fc8c`) |
+| consolidate | `agy` | produkciona beleška u `wiki/`, merge u `main` (`a186fc8c`) |
 
 Prvi verdikt je oborio **tri stvarne stvari**, dokazima iz repozitorijuma:
 
@@ -183,7 +183,7 @@ radno stablo i sa `OBSIDIAN_ROLE`/`OBSIDIAN_VAULT` u okruženju, pa im MCP serve
 automatski daje tačno onu zonu upisa koja im pripada:
 
 ```bash
-./tools/config/mcp/register.sh --print   # ispiši blokove za dsh, codex i agy
+./tools/config/mcp/register.sh --print   # ispiši blokove za dsh i agy
 ./tools/config/mcp/register.sh --agy     # registruj kod Antigravity
 ./tools/config/mcp/register.sh --check   # proveri da server radi
 node scripts/demo.mjs --real             # demo sa pravim harnesima (troši kvotu)
@@ -209,7 +209,7 @@ globalni fajl-lock (`agy` ne trpi paralelne sesije).
    istraživanje). Oportunistički redosled iz specifikacije, ali deterministički.
 4. **`agy` piše u svom radnom stablu.** Uloga istraživača po specifikaciji
    podrazumeva upis nacrta; izolacija je ta koja sprečava da to ugrozi `main`.
-   Konsolidaciju i merge i dalje radi isključivo `codex`/kontrolni sloj.
+   Konsolidaciju i merge i dalje radi isključivo `agy`/kontrolni sloj.
 
 ## Struktura repozitorijuma
 
@@ -307,7 +307,7 @@ nijedna**.
 
 ## Nezavisna verifikacija
 
-Implementaciju je proveravao **drugi vendor** (OpenAI Codex), u odvojenoj
+Implementaciju je proveravao **drugi vendor** (OpenAI Codex, pre uklanjanja iz sistema), u odvojenoj
 verifikacionoj niti, sa slepim ulazom (specifikacija + artefakt + falsifikabilne
 tvrdnje, bez reasoninga izvršioca). U tri runde je oboreno **10 nalaza** —
 od binarnog izvora koji se menjao bez prijave, preko simboličkog linka koji je
@@ -324,7 +324,6 @@ MCP server beleški je registrovan kod sva tri harnesa i proveren živim pozivom
 | Harnes | Gde je registracija | Dokaz |
 |---|---|---|
 | `agy` | `~/.gemini/config/mcp_config.json` (`agy mcp add obsidian …`) | `agy mcp list` → `obsidian stdio enabled` |
-| `codex` | `~/.codex/config.toml` → `[mcp_servers.obsidian]` | `codex mcp list` → `obsidian enabled`; živi poziv `obsidian_vault_info` kroz `codex exec` |
 | `dsh` | `~/.dsh/profiles/headless/cordis.patch.yml` | `dsh --profile headless --dump-config` → `obsidian-mcp`; živi poziv kroz `dsh headless` |
 
 Konfiguracije nose **samo identitet vendora** (`OBSIDIAN_AGENT`); `OBSIDIAN_ROLE`

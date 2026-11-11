@@ -1,7 +1,8 @@
 # AGENTS.md — sistemski ugovor zajedničke baze znanja
 
 Ovaj fajl je obavezujući ugovor za svaki harness (DeepSeek `dsh`, Google
-Antigravity `agy`, OpenAI Codex) i za kontrolni sloj (`agentctl`). Učitava se na
+Antigravity `agy`) i za kontrolni sloj (`agentctl`). OpenAI Codex je uklonjen iz
+sistema (vidi `docs/PLAN-BEZ-CODEX.md`). Učitava se na
 početku svake sesije i **ne sme se zaobići**. Ako je zahtev korisnika u koliziji
 sa ovim ugovorom, ugovor pobeđuje dok se ne izmeni kroz `tasks/` proceduru.
 
@@ -14,7 +15,7 @@ fajlova u ovom repozitorijumu.
 | Zona | Namena | Ko sme da piše |
 |---|---|---|
 | `raw/` | nepromenljivi izvori (append-only) | **niko** — samo dodavanje novih fajlova od strane operatera |
-| `wiki/` | produkciona, verifikovana enciklopedija | isključivo `consolidator` (Codex) |
+| `wiki/` | produkciona, verifikovana enciklopedija | isključivo `consolidator` (agy) |
 | `wiki/drafts/` | preliminarni nacrti | `researcher` (Gemini/agy) |
 | `wiki/drafts/fragments/` | fragmenti multimodalnog unosa | `extractor` (agy) |
 | `wiki/Index.md` | izveden centralni indeks | isključivo `agentctl` (faza 5) |
@@ -23,7 +24,7 @@ fajlova u ovom repozitorijumu.
 | `tasks/review/` | zadaci na verifikaciji | `agentctl` |
 | `tasks/completed/` | arhivirani zadaci | `agentctl` |
 | `tasks/reviews/` | revizorski tragovi i primedbe | `verifier` (DeepSeek) |
-| `tasks/audits/` | izveštaji o održavanju baze | `librarian` (Codex) |
+| `tasks/audits/` | izveštaji o održavanju baze | `librarian` (dsh) |
 | `tasks/challenges/` | red-team nalazi i reprodukcioni skripti | `red-team` (DeepSeek) |
 | `.agents/raw-manifest.json` | otisci izvora (nepromenljivost) | `agentctl` |
 | `tasks/events.jsonl` | append-only tok događaja kontrolnog sloja | `agentctl` |
@@ -205,10 +206,10 @@ međusobnog isključivanja; istekao zakup se automatski opoziva.
 | `researcher` | agy (Antigravity / Gemini) | `wiki/drafts/` | `wiki/` produkcija, merge |
 | `verifier` | dsh (DeepSeek headless) | `tasks/reviews/` | izmena nacrta, kod |
 | `red-team` | dsh (DeepSeek) | `tasks/challenges/` | popravljanje onoga što napada; sve ostalo |
-| `librarian` | codex (codex-rs) | `wiki/` u opsegu + `tasks/audits/` | novi članci, prepisivanje sadržaja, izlazak iz opsega |
-| `consolidator` | codex (codex-rs) | `wiki/` (bez `Index.md`) | izmišljanje sadržaja, merge |
+| `librarian` | dsh (DeepSeek headless) | `wiki/` u opsegu + `tasks/audits/` | novi članci, prepisivanje sadržaja, izlazak iz opsega |
+| `consolidator` | agy (Antigravity / Gemini) | `wiki/` (bez `Index.md`) | izmišljanje sadržaja, merge |
 
-Kognitivna podela rada: Gemini sintetiše, DeepSeek arbitrira, Codex integriše.
+Kognitivna podela rada: Gemini sintetiše i konsoliduje, DeepSeek verifikuje i održava.
 
 **Nezavisnost je precizno definisana, ne preširoko:**
 
@@ -221,8 +222,8 @@ Kognitivna podela rada: Gemini sintetiše, DeepSeek arbitrira, Codex integriše.
   korelisane. To se **beleži** u zadatku (`challenge.correlationRisk: true`) i
   vidljivo je u izveštaju; red-team nalaz ipak mora da se **izvrši** na
   zamrznutoj reviziji, pa dokaz ne zavisi od toga ko ga je napisao. Vendor se
-  menja čim neki drugi bude mogao da izvrši ovu klasu zadatka (Codex je za nju
-  blokiran od svog provajdera — vidi `KONSULTACIJA-ULOGA.md`).
+  menja čim neki drugi bude mogao da izvrši ovu klasu zadatka (OpenAI Codex,
+  koji je ranije nosio tu klasu, uklonjen je iz sistema — vidi `docs/PLAN-BEZ-CODEX.md`).
 
 ## 6. Operativne komande
 

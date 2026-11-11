@@ -46,11 +46,11 @@ export const DEFAULT_CONFIG = {
     researcher: { harness: 'agy', adapter: 'mock', model: null },
     verifier: { harness: 'dsh', adapter: 'mock', model: null },
     'red-team': { harness: 'dsh', adapter: 'mock', model: null },
-    librarian: { harness: 'codex', adapter: 'mock', model: null },
-    consolidator: { harness: 'codex', adapter: 'mock', model: null },
+    librarian: { harness: 'dsh', adapter: 'mock', model: null },
+    consolidator: { harness: 'agy', adapter: 'mock', model: null },
     // Coding tok: programer piše popravku, reviewer je DRUGI vendor.
     programer: { harness: 'dsh', adapter: 'mock', model: null },
-    reviewer: { harness: 'codex', adapter: 'mock', model: null },
+    reviewer: { harness: 'agy', adapter: 'mock', model: null },
   },
 };
 

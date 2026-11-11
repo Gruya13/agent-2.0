@@ -4,7 +4,7 @@
  *   1. ingest      raw izvor + zadatak u tasks/inbox/
  *   2. research    izolovano worktree + agy/Gemini -> wiki/drafts/, status review
  *   3. verify      dsh/DeepSeek -> tasks/reviews/ + verdikt, status verified
- *   4. consolidate codex -> wiki/ produkcija + Index.md, sekvencijalni merge u main
+ *   4. consolidate agy -> wiki/ produkcija + Index.md, sekvencijalni merge u main
  *   5. reflect     indeks i revizorski trag; stanje vidljivo u Obsidian grafu
  *
  * Petlja je oportunistička: prvo dovršava započeto (konsolidacija, pa

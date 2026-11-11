@@ -172,7 +172,7 @@ test('CLI: doctor proverava okruženje i prijavljuje adaptere', async () => {
   const names = checks.map((c) => c.name);
   assert.ok(names.some((n) => n.includes('git repozitorijum')));
   assert.ok(names.some((n) => n.includes('harnes dsh')));
-  assert.ok(names.some((n) => n.includes('harnes codex')));
+  assert.ok(names.some((n) => n.includes('harnes agy')));
   assert.ok(names.some((n) => n.includes('harnes agy')));
   const roles = checks.filter((c) => c.name.startsWith('uloga '));
   // Šest dokumentnih uloga + dve coding uloge (programer, reviewer).
