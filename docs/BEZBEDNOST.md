@@ -74,7 +74,14 @@ Detalji: `docs/IZOLACIJA-KOPIJA.md` i `~/.dsh/docker/README.md`.
 ## Granice zaštite
 
 - Git worktree nije OS sandbox i proces istog korisnika može pristupiti drugim putanjama.
-- `agy` adapter u kodu koristi zastavicu `--dangerously-skip-permissions` (naziv harnesa je `agy`); projektne zone same po sebi ne ograničavaju ceo proces.
+- `agy` adapter u kodu koristi zastavicu `--dangerously-skip-permissions` (naziv
+  harnesa je `agy`). U `safe` modu proces se ipak izvršava kroz `bwrap`: `HOME` je
+  prazan tmpfs, izvršno okruženje se ne nasleđuje, radni direktorijum je
+  read-only, a od HOME-a se binduju samo CLI-jev `~/.gemini`,
+  `~/.config/antigravity` i mise runtime — `~/.dsh`, `~/.ssh`, `~/.gnupg` i drugi
+  projekti nisu vidljivi. Mreža i keyring ostaju dostupni (agy-jev sopstveni
+  auth), pa to nije kontejnerska izolacija; za tvrdu granicu koristi se
+  `dsh-worker`.
 - MCP štiti operacije koje idu kroz njega. Direktan fajl-sistemski upis u agentskom stablu proverava se ponovo na merge-u; time se ne sprečava svaki neželjeni upis van stabla.
 - Brisanje `.agents/AGENTS.md` uklanja marker po kome MCP prepoznaje kontrolisani vault. Marker i glavni kontrolni koren moraju ostati pod nadzorom operatera.
 - Verifier i red-team podrazumevano dele dsh vendora; `correlationRisk` je evidencija, ne dodatna nezavisna provera.
