@@ -41,7 +41,7 @@ skripte se tada izvršavaju u kontejneru sa read-only rootfs-om, bez mreže
 (`--network none`), bez host HOME-a i sa `--cap-drop ALL`, `--pids-limit` i
 `--memory`; jedini upisivi put je privremeni klon mountovan kao `/work` (i tmpfs
 `/tmp`). Ako Docker ili slika nisu dostupni, kod pada na bwrap, pa na host.
-Slika se gradi sa `~/.dsh/docker/sandbox/build.sh`.
+Slika se gradi iz repozitorijuma: `tools/sandbox/build.sh` (Dockerfile je u `tools/sandbox/`).
 
 Greška kloniranja/interpretera/sandbox-a može biti zabeležena kao unreproduced, pa njen operativni uzrok ne treba pomešati sa dokazom da tvrdnja nije oboriva. `challengeExecute: false` trenutno može proizvesti clean bez izvršavanja skripti koje su unutar limita. U dnevniku uvek proveri executed, timedOut, unexecuted i pojedinačne rezultate.
 

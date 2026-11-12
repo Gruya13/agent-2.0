@@ -20,3 +20,10 @@ test('config: reviewer je drugi vendor od programera (nezavisan pregled)', async
   assert.notEqual(config.agents.programer.harness, config.agents.reviewer.harness,
     'reviewer mora biti drugi vendor; inače nije nezavisan pregled');
 });
+
+test('config: produkcijski agents.real.yml uključuje Docker sandbox za challenge', async () => {
+  const text = await fs.readFile(path.join(PACKAGE_ROOT, 'tools', 'config', 'agents.real.yml'), 'utf8');
+  const config = parseYaml(text);
+  assert.equal(config.pipeline?.challengeSandbox, 'docker',
+    'produkcija mora izvršavati red-team skripte u kontejneru, ne na hostu');
+});

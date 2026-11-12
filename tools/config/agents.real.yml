@@ -35,6 +35,9 @@ pipeline:
   challengeExecute: true
   challengeTimeoutMs: 60000
   challengeMaxScripts: 3
+  # Red-team reprodukcije se izvršavaju u kontejneru (read-only rootfs, bez
+  # mreže, samo klon u /work), ne na hostu. Fallback: bwrap, pa host.
+  challengeSandbox: docker
   maxRounds: 10
   intervalMs: 0
   agentTimeoutMs: 900000

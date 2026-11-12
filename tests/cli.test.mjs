@@ -291,3 +291,27 @@ test('CLI: worker-review generiše slepi brief za verifikaciju grane', async () 
   assert.match(sadrzaj, /Worker izlaz/);
   await vault.cleanup();
 });
+
+test('CLI: tick --strict vraća 1 kada akcija nije uspela', async () => {
+  const vault = await makeVault();
+  await runCli(vault.root, ['init']);
+  const ingest = await runCli(vault.root, ['ingest', 'raw/dokument.md', '--title', 'Strict proba']);
+  assert.equal(ingest.code, 0, ingest.stderr);
+  // Zadatak u `review` bez researcherske grane: verify faza mora pasti (ok:false).
+  const claim = await runCli(vault.root, ['claim', 'TASK-101', '--owner', 'tester']);
+  const token = claim.stdout.match(/token: (\S+)/)?.[1];
+  assert.ok(token, claim.stdout);
+  const release = await runCli(vault.root, ['release', 'TASK-101', '--owner', 'tester', '--token', token, '--to', 'review']);
+  assert.equal(release.code, 0, release.stderr);
+
+  const tick = await runCli(vault.root, ['tick', '--strict', '--json']);
+  let result;
+  try { result = JSON.parse(tick.stdout); } catch { result = {}; }
+  assert.equal((result.actions ?? []).some((a) => a.ok === false), true,
+    `scenario mora da proizvede neuspešnu akciju: ${tick.stdout} ${tick.stderr}`);
+  assert.equal(tick.code, 1, 'tick --strict mora da vrati 1 kada akcija nije uspela');
+  // Bez --strict isti scenario vraća 0 (kompatibilnost postojećih pozivalaca).
+  const opusteno = await runCli(vault.root, ['tick', '--json']);
+  assert.equal(opusteno.code, 0);
+  await vault.cleanup();
+});
