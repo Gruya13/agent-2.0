@@ -360,7 +360,6 @@ const COMMANDS = {
     }
     const roundsResult = await pipeline.run({ rounds });
     const actions = roundsResult.flatMap((r) => r.actions);
-    const neuspesno = actions.filter((a) => !a.ok).length;
     if (flags.json) { json(roundsResult); return flags.strict === true ? strictExit(actions) : 0; }
     out(table(actions.map((a) => [a.phase, a.task ?? '—', a.ok ? 'ok' : `neuspeh${a.reason ? `: ${a.reason}` : ''}`]),
       ['FAZA', 'ZADATAK', 'ISHOD']));
