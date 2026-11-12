@@ -20,6 +20,7 @@ import {
   normalizeName, readNote, writeNote,
 } from '../vault.mjs';
 import { parseVerdict } from './harness.mjs';
+import { matchesScope } from '../scope.mjs';
 
 const MAX_SENTENCES = 5;
 
@@ -368,7 +369,7 @@ async function librarian(config, { task, cwd, now }) {
   const opseg = task.data.audit_scope ?? [];
   const sve = await listNotes(cwd, ['wiki']);
   const mete = sve.filter((rel) => !rel.includes('/drafts/') && rel !== 'wiki/Index.md'
-    && opseg.some((scope) => new RegExp(`^${scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*\\\*/g, '.*').replace(/\\\*/g, '[^/]*')}$`).test(rel)));
+    && matchesScope(rel, opseg));
   if (!mete.length) return { ok: false, output: `nijedna beleška ne ulazi u opseg (${opseg.join(', ')})`, artifacts: [] };
 
   const imena = new Set(sve.map((p) => normalizeName(noteName(p))));

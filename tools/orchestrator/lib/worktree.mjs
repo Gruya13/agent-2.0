@@ -7,6 +7,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { branchExists, commitAll, commitPaths, currentBranch, git, hasCommits, headSha, statusPorcelain } from './git.mjs';
 import { exists } from './fsx.mjs';
+import { matchesScope } from './scope.mjs';
 
 export const MAIN_BRANCH = 'main';
 
@@ -175,10 +176,10 @@ export async function mergeIntoMain(config, {
   const opseg = politika.scope ?? [];
   // Izvedeni artefakti su vlasnistvo kontrolnog sloja, ma ko ih poslao.
   const izvedeni = new Set([...(generatedPaths ?? []), config.vault.index, '.agents/raw-manifest.json']);
-  const uOpsegu = (f) => opseg.some((scope) => {
-    const rx = new RegExp(`^${String(scope).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*\\\*/g, '.*').replace(/\\\*/g, '[^/]*')}$`);
-    return rx.test(f);
-  });
+  // Isti jezik globa kao revizorska kapija (`scope.mjs`): raniji inline regex je
+  // eskejpovao `?` kao literal, pa je opseg sa `?` prolazio reviziju a padao
+  // na ovoj kapiji — ista putanja, dva odgovora.
+  const uOpsegu = (f) => matchesScope(f, opseg);
   const vanZone = izmene.filter((f) => {
     if (dozvoljeniPrefiksi.some((z) => f.startsWith(z))) return false;
     if (dozvoljenaProdukcija.has(f)) return false;

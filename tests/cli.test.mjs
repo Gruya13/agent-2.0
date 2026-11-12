@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import { gitExec, makeVault, runCli } from './helpers/vault.mjs';
 import { PACKAGE_ROOT } from '../tools/orchestrator/lib/config.mjs';
 
@@ -167,8 +168,8 @@ test('CLI: doctor proverava okruženje i prijavljuje adaptere', async () => {
   const vault = await makeVault();
   await runCli(vault.root, ['init']);
   const doctor = await runCli(vault.root, ['doctor', '--json']);
-  assert.equal(doctor.code, 0, doctor.stderr);
   const checks = JSON.parse(doctor.stdout);
+  assert.equal(doctor.code, checks.some((c) => !c.ok) ? 1 : 0, 'doctor exit kod mora da odražava neuspele provere');
   const names = checks.map((c) => c.name);
   assert.ok(names.some((n) => n.includes('git repozitorijum')));
   assert.ok(names.some((n) => n.includes('harnes dsh')));
@@ -224,5 +225,24 @@ test('CLI: --help ispisuje komande', async () => {
   for (const command of ['ingest', 'claim', 'run', 'lint', 'index', 'doctor']) {
     assert.match(help.stdout, new RegExp(`\\b${command}\\b`));
   }
+  await vault.cleanup();
+});
+
+test('CLI: doctor vraća 1 kada provera nije ok', async () => {
+  const vault = await makeVault();
+  await runCli(vault.root, ['init']);
+  await fs.rm(path.join(vault.root, 'tasks', 'review'), { recursive: true, force: true });
+  const doctor = await runCli(vault.root, ['doctor', '--json']);
+  assert.equal(doctor.code, 1, 'neuspešna provera mora da obori izlazni kod');
+  const checks = JSON.parse(doctor.stdout);
+  assert.ok(checks.some((c) => !c.ok && c.name.includes('tasks/review')), doctor.stdout.slice(0, 800));
+  await vault.cleanup();
+});
+
+test('CLI: run --strict prihvata flag i uspešan tok ostaje 0', async () => {
+  const vault = await makeVault();
+  await runCli(vault.root, ['init']);
+  const run = await runCli(vault.root, ['run', '--strict', '--rounds', '0']);
+  assert.equal(run.code, 0, run.stderr);
   await vault.cleanup();
 });

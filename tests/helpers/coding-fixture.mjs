@@ -85,7 +85,7 @@ export const reproKomanda = () => `node -e ${JSON.stringify(REPRO_SKRIPT)}`;
  */
 export async function pripremiCoding({
   saBugom = true, lease = null, scope = ['src/**', 'tests/**'], testCommand = 'npm test',
-  extra = {}, memory = [],
+  extra = {}, memory = [], reproCommand = reproKomanda(),
 } = {}) {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);
@@ -100,7 +100,7 @@ export async function pripremiCoding({
     base: cilj.base,
     scope,
     testCommand,
-    reproCommand: reproKomanda(),
+    reproCommand,
     memory,
   });
   return { vault, config, store, coding, cilj, zadatak };

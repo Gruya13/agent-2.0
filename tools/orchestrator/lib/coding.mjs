@@ -82,8 +82,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       });
       return { exitCode: 0, stdout: String(stdout), stderr: String(stderr), durationMs: Date.now() - started };
     } catch (error) {
+      // Greška PRI POKRETANJU (npr. ENOENT: komanda ne postoji) nije izlazni
+      // kod procesa. Pretvorena u 1, izgleda kao "test je pao", pa bi faza
+      // reprodukcije prihvatila nepostojeću komandu kao dokaz buga.
+      const spawnError = Number.isInteger(error.code) ? null : String(error.code ?? error.message ?? 'spawn-error');
       return {
-        exitCode: Number.isInteger(error.code) ? error.code : 1,
+        exitCode: spawnError === null ? Number(error.code) : null,
+        spawnError,
         stdout: String(error.stdout ?? ''),
         stderr: String(error.stderr ?? error.message),
         durationMs: Date.now() - started,
@@ -187,6 +192,8 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
     // Prekid ima prioritet nad svim ostalim: i `timeout(1)` daje 124, a izlaz
     // može da sadrži i prethodnu assertion poruku (Codex: takav pad je prošao).
     if (test.timedOut || test.exitCode === 124 || /Command timed out|timed out after/.test(tekst)) return 'timeout';
+    // Komanda koja se nije pokrenula nije pad testa; nikad nije dokaz buga.
+    if (test.spawnError) return 'error';
     // Greške izvršavanja idu PRVE: `node --test` obeležava i njih sa ✖, pa se
     // ✖ ne sme koristiti kao dokaz tvrdnje (Codex: TypeError je prošao kao assertion).
     if (/SyntaxError|TypeError|ReferenceError|RangeError|Cannot find module|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|ERR_REQUIRE_ESM/.test(tekst)) return 'error';
@@ -212,6 +219,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const test = await pokreniTest(baza, task.data.code_test);
       return {
         exitCode: test.exitCode,
+        spawnError: test.spawnError ?? null,
         files: testFajlovi,
         command: task.data.code_test,
         at: now(),
@@ -403,8 +411,11 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       // test suite nije dokaz reprodukcije: bug često nije pokriven testovima.
       const reproKomanda = task.data.code_repro ?? task.data.code_test;
       const pre = await pokreniTest(dir, reproKomanda);
-      ev = { ...ev, reproduce: { command: reproKomanda, exitCode: pre.exitCode, base: task.data.code_base, at: now() } };
+      ev = { ...ev, reproduce: { command: reproKomanda, exitCode: pre.exitCode, spawnError: pre.spawnError ?? null, base: task.data.code_base, at: now() } };
       await store.setFields(id, { code_evidence: ev }, { actor: OWNER, note: 'reprodukcija problema' });
+      if (pre.spawnError) {
+        return await odbij(id, ev, `repro komanda se nije pokrenula (${pre.spawnError}): "${reproKomanda}" — to nije pad testa i ne dokazuje bug`, token);
+      }
       if (pre.exitCode === 0) return await odbij(id, ev, `bug se ne reprodukuje: "${reproKomanda}" prolazi na ${task.data.code_base}`, token);
       logger(`code: ${id} reprodukcija OK (repro pada na ${String(task.data.code_base).slice(0, 8)})`);
 
@@ -518,6 +529,9 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
           at: now(),
         },
       };
+      if (posle.spawnError || reproPosle.spawnError) {
+        return await odbij(id, ev, `komanda se nije pokrenula posle popravke (suite ${posle.spawnError ?? 'ok'}, repro ${reproPosle.spawnError ?? 'ok'})`, token);
+      }
       if (posle.exitCode !== 0 || reproPosle.exitCode !== 0) {
         return await odbij(id, ev, `test ne prolazi posle popravke (suite ${posle.exitCode}, repro ${reproPosle.exitCode})`, token);
       }
@@ -674,9 +688,12 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const test = await pokreniTest(dir, testCommand);
       const tree = (await git(dir, ['rev-parse', 'HEAD^{tree}'])).stdout.trim();
       return {
-        ok: test.exitCode === 0,
-        reason: test.exitCode === 0 ? null : `zajednički rezultat ne prolazi proveru (exit ${test.exitCode})`,
+        ok: test.exitCode === 0 && !test.spawnError,
+        reason: test.spawnError
+          ? `integracijska provera se nije pokrenula (${test.spawnError})`
+          : test.exitCode === 0 ? null : `zajednički rezultat ne prolazi proveru (exit ${test.exitCode})`,
         exitCode: test.exitCode,
+        spawnError: test.spawnError ?? null,
         command: testCommand,
         stdout: String(test.stdout).slice(0, 800),
         tree,

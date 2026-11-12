@@ -82,7 +82,7 @@ Ne uzimaj ručni zakup pre standardnog `phase` ili `run`: oni sami uzimaju zakup
 | `1` | izuzetak/greška; phase takođe koristi 1 za neuspešan rezultat |
 | `2` | lint/status sa lint greškama; nepoznata komanda |
 
-`run` vraća `0` i kada pojedine akcije imaju `ok: false`. `doctor` u tekstualnom režimu vraća `0` i kada ispisuje `FAIL`; JSON režim vraća `1` za neuspelu Git proveru. Za automatizaciju proveri sadržaj rezultata i završni status zadatka.
+`doctor` vraća `1` ako ijedna provera nije `ok` (i u tekstualnom i u JSON režimu), pa skripta spremnosti ne može da prijavi lažan uspeh. `run` podrazumevano vraća `0` radi kompatibilnosti sa postojećim pozivaocima; sa `--strict` vraća `1` ako ijedna akcija ima `ok: false`. Za automatizaciju koristi `run --strict` (ili proveri sadržaj rezultata).
 
 ## npm skripte
 

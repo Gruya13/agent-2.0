@@ -355,15 +355,16 @@ const COMMANDS = {
       const result = await pipeline.runOnce({ only });
       if (flags.json) json(result);
       else out(`faza ${only}: ${result.actions.length} akcija`);
-      return 0;
+      return flags.strict === true && result.actions.some((a) => !a.ok) ? 1 : 0;
     }
     const roundsResult = await pipeline.run({ rounds });
-    if (flags.json) { json(roundsResult); return 0; }
     const actions = roundsResult.flatMap((r) => r.actions);
+    const neuspesno = actions.filter((a) => !a.ok).length;
+    if (flags.json) { json(roundsResult); return flags.strict === true && neuspesno > 0 ? 1 : 0; }
     out(table(actions.map((a) => [a.phase, a.task ?? '—', a.ok ? 'ok' : `neuspeh${a.reason ? `: ${a.reason}` : ''}`]),
       ['FAZA', 'ZADATAK', 'ISHOD']));
     out(`krugova: ${roundsResult.length}, akcija: ${actions.length}`);
-    return 0;
+    return flags.strict === true && neuspesno > 0 ? 1 : 0;
   },
 
   async status({ pipeline, flags }) {
@@ -428,9 +429,10 @@ const COMMANDS = {
     for (const role of ROLES) {
       checks.push({ name: `uloga ${role}`, ok: true, detail: `${config.agents[role].adapter}${config.agents[role].adapter === 'harness' ? `:${config.agents[role].harness}` : ''}` });
     }
-    if (flags.json) { json(checks); return checks.some((c) => !c.ok && c.name.startsWith('git')) ? 1 : 0; }
+    const neuspesno = checks.filter((c) => !c.ok).length;
+    if (flags.json) { json(checks); return neuspesno === 0 ? 0 : 1; }
     out(table(checks.map((c) => [c.ok ? 'OK' : 'FAIL', c.name, c.detail]), ['STANJE', 'PROVERA', 'DETALJ']));
-    return 0;
+    return neuspesno === 0 ? 0 : 1;
   },
 
   async 'merge-log'({ config, flags }) {

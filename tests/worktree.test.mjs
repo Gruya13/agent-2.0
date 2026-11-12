@@ -265,3 +265,33 @@ test('worktree putanja nikad ne izlazi iz vault-a', async () => {
   assert.equal(path.basename(dir), 'TASK-060-researcher');
   await vault.cleanup();
 });
+
+test('worktree: glob ? je isti jezik u reviziji i merge kapiji', async () => {
+  const vault = await makeVault();
+  const config = await loadConfig(vault.root);
+  await ensureMainBranch(config);
+
+  // `?` je tačno jedan znak. Ista grana mora proći kapiju, kao što prolazi reviziju.
+  await createWorktree(config, { id: 'TASK-080', role: 'researcher' });
+  const wtA = worktreePath(config, 'TASK-080', 'researcher');
+  await vault.write('.worktrees/TASK-080-researcher/audit/A.md', '# A\n');
+  await gitExec(wtA, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'add', '-A']);
+  await gitExec(wtA, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'commit', '-q', '-m', 'audit A']);
+  const prolazi = await mergeIntoMain(config, {
+    branch: 'agent/researcher/TASK-080', message: 'probe', zonePolicy: { scope: ['audit/?.md'] },
+  });
+  assert.equal(prolazi.merged, true, prolazi.reason);
+
+  // Dva znaka više nisu jedan: `AB.md` ne ulazi u `audit/?.md`.
+  await createWorktree(config, { id: 'TASK-081', role: 'researcher' });
+  const wtB = worktreePath(config, 'TASK-081', 'researcher');
+  await vault.write('.worktrees/TASK-081-researcher/audit/AB.md', '# AB\n');
+  await gitExec(wtB, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'add', '-A']);
+  await gitExec(wtB, ['-c', 'user.name=r', '-c', 'user.email=r@local', 'commit', '-q', '-m', 'audit AB']);
+  const neProlazi = await mergeIntoMain(config, {
+    branch: 'agent/researcher/TASK-081', message: 'probe', zonePolicy: { scope: ['audit/?.md'] },
+  });
+  assert.equal(neProlazi.merged, false);
+  assert.deepEqual(neProlazi.outOfZone, ['audit/AB.md']);
+  await vault.cleanup();
+});

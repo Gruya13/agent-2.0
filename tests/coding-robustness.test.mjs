@@ -403,3 +403,21 @@ test('R19: gubitak zakupa tokom upisa taga sprečava prihvatanje', async () => {
     await vault.cleanup();
   }
 });
+
+test('R20: greška pokretanja repro komande nije dokaz buga (spawn greška)', async () => {
+  // `exec` baca grešku sa string `code` kada proces ne može da se pokrene ili
+  // prekorači maxBuffer; to NIJE izlazni kod testa. Nepostojeća komanda kroz
+  // shell daje 127 (legitiman kod), ali greška pokretanja/buffera ne sme da se
+  // pretvori u 1 i prođe kao reprodukcija.
+  const prelivanje = `node -e ${JSON.stringify("process.stdout.write('x'.repeat(17*1024*1024))")}`;
+  const { vault, coding, zadatak } = await pripremiCoding({ reproCommand: prelivanje });
+  try {
+    const rezultat = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(rezultat.ok, false, 'greška izvršavanja ne sme da prođe kao reprodukcija');
+    assert.match(String(rezultat.reason), /nije pokrenula|buffer|spawn/i);
+    // Isti slučaj kroz klasifikaciju: greška izvršavanja, nikad tvrdnja o ponašanju.
+    assert.equal(coding.klasifikujPad({ spawnError: 'ENOENT', stdout: '', stderr: '' }), 'error');
+  } finally {
+    await vault.cleanup();
+  }
+});
