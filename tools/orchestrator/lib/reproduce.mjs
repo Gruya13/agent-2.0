@@ -18,9 +18,20 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { git } from './git.mjs';
 
-function postoji(bin) {
+/**
+ * Does bwrap actually work here? `which` alone lies: the binary can exist while
+ * the kernel forbids user namespaces (containers, hardened hosts). The probe is
+ * the same operation the sandbox needs, so a failing probe means "do not wrap"
+ * instead of "every script is unexecuted".
+ */
+function bwrapRadi() {
   return new Promise((resolve) => {
-    const child = spawn('which', [bin], { stdio: 'ignore' });
+    let child;
+    try {
+      child = spawn('bwrap', ['--ro-bind', '/usr', '/usr', '--', '/usr/bin/true'], {
+        stdio: 'ignore', timeout: 1500,
+      });
+    } catch { resolve(false); return; }
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0));
   });
@@ -88,7 +99,7 @@ function omotaj(bwrap, klon, ime, interpreter) {
       '--ro-bind', '/usr', '/usr',
       '--ro-bind', '/lib', '/lib',
       '--ro-bind-try', '/lib64', '/lib64',
-      '--ro-bind', '/bin', '/bin',
+      '--ro-bind-try', '/bin', '/bin',
       '--ro-bind', '/etc', '/etc',
       '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp',
       '--bind', klon, klon,
@@ -148,7 +159,7 @@ function runProcess(command, args, { cwd, timeoutMs, env }) {
 export async function runReproductionScripts({
   repoRoot, revision, worktreeDir, scripts, max = 3, timeoutMs = 60_000, bwrap = null,
 }) {
-  const sandbox = bwrap ?? (await postoji('bwrap') ? 'bwrap' : null);
+  const sandbox = bwrap ?? (await bwrapRadi() ? 'bwrap' : null);
   const odabrani = scripts.slice(0, max);
   const rezultati = [];
   for (const rel of odabrani) {

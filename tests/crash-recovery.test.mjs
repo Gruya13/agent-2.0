@@ -113,13 +113,30 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
     const pregled = await coding.runCodeTask(zadatak.data.id); // pregled
     assert.equal(pregled.ok, true, `pregled nije prošao: ${JSON.stringify(pregled)}`);
 
-    // Uspori wiki zapis: pre-commit hook u KONTROLNOM repou spava.
+    // Uspori wiki zapis: pre-commit hook u KONTROLNOM repou čeka release fajl.
+    // Marker dokazuje da hook radi pre nego što test traži prozor — bez sleep-a.
+    const active = path.join(vault.root, '.git', 'cr2-hook-active');
+    const release = path.join(vault.root, '.git', 'cr2-hook-release');
     const hook = path.join(vault.root, '.git', 'hooks', 'pre-commit');
     await fs.mkdir(path.dirname(hook), { recursive: true });
-    await fs.writeFile(hook, '#!/bin/sh\nsleep 30\n', 'utf8');
+    await fs.writeFile(hook, [
+      '#!/bin/sh',
+      'touch "' + active + '"',
+      'for i in $(seq 1 600); do [ -f "' + release + '" ] && exit 0; sleep 0.05; done',
+      '',
+    ].join('\n'), 'utf8');
     await fs.chmod(hook, 0o755);
 
     const p = pokreni(vault.root, zadatak.data.id, { AGENT_2_0_MOCK_CODE_CMD: process.env.AGENT_2_0_MOCK_CODE_CMD });
+    // Sačekaj da hook zaista blokira zapis; tek tada prozor accept→memory_write
+    // traje, pa ga je deterministički moguće uhvatiti.
+    let hookAktivan = false;
+    const ropHook = Date.now() + 15000;
+    while (Date.now() < ropHook && !hookAktivan) {
+      hookAktivan = await fs.access(active).then(() => true).catch(() => false);
+      if (!hookAktivan) await cekaj(25);
+    }
+    assert.equal(hookAktivan, true, 'hook nije aktiviran — prozor ne bi bio deterministički');
     // Kill tek kada je prihvatanje ZABELEŽENO (accept) a zapis NIJE (memory_write):
     // inače test može pasti u prozoru pre upisa accept-a (nalaz nezavisne provere).
     const kraj = Date.now() + 30000;
@@ -138,6 +155,8 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
     try { process.kill(-p.child.pid, 'SIGKILL'); } catch { p.child.kill('SIGKILL'); }
     await new Promise((r) => p.child.on('close', r));
     await fs.rm(hook, { force: true });
+    await fs.rm(active, { force: true });
+    await fs.rm(release, { force: true });
     // Ubijena procesna grupa ne ostavlja živog vlasnika: lock je zaostao. Test ga
     // uklanja kao deo SIMULACIJE oporavka (operater zna da procesa nema); u
     // produkciji se automatski uklanja samo lock stariji od 60 s.
@@ -148,8 +167,15 @@ test('CR2: kill posle prihvatanja a pre wiki zapisa — nastavak ne duplira merg
     }
     await fs.rm(lock, { force: true });
 
-    // Mrtav proces drži zakup do isteka TTL-a; nov proces ga opoziva po pravilima.
-    await cekaj(2000);
+    // Mrtav proces drži zakup do isteka TTL-a; sačekaj istek (bez fiksnog
+    // sleep-a), pa ga nov proces opoziva po pravilima.
+    const rokTtl = Date.now() + 15000;
+    while (Date.now() < rokTtl) {
+      const stanje = await store.get(zadatak.data.id);
+      const expires = Date.parse(stanje.data.lease_expires_at ?? '');
+      if (!Number.isFinite(expires) || expires <= Date.now()) break;
+      await cekaj(50);
+    }
     await store.reclaimExpired();
 
     const posle = await store.get(zadatak.data.id);

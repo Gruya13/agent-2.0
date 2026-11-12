@@ -24,6 +24,7 @@ import { exists, walkFiles, writeFileAtomic } from './fsx.mjs';
 import { commitPaths, git } from './git.mjs';
 import { buildPrompt, identityFor, runAgent } from './agents/index.mjs';
 import { matchesScope } from './scope.mjs';
+import { startLeaseHeartbeat } from './lease-heartbeat.mjs';
 import { holdsLease } from './lease.mjs';
 import { readNote, writeNote } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
@@ -113,19 +114,14 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
    * sme nastaviti kao uspešan.
    */
   async function saZakupom(id, token, fn) {
-    let greska = null;
-    const period = Math.max(50, Number(config.lease?.heartbeatMs ?? 2000));
-    const timer = setInterval(() => {
-      store.renew(id, OWNER, { token }).catch((error) => { greska = greska ?? error; });
-    }, period);
-    timer.unref?.();
+    const lease = startLeaseHeartbeat({ store, id, owner: OWNER, token, config, logger });
     try {
       const rezultat = await fn();
-      return { rezultat, izgubljen: greska };
+      return { rezultat, izgubljen: lease.izgubljen };
     } catch (error) {
-      return { rezultat: null, izgubljen: greska, error };
+      return { rezultat: null, izgubljen: lease.izgubljen, error };
     } finally {
-      clearInterval(timer);
+      lease.stop();
     }
   }
 

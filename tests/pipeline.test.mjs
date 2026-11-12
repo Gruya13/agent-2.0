@@ -725,7 +725,16 @@ test('E2E: greška izvršavanja reprodukcije nije „čist nalaz" (kapija ostaje
 
   // Kontrolisana greška okruženja: bwrap se prekida pre nego što pokrene skript.
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-bin-'));
-  await fs.writeFile(path.join(bin, 'bwrap'), '#!/usr/bin/env bash\necho "bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted" >&2\nexit 1\n');
+  // Proba detekcije mora da prođe, a pravo izvršavanje skripta da padne —
+  // tako ostaje ista semantika (greška okruženja pri izvršavanju), a bwrap se
+  // ne preskače već se koristi.
+  await fs.writeFile(path.join(bin, 'bwrap'), [
+    '#!/usr/bin/env bash',
+    'for a in "$@"; do [ "$a" = "/usr/bin/true" ] && exit 0; done',
+    'echo "bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted" >&2',
+    'exit 1',
+    '',
+  ].join('\n'));
   await fs.chmod(path.join(bin, 'bwrap'), 0o755);
 
   const stariPath = process.env.PATH;

@@ -87,22 +87,48 @@ test('reprodukcija: poštuje maksimalan broj skripti', async () => {
   await vault.cleanup();
 });
 
-test('reprodukcija: pukao sandbox nije „lažni nalaz" nego neizvršena provera', async () => {
+test('reprodukcija: bwrap koji ne može da napravi namespace se preskače (fallback)', async () => {
   const { vault, skripte, revision } = await pripremi();
   await fs.writeFile(path.join(skripte, 'NALAZ-1.sh'), '#!/usr/bin/env bash\necho "OBORENO: proba"\nexit 0\n');
 
-  // Kontrola: sa ispravnim sandboxom isti skript je izvršen i nalaz je priznat.
-  const [kontrola] = await runReproductionScripts({
-    repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.sh'], timeoutMs: 30_000,
-  });
-  assert.equal(kontrola.executed, true, 'ispravan sandbox mora da izvrši skript');
-
-  // Kontrolisana greška okruženja: bwrap se prekida pre nego što pokrene skript
-  // (isti tekst koji je istorijski prijavljen na a0dc5c8).
+  // Binar postoji, ali svaka upotreba padne (zabranjen user namespace).
   const bin = path.join(vault.root, '.probni-bin');
   await fs.mkdir(bin, { recursive: true });
   const lazniBwrap = path.join(bin, 'bwrap');
-  await fs.writeFile(lazniBwrap, '#!/usr/bin/env bash\necho "bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted" >&2\nexit 1\n');
+  await fs.writeFile(lazniBwrap, '#!/usr/bin/env bash\necho "bwrap: Creating new namespace failed: Function not implemented" >&2\nexit 1\n');
+  await fs.chmod(lazniBwrap, 0o755);
+
+  const stariPath = process.env.PATH;
+  process.env.PATH = `${bin}:${stariPath}`;
+  try {
+    const [rezultat] = await runReproductionScripts({
+      repoRoot: vault.root, revision, worktreeDir: skripte, scripts: ['NALAZ-1.sh'], timeoutMs: 30_000,
+    });
+    // Proba je pala, pa se skript izvršava bez omotača — to je bolje nego da
+    // svaki nalaz bude „neizvršen“ na hostu gde bwrap ne radi.
+    assert.equal(rezultat.executed, true, 'fallback mora da izvrši skript');
+    assert.equal(rezultat.reproduced, true);
+  } finally {
+    process.env.PATH = stariPath;
+    await vault.cleanup();
+  }
+});
+
+test('reprodukcija: bwrap koji prođe probu a padne pri skriptu je neizvršena provera', async () => {
+  const { vault, skripte, revision } = await pripremi();
+  await fs.writeFile(path.join(skripte, 'NALAZ-1.sh'), '#!/usr/bin/env bash\necho "OBORENO: proba"\nexit 0\n');
+
+  const bin = path.join(vault.root, '.probni-bin');
+  await fs.mkdir(bin, { recursive: true });
+  const lazniBwrap = path.join(bin, 'bwrap');
+  await fs.writeFile(lazniBwrap, [
+    '#!/usr/bin/env bash',
+    '# Proba iz detekcije prolazi; svako pravo izvršavanje skripta pada.',
+    'for a in "$@"; do [ "$a" = "/usr/bin/true" ] && exit 0; done',
+    'echo "bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted" >&2',
+    'exit 1',
+    ''
+  ].join('\n'));
   await fs.chmod(lazniBwrap, 0o755);
 
   const stariPath = process.env.PATH;
@@ -119,7 +145,6 @@ test('reprodukcija: pukao sandbox nije „lažni nalaz" nego neizvršena provera
     await vault.cleanup();
   }
 });
-
 test('reprodukcija: skript koji sam ispiše „bwrap:" je izvršen, ne neizvršen', async () => {
   const { vault, skripte, revision } = await pripremi();
   // Kontraprimer iz nezavisne verifikacije (T4): tekst izlaza ne sme da

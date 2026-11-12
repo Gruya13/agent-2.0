@@ -208,8 +208,13 @@ međusobnog isključivanja; istekao zakup se automatski opoziva.
 | `red-team` | dsh (DeepSeek) | `tasks/challenges/` | popravljanje onoga što napada; sve ostalo |
 | `librarian` | dsh (DeepSeek headless) | `wiki/` u opsegu + `tasks/audits/` | novi članci, prepisivanje sadržaja, izlazak iz opsega |
 | `consolidator` | agy (Antigravity / Gemini) | `wiki/` (bez `Index.md`) | izmišljanje sadržaja, merge |
+| `programer` | dsh (DeepSeek) | izolovano radno stablo **ciljnog repoa**, u opsegu zadatka (`code_scope`) | kontrolni repo, kapije, tuđi testovi, van opsega |
+| `reviewer` | agy (Antigravity / Gemini) | `.agent-review/<TASK-ID>.md` u svom checkout-u | popravka koda; sve van `.agent-review/` |
 
 Kognitivna podela rada: Gemini sintetiše i konsoliduje, DeepSeek verifikuje i održava.
+Dve coding uloge (`programer`, `reviewer`) pripadaju istoj podeli: programer piše
+popravku i regresioni test, a reviewer — **drugi vendor** — piše sopstveni kontrolni
+slučaj i nalaz u `.agent-review/`; nijedan ne popravlja ono što drugi proverava.
 
 **Nezavisnost je precizno definisana, ne preširoko:**
 

@@ -383,24 +383,41 @@ test('R19: gubitak zakupa tokom upisa taga sprečava prihvatanje', async () => {
     await coding.runCodeTask(zadatak.data.id);
     const pre = (await gitExec(cilj.root, ['rev-parse', 'main'])).stdout.trim();
 
-    // Usporen upis taga: hook zadržava referentnu transakciju.
+    // Deterministički hook: blokira referentnu transakciju dok test ne kaže
+    // "pusti". Bez sleep-a i bez nagađanja prozora — test čeka marker.
     const hookDir = path.join(cilj.root, '.git', 'hooks');
     await fs.mkdir(hookDir, { recursive: true });
+    const marker = path.join(cilj.root, '.git', 'r19-aktivan');
+    const release = path.join(cilj.root, '.git', 'r19-pusti');
     const hook = path.join(hookDir, 'reference-transaction');
-    await fs.writeFile(hook, '#!/bin/sh\nsleep 0.5\n', 'utf8');
+    await fs.writeFile(hook, [
+      '#!/bin/sh',
+      'touch "' + marker + '"',
+      'while [ ! -f "' + release + '" ]; do sleep 0.02; done',
+      '',
+    ].join('\n'), 'utf8');
     await fs.chmod(hook, 0o755);
 
     const tok = coding.runCodeTask(zadatak.data.id);
-    await new Promise((r) => setTimeout(r, 250));
+    let aktivan = false;
+    const rok = Date.now() + 15_000;
+    while (Date.now() < rok && !aktivan) {
+      aktivan = await fs.access(marker).then(() => true).catch(() => false);
+      if (!aktivan) await new Promise((r) => setTimeout(r, 20));
+    }
+    if (!aktivan) await fs.writeFile(release, '');
     const tudji = await store.claim(zadatak.data.id, 'agentctl', { force: true, token: 'tudji-token' }).then(() => true).catch(() => false);
+    await fs.writeFile(release, '');
     const rezultat = await tok.catch((e) => ({ ok: false, reason: e.message }));
     await fs.rm(hook, { force: true });
+    await fs.rm(release, { force: true });
+    await fs.rm(marker, { force: true });
 
     const posle = (await gitExec(cilj.root, ['rev-parse', 'main'])).stdout.trim();
-    if (tudji) {
-      assert.equal(rezultat.ok, false, 'posle preuzimanja zakupa nema prihvatanja');
-      assert.equal(posle, pre, 'main se ne sme promeniti');
-    }
+    assert.equal(aktivan, true, 'hook nije aktiviran — prozor bi bio nedeterministički');
+    assert.equal(tudji, true, 'tuđi claim mora da uspe dok hook blokira upis');
+    assert.equal(rezultat.ok, false, 'posle preuzimanja zakupa nema prihvatanja');
+    assert.equal(posle, pre, 'main se ne sme promeniti');
   } finally {
     delete process.env.AGENT_2_0_MOCK_CODE_CMD;
     await vault.cleanup();

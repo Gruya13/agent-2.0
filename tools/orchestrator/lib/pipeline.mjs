@@ -25,6 +25,7 @@ import { buildPrompt, identityFor, parseVerdict, runAgent } from './agents/index
 import { lintRawImmutability, lintVault, updateRawManifest } from './lint.mjs';
 import { isReproductionScript, runReproductionScripts } from './reproduce.mjs';
 import { matchesScope } from './scope.mjs';
+import { LeaseLostError, startLeaseHeartbeat } from './lease-heartbeat.mjs';
 import { listNotes, normalizeConsolidatedNote, readNote, renderIndex } from './vault.mjs';
 import { defaultBody, dirForPhase, findTask, newTaskData, nextTaskId, phaseFor, writeTaskFile } from './task.mjs';
 import { createCodingPipeline } from './coding.mjs';
@@ -74,17 +75,17 @@ export function createPipeline(config, options = {}) {
    */
   async function runAgentDrzeciZakup(id, owner, args) {
     const token = leaseTokens.get(id);
-    const period = Math.max(50, config.lease?.heartbeatMs ?? 120_000);
-    const timer = setInterval(() => {
-      store.renew(id, owner, { token }).catch((error) => {
-        logger(`obnova zakupa nije uspela za ${id}: ${error.message}`);
-      });
-    }, period);
-    timer.unref?.();
+    const lease = startLeaseHeartbeat({ store, id, owner, token, config, logger });
     try {
-      return await runAgent(config, args);
+      const rezultat = await runAgent(config, args);
+      // Neuspeh obnove nije detalj za dnevnik: rad pod izgubljenim zakupom se
+      // ne sme prijaviti kao uspešna faza.
+      if (lease.izgubljen) {
+        throw new LeaseLostError(`zakup je izgubljen tokom poziva harnesa: ${lease.izgubljen.message}`);
+      }
+      return rezultat;
     } finally {
-      clearInterval(timer);
+      lease.stop();
     }
   }
 
@@ -357,7 +358,10 @@ export function createPipeline(config, options = {}) {
     try {
       result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
-      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
+      const reason = error?.code === 'LEASE_LOST'
+        ? 'zakup je izgubljen tokom poziva harnesa; faza je odbijena'
+        : `harnes je bacio grešku: ${error.message}`;
+      await failPhase(id, role, { reason });
       throw error;
     }
 
@@ -505,7 +509,10 @@ export function createPipeline(config, options = {}) {
     try {
       result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
-      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
+      const reason = error?.code === 'LEASE_LOST'
+        ? 'zakup je izgubljen tokom poziva harnesa; faza je odbijena'
+        : `harnes je bacio grešku: ${error.message}`;
+      await failPhase(id, role, { reason });
       throw error;
     }
 
@@ -602,7 +609,10 @@ export function createPipeline(config, options = {}) {
     try {
       result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
-      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}` });
+      const reason = error?.code === 'LEASE_LOST'
+        ? 'zakup je izgubljen tokom poziva harnesa; faza je odbijena'
+        : `harnes je bacio grešku: ${error.message}`;
+      await failPhase(id, role, { reason });
       throw error;
     }
 
@@ -702,7 +712,10 @@ export function createPipeline(config, options = {}) {
     try {
       result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
-      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}`, toStatus: 'review' });
+      const reason = error?.code === 'LEASE_LOST'
+        ? 'zakup je izgubljen tokom poziva harnesa; faza je odbijena'
+        : `harnes je bacio grešku: ${error.message}`;
+      await failPhase(id, role, { reason, toStatus: 'review' });
       throw error;
     }
 
@@ -820,7 +833,10 @@ export function createPipeline(config, options = {}) {
     try {
       result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
-      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}`, toStatus: 'verified' });
+      const reason = error?.code === 'LEASE_LOST'
+        ? 'zakup je izgubljen tokom poziva harnesa; faza je odbijena'
+        : `harnes je bacio grešku: ${error.message}`;
+      await failPhase(id, role, { reason, toStatus: 'verified' });
       throw error;
     }
 
@@ -1068,7 +1084,10 @@ export function createPipeline(config, options = {}) {
     try {
       result = await runAgentDrzeciZakup(id, owner, { role, task: claimed, cwd: wt, prompt, now: now(), logger });
     } catch (error) {
-      await failPhase(id, role, { reason: `harnes je bacio grešku: ${error.message}`, toStatus: 'review' });
+      const reason = error?.code === 'LEASE_LOST'
+        ? 'zakup je izgubljen tokom poziva harnesa; faza je odbijena'
+        : `harnes je bacio grešku: ${error.message}`;
+      await failPhase(id, role, { reason, toStatus: 'review' });
       throw error;
     }
 

@@ -73,3 +73,15 @@ agents:
     harness: agy
     model: null
     timeoutMs: 900000
+  # Coding tok: programer piše popravku, reviewer je DRUGI vendor i pravi
+  # sopstveni kontrolni slučaj (nezavisan pregled, zona .agent-review/).
+  programer:
+    adapter: mock
+    harness: dsh
+    model: null
+    timeoutMs: 900000
+  reviewer:
+    adapter: mock
+    harness: agy
+    model: null
+    timeoutMs: 900000
