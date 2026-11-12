@@ -89,6 +89,8 @@ docs/                        tehnička dokumentacija
 | `task.mjs` | šema zadatka, automat, serijalizacija i pronalaženje |
 | `store.mjs` | zaključane mutacije, zakup i događaji |
 | `lease.mjs` | identitet, token, trajanje i životnost zakupa |
+| `lease-heartbeat.mjs` | zajedničko obnavljanje zakupa za dokumentni i coding tok; `LeaseLostError` |
+| `exit.mjs` | pravilo izlaznog koda za `run --strict` |
 | `worktree.mjs` | izolacija, politika putanja, poravnanje, rebase i merge |
 | `git.mjs` | izvršavanje Git komandi i autorstvo |
 | `vault.mjs` | beleške, frontmatter, Vikilinkovi, backlinkovi i indeks |

@@ -6,7 +6,7 @@
 
 `loadConfig(vaultRoot, { configFile })` spaja ugrađene vrednosti sa YAML konfiguracijom. Podrazumevani fajl je `<vaultRoot>/tools/config/agents.yml`. Nepostojeći fajl ne izaziva sam po sebi grešku: koriste se ugrađene vrednosti. Zato proveri da alternativna putanja stvarno postoji; `doctor` nije dovoljna provera sadržaja.
 
-Mape se spajaju rekurzivno, a liste zamenjuju. YAML mora biti mapiranje. Svih šest uloga mora imati adapter `mock` ili `harness`. Opšta stroga validacija svih polja i vremenskih parametara nije implementirana. Parser je projektni podskup YAML-a; ne računaj na sve mogućnosti standardnih YAML biblioteka.
+Mape se spajaju rekurzivno, a liste zamenjuju. YAML mora biti mapiranje. Svih osam uloga mora imati adapter `mock` ili `harness`. Opšta stroga validacija svih polja i vremenskih parametara nije implementirana. Parser je projektni podskup YAML-a; ne računaj na sve mogućnosti standardnih YAML biblioteka.
 
 `agents.yml` koristi mock za sve uloge, dok `agents.real.yml` koristi harness za sve. `model: null` ostavlja izbor modela spoljnjem harnesu; samo deklarisanje druge vrednosti ne garantuje da je CLI dobio odgovarajuću opciju.
 
@@ -32,7 +32,7 @@ Putanje se razrešavaju prema korenu vault-a. `.locks` i `.runtime` formiraju se
 | Parametar | Vrednost | Dejstvo |
 |---|---|---|
 | `lease.ttlMs` | 600000 | deset minuta zakupa |
-| `lease.heartbeatMs` | 120000 | deklarisan interval; trenutno nema izvršenog heartbeat-a |
+| `lease.heartbeatMs` | 120000 | interval obnavljanja zakupa; zajednički za dokumentni i coding tok (`lease-heartbeat.mjs`), minimum 50 ms |
 | `pipeline.challenge` | true | clean challenge potreban za konsolidaciju |
 | `pipeline.challengeExecute` | true | pokretanje reprodukcionih skripti |
 | `pipeline.challengeTimeoutMs` | 60000 | najviše vreme jednog skripta |
@@ -62,7 +62,6 @@ Za svaku ulogu ista polja biraju adapter, program i vremenski limit. Isporučeni
 | Harnes | Poziv iz adaptera |
 |---|---|
 | dsh | `dsh --profile headless <prompt>` |
-| codex | `codex exec --sandbox workspace-write -C <worktree> <prompt>` |
 | agy | `agy --dangerously-skip-permissions --add-dir <worktree> --print=<prompt>` |
 
 Ovo opisuje lokalni adapter, a ne obećanje kompatibilnosti sa svakom budućom verzijom spoljnih programa.
@@ -82,4 +81,4 @@ Ovo opisuje lokalni adapter, a ne obećanje kompatibilnosti sa svakom budućom v
 | `OBSIDIAN_LEASE_TOKEN` | token procesa koji drži zakup |
 | `WIKI_ROOT`, `WIKI_AGENT` | kompatibilne rezervne vrednosti za vault i identitet |
 
-Kontrolni sloj materijalizuje `.runtime/task-context.json`. MCP iz njega rezervno čita task, taskRoot i leaseToken; ne koristi ga kao univerzalni fallback za sva polja. `OBSIDIAN_ROLE` i `OBSIDIAN_AGENT` dolaze iz okruženja koje šalje kontrolni sloj (`agentEnv`), a ne iz statične MCP konfiguracije: statična `env` tabela pobeđuje nasleđeno okruženje (`buildChildEnv = {...parentEnv, ...config.env}`), pa bi fiksirana uloga onemogućila drugu ulogu istog vendora — `agy` bi uvek bio `researcher` (ekstraktor ne bi pisao fragmente), `dsh` uvek `verifier` (red-team ne bi pisao nalaze), `codex` uvek `consolidator` (bibliotekar ne bi pisao revizije). Zato šabloni u `tools/config/mcp/` fiksiraju samo `OBSIDIAN_AGENT`; ako `OBSIDIAN_ROLE` nije prosleđen, server ostaje `readonly`.
+Kontrolni sloj materijalizuje `.runtime/task-context.json`. MCP iz njega rezervno čita task, taskRoot i leaseToken; ne koristi ga kao univerzalni fallback za sva polja. `OBSIDIAN_ROLE` i `OBSIDIAN_AGENT` dolaze iz okruženja koje šalje kontrolni sloj (`agentEnv`), a ne iz statične MCP konfiguracije: statična `env` tabela pobeđuje nasleđeno okruženje (`buildChildEnv = {...parentEnv, ...config.env}`), pa bi fiksirana uloga onemogućila drugu ulogu istog vendora — `agy` bi uvek bio `researcher` (ekstraktor ne bi pisao fragmente), `dsh` uvek `verifier` (red-team ne bi pisao nalaze, a programer ne bi pisao popravke). Zato šabloni u `tools/config/mcp/` fiksiraju samo `OBSIDIAN_AGENT`; ako `OBSIDIAN_ROLE` nije prosleđen, server ostaje `readonly`.

@@ -11,7 +11,7 @@
 | npm | za skripte `npm test`, `npm run status` i demo |
 | Operativni sistem | Linux/POSIX je ciljno okruženje postojećih skripti |
 | Obsidian | opciono, za pregled Markdown baze i grafa |
-| `agy`, `dsh`, `codex` | potrebni samo za uloge sa `adapter: harness` |
+| `agy`, `dsh` | potrebni samo za uloge sa `adapter: harness` |
 | Bash / Python 3 | za reprodukciju `.sh` / `.py` red-team skripti |
 | `bwrap` | opciona izolacija reprodukcionih skripti |
 

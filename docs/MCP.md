@@ -56,13 +56,12 @@ Print zamenjuje `__VAULT__` apsolutnom putanjom projekta i ispisuje šablone. Ch
 ./tools/config/mcp/register.sh --agy
 ```
 
-Ona menja korisničku agy MCP konfiguraciju. DSH i Codex konfiguracije skripta samo ispisuje; operater ih dodaje u odgovarajući profil/kontrolisanu konfiguraciju.
+Ona menja korisničku agy MCP konfiguraciju. DSH konfiguraciju skripta samo ispisuje; operater ih dodaje u odgovarajući profil/kontrolisanu konfiguraciju.
 
 | Šablon | Klijent | Fiksirana uloga |
 |---|---|---|
 | `tools/config/mcp/agy.json` | agy | researcher |
 | `tools/config/mcp/dsh.patch.yml` | dsh headless profil | verifier |
-| `tools/config/mcp/codex.toml` | codex | consolidator |
 
 Ovi šabloni odgovaraju prvobitnim trima ulogama. Ako ista statična env tabela ostane aktivna, može odbiti extractor, red-team ili librarian upis. Runtime fajl ne nadjačava fiksirane role/agent promenljive. Za šest uloga obezbedi MCP konfiguraciju koja prenosi stvarnu ulogu poziva, pa proveri vault_info u konkretnom worktree-u. Nemoj fiksirati OBSIDIAN_VAULT, TASK, TASK_ROOT ili LEASE_TOKEN na jedan zadatak u zajedničkoj konfiguraciji.
 

@@ -8,7 +8,7 @@ Obsidian skladištu** koje je istovremeno crna tabla (Blackboard), Git
 repozitorijum i baza znanja.
 
 ```bash
-npm test                                   # 71 testa: jedinica + E2E + MCP protokol
+npm test                                   # 220 testova: jedinica + E2E + MCP protokol
 node scripts/demo.mjs                      # cela petofazna demonstracija u privremenom vault-u
 node tools/orchestrator/cli.mjs status     # stanje sistema u ovom repozitorijumu
 node tools/orchestrator/cli.mjs doctor     # provera okruženja i harnesa
@@ -105,9 +105,10 @@ posle `maxRevisions` pokušaja zadatak ide u `blocked` (nikad u produkcioni
 
 ## Uloge (i kako su dogovorene)
 
-Šest uloga. Tri su iz prvobitne podele, tri su dodate posle **konsultacije sva tri
-vendora** (svaki je zadržao svoje postojeće uloge i birao 0–2 nove, uz
-obrazloženje i dokaz; svi odgovori su u [KONSULTACIJA-ULOGA.md](KONSULTACIJA-ULOGA.md)):
+Osam uloga: šest dokumentnih (tri iz prvobitne podele, tri dodate posle
+**konsultacije vendora** — odgovori su u [KONSULTACIJA-ULOGA.md](KONSULTACIJA-ULOGA.md))
+i dve coding uloge (`programer`, `reviewer`) koje rade u izolovanom radnom stablu
+ciljnog repozitorijuma:
 
 | Uloga | Harnes | Zona | Šta radi |
 |---|---|---|---|
@@ -117,16 +118,17 @@ obrazloženje i dokaz; svi odgovori su u [KONSULTACIJA-ULOGA.md](KONSULTACIJA-UL
 | `red-team` | `dsh` | `tasks/challenges/` | posle pečata napada artefakt na **zamrznutoj reviziji**; nalaz je skript koji kontrolni sloj sam izvrši |
 | `librarian` | `dsh` | `wiki/` u opsegu + `tasks/audits/` | održava postojeću bazu: duplikati, siročići, oznake, pokvarene veze |
 | `consolidator` | `agy` | `wiki/` (bez `Index.md`) | premešta verifikovan nacrt u produkciju i uređuje strukturu |
+| `programer` | `dsh` | ciljni repo, opseg zadatka | piše popravku i regresioni test u izolovanom stablu; ne komituje |
+| `reviewer` | `agy` | `.agent-review/` | nezavisan pregled: sopstveni kontrolni slučaj, `VERDICT: pass|fail` |
 
 `extractor` je bio **jednoglasan** (svi su ga predložili agy-ju, jer fragmenti
-ostaju u njegovoj zoni). `librarian` nije tražio niko, pa je dodeljen kodexu kao
-jedinom koji već ima pravo upisa u `wiki/` — uz obaveznu nezavisnu proveru i
-strog opseg. Red-team je bio sporan i rešen je **izvršavanjem**, ne dogovorom:
-vidi [KONSULTACIJA-ULOGA.md](KONSULTACIJA-ULOGA.md).
+ostaju u njegovoj zoni). `librarian` nije tražio niko; danas ga drži `dsh`, uz
+obaveznu nezavisnu proveru i strog opseg. Red-team je bio sporan i rešen je
+**izvršavanjem**, ne dogovorom: vidi [KONSULTACIJA-ULOGA.md](KONSULTACIJA-ULOGA.md).
 
 ## Prelazak na prave harnese
 
-Podrazumevano su sva tri adaptera `mock`: to je deterministički zamenik istog
+Podrazumevano su sva adaptera `mock`: to je deterministički zamenik istog
 ugovora (iste zone upisa, isti izlazni format) koji omogućava da testovi i demo
 provere **arhitekturu**, a ne kvalitet sadržaja. Pravi harnesi se uključuju
 svesno, po pozivu, kroz odvojen config — da testovi ostanu deterministički i
@@ -283,8 +285,8 @@ istog harnesa (`agy`) imaju isto ime, ali ne i isti token — drugi ne može da
 obnovi, otpusti ni piše pod živim zakupom prvog. MCP proverava isti token.
 
 **Kontekst zadatka u radnom stablu.** Pokazalo se da harnesi ne prosleđuju
-okruženje MCP serveru isto: `dsh` i `agy` nasleđuju `OBSIDIAN_*`, a `codex exec`
-prosleđuje samo svoju `env` tabelu. Zato kontrolni sloj pre svakog poziva upisuje
+okruženje MCP serveru isto: `dsh` i `agy` nasleđuju `OBSIDIAN_*`, a spoljni CLI
+može da prosledi samo svoju `env` tabelu. Zato kontrolni sloj pre svakog poziva upisuje
 `.runtime/task-context.json` u radno stablo zadatka (gitignore — ne ulazi u
 granu), a MCP server ga čita kao fallback: `env > fajl > podrazumevano`. Time
 legitiman upis prolazi i kod harnesa koji ne nasleđuje okruženje, a

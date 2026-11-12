@@ -33,7 +33,7 @@ Nalaz se smatra reprodukovanim kada skript završi kodom 0, nije istekao i stdou
 | skripte preko limita | preostale ulaze u unexecuted |
 | nijedan blokirajući rezultat | clean po trenutnoj logici |
 
-Ako je `bwrap` dostupan, kod pokušava izolaciju procesa, mreže i upisivog klona. Dostupnost programa nije dokaz da je sandbox uspešno uspostavljen. Bez njega skripte rade kao obični korisnički procesi; privremeni klon i promenjeni HOME ne sprečavaju pristup ostalim datotekama ili mreži. Procesi nasleđuju korisničko okruženje, koje može sadržati tajne. Ovo je realna granica implementacije.
+Ako je `bwrap` dostupan, kod **prvo probno izvrši** sandbox sa istim namespace ograničenjima koja koristi i pravi omotač (`--unshare-pid`, `--unshare-net`, `--proc`, `--dev`, `--tmpfs`). Dostupnost programa nije dokaz da je sandbox uspešno uspostavljen: ako proba padne (npr. kontejner zabranjuje user namespace), skripte se izvršavaju kao obični korisnički procesi — to je svesni fallback da nalaz ne bi bio lažno „neizvršen“, ali gubi izolaciju. Bez njega skripte rade kao obični korisnički procesi; privremeni klon i promenjeni HOME ne sprečavaju pristup ostalim datotekama ili mreži. Procesi nasleđuju korisničko okruženje, koje može sadržati tajne. Ovo je realna granica implementacije.
 
 Greška kloniranja/interpretera/sandbox-a može biti zabeležena kao unreproduced, pa njen operativni uzrok ne treba pomešati sa dokazom da tvrdnja nije oboriva. `challengeExecute: false` trenutno može proizvesti clean bez izvršavanja skripti koje su unutar limita. U dnevniku uvek proveri executed, timedOut, unexecuted i pojedinačne rezultate.
 

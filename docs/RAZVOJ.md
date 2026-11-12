@@ -29,9 +29,14 @@ Testni helper `tests/helpers/vault.mjs` pravi privremeni Git vault sa kopiranim 
 | harness.test.mjs | komandni adapteri, izlazi i prekid procesa |
 | mcp.test.mjs | JSON-RPC i pristupne kapije |
 | scope.test.mjs | audit obrasci |
-| reproduce.test.mjs | zamrznuti klonovi, reprodukcija, limiti i timeout |
+| reproduce.test.mjs | zamrznuti klonovi, reprodukcija, limiti i timeout; probna provera bwrap-a i fallback |
+| coding.test.mjs, coding-robustness.test.mjs | coding tok, kapije, klasifikacija padova i zakup |
+| crash-recovery.test.mjs | prekid procesa, oporavak i nastavak bez dupliranja |
+| consolidate-paths.test.mjs, rebase-generated.test.mjs, wiki-integrity.test.mjs | promocija, rebase i integritet baze |
+| config-roles.test.mjs | svaka uloga eksplicitno u `agents.yml`; reviewer je drugi vendor |
+| exit.test.mjs, lease-heartbeat.test.mjs | pravilo `run --strict` i zajedničko obnavljanje zakupa |
 
-Broj testova uzmi iz stvarnog rezultata trenutne revizije; raniji README navodi istorijske brojeve koji se mogu razlikovati. Testovi reprodukcije izvršavaju Bash/Python i pokušavaju bwrap ako je dostupan. Ograničeno okruženje može sprečiti kloniranje, podprocese ili sandbox; uzrok neuspeha dokumentuj odvojeno od sadržajne regresije.
+Broj testova uzmi iz stvarnog rezultata trenutne revizije; raniji README navodi istorijske brojeve koji se mogu razlikovati. Testovi koji proveravaju vremenske prozore (R19, CR2) deterministički su vezani marker/release fajlovima, ne `sleep`-om: ako im treba prozor, čekaju hook, a ne sat. Testovi reprodukcije izvršavaju Bash/Python i pokušavaju bwrap ako je dostupan. Ograničeno okruženje može sprečiti kloniranje, podprocese ili sandbox; uzrok neuspeha dokumentuj odvojeno od sadržajne regresije.
 
 ## Interni API
 

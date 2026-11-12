@@ -73,7 +73,7 @@ Komanda postavlja challenge verdict=clean i beleži ko, kada i zašto. Zadatak m
 | merge van zone | agent menja zabranjene putanje; pregledaj diff, ne proširuj dozvolu samo da bi prošao |
 | rebase/merge konflikt | pregledaj navedene fajlove; sistem abortira konfliktni pokušaj, ne bira sadržaj automatski |
 | proposed bez napretka | zavisnosti nisu spremne ili nema automatske promocije proposed zadatka |
-| doctor FAIL, kod 0 | doctor je pregled, ne potpuna potvrda spremnosti |
+| doctor FAIL, kod 1 | doctor vraća 1 ako ijedna provera nije `ok`; ne proverava auth, kvotu ni punu MCP integraciju |
 | run kod 0, neuspešni zadaci | pregledaj JSON akcije i završni status |
 
 Za v1 binarni manifest re-osnova znači uklanjanje samo konkretnog zapisa iz files nakon pregleda i potom `index`. Time se uspostavlja nova osnova, ne dokazuje istorijska nepromenljivost. Sačuvaj obrazloženje intervencije.

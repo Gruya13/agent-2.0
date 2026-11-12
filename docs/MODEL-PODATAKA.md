@@ -79,7 +79,7 @@ Obavezna polja su `title`, `created`, `updated`, `authors`, `status`, `tags`. Au
 title: Nova tema
 created: 2026-10-14T10:00:00.000Z
 updated: 2026-10-14T10:10:00.000Z
-authors: [agy, dsh, codex]
+authors: [agy, dsh]
 status: consolidated
 tags: [tema]
 ---
