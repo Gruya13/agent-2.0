@@ -239,7 +239,7 @@ test('CLI: doctor vraća 1 kada provera nije ok', async () => {
   await vault.cleanup();
 });
 
-test('CLI: run --strict prihvata flag i uspešan tok ostaje 0', async () => {
+test('CLI: run --strict ne kvari uspešan tok (logika koda je u lib/exit.mjs)', async () => {
   const vault = await makeVault();
   await runCli(vault.root, ['init']);
   const run = await runCli(vault.root, ['run', '--strict', '--rounds', '0']);

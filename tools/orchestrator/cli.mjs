@@ -18,6 +18,7 @@ import { renderIndex } from './lib/vault.mjs';
 import { exists } from './lib/fsx.mjs';
 import { commitPaths, git, log as gitLog, isGitRepo } from './lib/git.mjs';
 import { HARNESS_COMMANDS } from './lib/agents/index.mjs';
+import { strictExit } from './lib/exit.mjs';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
@@ -355,16 +356,16 @@ const COMMANDS = {
       const result = await pipeline.runOnce({ only });
       if (flags.json) json(result);
       else out(`faza ${only}: ${result.actions.length} akcija`);
-      return flags.strict === true && result.actions.some((a) => !a.ok) ? 1 : 0;
+      return flags.strict === true ? strictExit(result.actions) : 0;
     }
     const roundsResult = await pipeline.run({ rounds });
     const actions = roundsResult.flatMap((r) => r.actions);
     const neuspesno = actions.filter((a) => !a.ok).length;
-    if (flags.json) { json(roundsResult); return flags.strict === true && neuspesno > 0 ? 1 : 0; }
+    if (flags.json) { json(roundsResult); return flags.strict === true ? strictExit(actions) : 0; }
     out(table(actions.map((a) => [a.phase, a.task ?? '—', a.ok ? 'ok' : `neuspeh${a.reason ? `: ${a.reason}` : ''}`]),
       ['FAZA', 'ZADATAK', 'ISHOD']));
     out(`krugova: ${roundsResult.length}, akcija: ${actions.length}`);
-    return flags.strict === true && neuspesno > 0 ? 1 : 0;
+    return flags.strict === true ? strictExit(actions) : 0;
   },
 
   async status({ pipeline, flags }) {

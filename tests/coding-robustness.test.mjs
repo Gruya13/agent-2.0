@@ -314,8 +314,11 @@ test('R15: tuđi zakup sprečava prihvatanje', async () => {
 });
 
 test('R16: zakup ostaje živ i tokom duge provere na osnovi', async () => {
+  // Dogfood P6: pod `--test-concurrency=4` zidni sat je pravio flaky pad.
+  // TTL je podignut da heartbeat ima više od jednog promašenog otkucaja margine,
+  // a test i dalje dokazuje da se zakup obnavlja tokom duge provere.
   const { vault, store, coding, zadatak } = await pripremiCoding({
-    lease: { ttlMs: 400, heartbeatMs: 150 },
+    lease: { ttlMs: 1500, heartbeatMs: 200 },
     testCommand: 'sleep 0.6 && npm test',
   });
   process.env.AGENT_2_0_MOCK_CODE_CMD = await skriptaProgramera(ISPRAVKA);
@@ -417,6 +420,18 @@ test('R20: greška pokretanja repro komande nije dokaz buga (spawn greška)', as
     assert.match(String(rezultat.reason), /nije pokrenula|buffer|spawn/i);
     // Isti slučaj kroz klasifikaciju: greška izvršavanja, nikad tvrdnja o ponašanju.
     assert.equal(coding.klasifikujPad({ spawnError: 'ENOENT', stdout: '', stderr: '' }), 'error');
+  } finally {
+    await vault.cleanup();
+  }
+});
+
+test('R21: nepostojeća komanda u shellu (127) nije dokaz buga', async () => {
+  // Shell se pokrene i vrati 127; to nije pad testa nego komanda koje nema.
+  const { vault, coding, zadatak } = await pripremiCoding({ reproCommand: 'nepostojeca-komanda-za-repro-xyz' });
+  try {
+    const rezultat = await coding.runCodeTask(zadatak.data.id);
+    assert.equal(rezultat.ok, false, 'shell 127 ne sme da prođe kao reprodukcija');
+    assert.match(String(rezultat.reason), /nije pokrenula|not-runnable/i);
   } finally {
     await vault.cleanup();
   }

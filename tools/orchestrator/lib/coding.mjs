@@ -85,7 +85,13 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       // Greška PRI POKRETANJU (npr. ENOENT: komanda ne postoji) nije izlazni
       // kod procesa. Pretvorena u 1, izgleda kao "test je pao", pa bi faza
       // reprodukcije prihvatila nepostojeću komandu kao dokaz buga.
-      const spawnError = Number.isInteger(error.code) ? null : String(error.code ?? error.message ?? 'spawn-error');
+      // Isto važi za shell kodove 126 (nije izvršivo) i 127 (komanda ne
+      // postoji): shell se pokrenuo, ali tražena komanda nije — to je greška
+      // izvršavanja, nikad tvrdnja o ponašanju koda.
+      const code = Number(error.code);
+      const spawnError = Number.isInteger(code)
+        ? (code === 126 || code === 127 ? `exit-${code}-command-not-runnable` : null)
+        : String(error.code ?? error.message ?? 'spawn-error');
       return {
         exitCode: spawnError === null ? Number(error.code) : null,
         spawnError,
