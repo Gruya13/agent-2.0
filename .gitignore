@@ -9,3 +9,4 @@
 .runtime/
 # Lokalna konfiguracija koja ne pripada repozitorijumu.
 .agents/AGENTS.local.md
+.docker-config/
