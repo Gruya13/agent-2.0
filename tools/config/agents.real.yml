@@ -77,9 +77,10 @@ agents:
   # Coding tok: programer (dsh) piše popravku i regresioni test, reviewer
   # (agy) je nezavisan vendor i pravi sopstveni kontrolni slučaj.
   programer:
-    adapter: harness
+    # Izolovani worker: kod nastaje u kontejneru; host nastavlja kapije.
+    adapter: worker
     harness: dsh
-    model: null
+    model: deepseek-v4-pro
     timeoutMs: 900000
   # Nezavisan pregled: MORA biti vendor razlicit od autora popravke.
   # Autor je `dsh`, pa je jedini preostali drugi vendor `agy`.

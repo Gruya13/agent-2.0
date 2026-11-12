@@ -25,6 +25,7 @@ import { commitPaths, git } from './git.mjs';
 import { buildPrompt, identityFor, runAgent } from './agents/index.mjs';
 import { matchesScope } from './scope.mjs';
 import { startLeaseHeartbeat } from './lease-heartbeat.mjs';
+import { runWorkerTask } from './worker.mjs';
 import { holdsLease } from './lease.mjs';
 import { readNote, writeNote } from './vault.mjs';
 import { defaultBody, newTaskData, nextTaskId, writeTaskFile } from './task.mjs';
@@ -412,6 +413,54 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
 
   // ------------------------------------------------------- 1+2+3: izmena
 
+  /**
+   * Programer kao izolovani worker: kod nastaje u kontejneru (read-only rootfs,
+   * bez mreže, bez host home-a), a host NASTAVLJA kapije nad njegovom granom —
+   * testovi, baseline, nezavisan pregled i merge se ne prepuštaju izvršiocu.
+   */
+  async function izvrsiProgrameraWorkerom({ id, task, root, dir, prompt, signal }) {
+    const ime = `code-${id.toLowerCase().replace(/[^a-z0-9-]+/g, '-')}`;
+    const grana = `agent/worker/${ime}`;
+    const spec = config.agents?.[ROLE_IMPLEMENT] ?? {};
+    const brief = [
+      prompt,
+      '',
+      '## Režim rada (izolovani worker)',
+      '',
+      '- Radiš u `/work` — svež klon početne revizije; host izvršava testove i kapije nad tvojom granom.',
+      '- Commit-uj izmene na svoju granu i završi; ne pokušavaj da menjaš glavnu granu.',
+      '- Ako propisana test komanda ne može da se pokrene zbog nedostajućih zavisnosti, to nije blokada: napiši popravku i regresioni test, host proverava.',
+    ].join('\n');
+    const worker = await runWorkerTask({
+      repo: root,
+      base: task.data.code_base,
+      name: ime,
+      brief,
+      model: spec.model ?? undefined,
+      timeoutMs: spec.timeoutMs ?? 900_000,
+      logger,
+      signal,
+    });
+    if (!worker.ok) {
+      return {
+        ok: false, harness: 'worker', adapter: 'worker', exitCode: worker.exitCode ?? null,
+        durationMs: worker.durationMs, worker,
+        reason: `worker nije uspeo (${worker.status}): ${worker.error}`,
+      };
+    }
+    // Worker je pushovao granu u ciljni repo; spajamo je u stablo izrade (ff).
+    const merge = await git(dir, ['merge', '--ff-only', grana], { actor: OWNER, allowFailure: true });
+    if (merge.code !== 0) {
+      return {
+        ok: false, harness: 'worker', adapter: 'worker', exitCode: merge.code,
+        durationMs: worker.durationMs, worker,
+        reason: `worker grana ${grana} se ne može spojiti (${(merge.stderr || merge.stdout).split('\n')[0]})`,
+      };
+    }
+    logger(`code: ${id} worker commit ${worker.commits?.[0]?.slice(0, 8) ?? '?'} spojen u stablo izrade`);
+    return { ok: true, harness: 'worker', adapter: 'worker', exitCode: 0, durationMs: worker.durationMs, output: '', worker };
+  }
+
   async function fazaIzrade(id, task, root, ev) {
     const claim = await store.claim(id, OWNER);
     const token = claim.leaseToken;
@@ -472,7 +521,14 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const autor = identityFor(config, ROLE_IMPLEMENT);
       // Zakup se obnavlja dok traje poziv: bez toga dug poziv ostavlja zadatak
       // bez važećeg zakupa (kontrolni test R2).
-      const poziv = await saZakupom(id, token, (signal) => runAgent(config, { role: ROLE_IMPLEMENT, task, cwd: dir, prompt, now: now(), signal, logger }));
+      const programer = config.agents?.[ROLE_IMPLEMENT] ?? {};
+      const poziv = await saZakupom(id, token, (signal) => {
+        // Adapter bira gde programer radi: host harnes ili izolovani worker.
+        if (programer.adapter === 'worker') {
+          return izvrsiProgrameraWorkerom({ id, task, root, dir, prompt, signal });
+        }
+        return runAgent(config, { role: ROLE_IMPLEMENT, task, cwd: dir, prompt, now: now(), signal, logger });
+      });
       if (poziv.error) throw poziv.error;
       if (poziv.izgubljen) {
         return await odbij(id, ev, `zakup je izgubljen tokom poziva programera: ${poziv.izgubljen.message}`, token);
@@ -480,7 +536,10 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const rezultat = poziv.rezultat;
       await zabeleziPoziv(id, ROLE_IMPLEMENT, rezultat);
       impl = { harness: rezultat.harness, exitCode: rezultat.exitCode, at: now() };
-      if (!rezultat.ok) return await odbij(id, ev, `programer nije uspeo (exit ${rezultat.exitCode})`, token);
+      if (rezultat.worker) {
+        impl = { ...impl, worker: { branch: rezultat.worker.branch, commits: rezultat.worker.commits, durationMs: rezultat.worker.durationMs } };
+      }
+      if (!rezultat.ok) return await odbij(id, ev, rezultat.reason ?? `programer nije uspeo (exit ${rezultat.exitCode})`, token);
 
       // kapija opsega PRE ičega drugog
       const izmene = await izmeneU(dir, task.data.code_base);

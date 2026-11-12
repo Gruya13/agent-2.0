@@ -88,8 +88,11 @@ export async function loadConfig(vaultRoot = PACKAGE_ROOT, options = {}) {
   for (const role of ROLES) {
     const entry = merged.agents?.[role];
     if (!entry) throw new Error(`konfiguracija ne definiše ulogu "${role}"`);
-    if (entry.adapter !== 'mock' && entry.adapter !== 'harness') {
-      throw new Error(`uloga "${role}": adapter mora biti "mock" ili "harness", dobijeno "${entry.adapter}"`);
+    // Programer može da radi kao izolovani worker (Docker): host tada izvršava
+    // kapije nad njegovom granom. Ostale uloge su mock ili harness.
+    const dozvoljeni = role === 'programer' ? ['mock', 'harness', 'worker'] : ['mock', 'harness'];
+    if (!dozvoljeni.includes(entry.adapter)) {
+      throw new Error(`uloga "${role}": adapter mora biti ${dozvoljeni.map((a) => `"${a}"`).join(', ')}, dobijeno "${entry.adapter}"`);
     }
   }
 

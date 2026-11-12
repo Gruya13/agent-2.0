@@ -58,7 +58,7 @@ agents:
     timeoutMs: 900000
 ```
 
-Za svaku ulogu ista polja biraju adapter, program i vremenski limit. Isporučeni YAML daje extractor-u 300000 ms, a ostalim ulogama 900000 ms. Harness komande su u kodu, u `HARNESS_COMMANDS`:
+`adapter` može biti `mock`, `harness` ili — samo za ulogu `programer` — `worker`, koji kod stvara u izolovanom Docker workeru, a host nastavlja kapije (testovi, baseline, pregled, merge). Za svaku ulogu ista polja biraju adapter, program i vremenski limit. Isporučeni YAML daje extractor-u 300000 ms, a ostalim ulogama 900000 ms. Harness komande su u kodu, u `HARNESS_COMMANDS`:
 
 | Harnes | Poziv iz adaptera |
 |---|---|

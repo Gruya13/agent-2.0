@@ -85,11 +85,13 @@ export const reproKomanda = () => `node -e ${JSON.stringify(REPRO_SKRIPT)}`;
  */
 export async function pripremiCoding({
   saBugom = true, lease = null, scope = ['src/**', 'tests/**'], testCommand = 'npm test',
-  extra = {}, memory = [], reproCommand = reproKomanda(),
+  extra = {}, memory = [], reproCommand = reproKomanda(), agents = null,
 } = {}) {
   const vault = await makeVault();
   const config = await loadConfig(vault.root);
   if (lease) config.lease = { ...config.lease, ...lease };
+  // Testovi mogu da zamene adaptere (npr. programer -> izolovani worker).
+  if (agents) config.agents = { ...config.agents, ...agents };
   const store = createStore(config);
   const coding = createCodingPipeline(config, { store });
   const cilj = await napraviCiljniRepo({ saBugom, extra });

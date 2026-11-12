@@ -37,6 +37,7 @@ Testni helper `tests/helpers/vault.mjs` pravi privremeni Git vault sa kopiranim 
 | config-roles.test.mjs | svaka uloga eksplicitno u `agents.yml`; reviewer je drugi vendor |
 | evals.test.mjs | zlatni set evala: poznati scenariji daju očekivane ishode |
 | reproduce-sandbox.test.mjs | Docker sandbox: read-only rootfs, bez mreže, klon u `/work` |
+| coding-worker.test.mjs | programer kao izolovani worker: kod iz kontejnera, kapije i testovi na hostu |
 | exit.test.mjs, lease-heartbeat.test.mjs | pravilo `run --strict` i zajedničko obnavljanje zakupa |
 
 Broj testova uzmi iz stvarnog rezultata trenutne revizije; raniji README navodi istorijske brojeve koji se mogu razlikovati. Testovi koji proveravaju vremenske prozore (R19, CR2) deterministički su vezani marker/release fajlovima, ne `sleep`-om: ako im treba prozor, čekaju hook, a ne sat. Testovi reprodukcije izvršavaju Bash/Python i pokušavaju bwrap ako je dostupan. Ograničeno okruženje može sprečiti kloniranje, podprocese ili sandbox; uzrok neuspeha dokumentuj odvojeno od sadržajne regresije.

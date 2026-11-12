@@ -106,5 +106,6 @@ docs/                        tehnička dokumentacija
 | `agents/harness.mjs` | procesi agy/dsh, vreme i prekid |
 | `agents/mock.mjs` | deterministički adapteri |
 | `agents/prompts.mjs` | brief i stanje zadatka kao prompt |
+| `worker.mjs` | poziv izolovanog DSH workera iz coding toka (adapter `worker` za programera) |
 
 Spoljni sistem komunikacije, baza podataka, HTTP servis, korisnički interfejs za upravljanje i trajni scheduler nisu deo implementacije.

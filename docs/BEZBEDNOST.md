@@ -43,6 +43,14 @@ skripte se tada izvršavaju u kontejneru sa read-only rootfs-om, bez mreže
 `/tmp`). Ako Docker ili slika nisu dostupni, kod pada na bwrap, pa na host.
 Slika se gradi iz repozitorijuma: `tools/sandbox/build.sh` (Dockerfile je u `tools/sandbox/`).
 
+**Programer u izolovanom workeru.** U produkcionoj konfiguraciji uloga `programer`
+ima `adapter: worker`: kod nastaje u `dsh-worker` kontejneru (read-only rootfs,
+internal mreža, sidecar LLM proxy, bez tajni), a host preuzima granu i **sam**
+izvršava testove, baseline na početnoj reviziji, integracionu probu i spaja uz
+nezavisan pregled. Izvršilac ne ocenjuje svoj rad — kapije ostaju na hostu.
+Worker ne može da pokrene testove ciljnog repoa zbog nedostajućih zavisnosti; to
+nije blokada, već razlog što proveru radi kontrolni sloj.
+
 Greška kloniranja/interpretera/sandbox-a može biti zabeležena kao unreproduced, pa njen operativni uzrok ne treba pomešati sa dokazom da tvrdnja nije oboriva. `challengeExecute: false` trenutno može proizvesti clean bez izvršavanja skripti koje su unutar limita. U dnevniku uvek proveri executed, timedOut, unexecuted i pojedinačne rezultate.
 
 ## Izolovane DSH kopije (worker)
