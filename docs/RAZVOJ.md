@@ -10,6 +10,7 @@ Projekat je Node ESM (`type: module`), bez build koraka i spoljnjih npm zavisnos
 npm test
 node --test tests/pipeline.test.mjs
 node --test tests/mcp.test.mjs
+node tools/evals/run.mjs                   # zlatni set evala (3 scenarija, mock)
 node scripts/demo.mjs
 ```
 
@@ -34,6 +35,8 @@ Testni helper `tests/helpers/vault.mjs` pravi privremeni Git vault sa kopiranim 
 | crash-recovery.test.mjs | prekid procesa, oporavak i nastavak bez dupliranja |
 | consolidate-paths.test.mjs, rebase-generated.test.mjs, wiki-integrity.test.mjs | promocija, rebase i integritet baze |
 | config-roles.test.mjs | svaka uloga eksplicitno u `agents.yml`; reviewer je drugi vendor |
+| evals.test.mjs | zlatni set evala: poznati scenariji daju očekivane ishode |
+| reproduce-sandbox.test.mjs | Docker sandbox: read-only rootfs, bez mreže, klon u `/work` |
 | exit.test.mjs, lease-heartbeat.test.mjs | pravilo `run --strict` i zajedničko obnavljanje zakupa |
 
 Broj testova uzmi iz stvarnog rezultata trenutne revizije; raniji README navodi istorijske brojeve koji se mogu razlikovati. Testovi koji proveravaju vremenske prozore (R19, CR2) deterministički su vezani marker/release fajlovima, ne `sleep`-om: ako im treba prozor, čekaju hook, a ne sat. Testovi reprodukcije izvršavaju Bash/Python i pokušavaju bwrap ako je dostupan. Ograničeno okruženje može sprečiti kloniranje, podprocese ili sandbox; uzrok neuspeha dokumentuj odvojeno od sadržajne regresije.

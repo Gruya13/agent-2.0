@@ -31,6 +31,7 @@ Putanje se razrešavaju prema korenu vault-a. `.locks` i `.runtime` formiraju se
 
 | Parametar | Vrednost | Dejstvo |
 |---|---|---|
+| `pipeline.challengeSandbox` | `auto` | gde se izvršavaju reprodukcione skripte: `auto` (bwrap ako radi, inače host), `docker` (kontejner, preporučeno u produkciji), `none` |
 | `lease.ttlMs` | 600000 | deset minuta zakupa |
 | `lease.heartbeatMs` | 120000 | interval obnavljanja zakupa; zajednički za dokumentni i coding tok (`lease-heartbeat.mjs`), minimum 50 ms |
 | `pipeline.challenge` | true | clean challenge potreban za konsolidaciju |

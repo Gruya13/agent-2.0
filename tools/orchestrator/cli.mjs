@@ -16,7 +16,7 @@ import { createWorktree as _createWorktree, ensureMainBranch, listWorktrees, rem
 import { formatFindings, lintVault, updateRawManifest, RAW_MANIFEST } from './lib/lint.mjs';
 import { renderIndex } from './lib/vault.mjs';
 import { exists } from './lib/fsx.mjs';
-import { commitPaths, git, log as gitLog, isGitRepo } from './lib/git.mjs';
+import { branchExists, commitPaths, git, log as gitLog, isGitRepo } from './lib/git.mjs';
 import { HARNESS_COMMANDS } from './lib/agents/index.mjs';
 import { strictExit } from './lib/exit.mjs';
 
@@ -84,6 +84,10 @@ Komande:
   override <TASK-ID> --reason <tekst>   svesno preglаsaj red-team nalaz (zapisuje se)
   phase <faza> <TASK-ID>    izvrši jednu fazu (extract|research|verify|challenge|audit|consolidate)
   run [--rounds N]          kontrolna petlja kroz sve faze
+  tick [--strict]           jedan deterministički prolaz (za systemd --user tajmer)
+  worker-review --branch <g> [--task "..."] [--claims "a;b"]
+                            slepi brief za verifikaciju worker grane
+  metrics [--json]          agregirane metrike harnes poziva iz events.jsonl
   status [--json]           stanje sistema
   lint [--json]             proveri invarijante ugovora
   index                     regeneriši wiki/Index.md i manifest izvora
@@ -365,6 +369,126 @@ const COMMANDS = {
       ['FAZA', 'ZADATAK', 'ISHOD']));
     out(`krugova: ${roundsResult.length}, akcija: ${actions.length}`);
     return flags.strict === true ? strictExit(actions) : 0;
+  },
+
+  /** Jedan deterministički prolaz za tajmer (systemd --user / cron). */
+  async tick({ pipeline, flags }) {
+    const result = await pipeline.runOnce();
+    const actions = result.actions ?? [];
+    const neuspesno = actions.filter((a) => !a.ok).length;
+    if (flags.json) { json(result); return flags.strict === true && neuspesno > 0 ? 1 : 0; }
+    out(`tick: ${actions.length} akcija, promena=${result.changed === true ? 'da' : 'ne'}`);
+    for (const a of actions) {
+      out(`  ${a.phase}${a.task ? ` ${a.task}` : ''}: ${a.ok ? 'ok' : `neuspeh${a.reason ? ` (${a.reason})` : ''}`}`);
+    }
+    return flags.strict === true && neuspesno > 0 ? 1 : 0;
+  },
+
+  /** Agregirane metrike harnes poziva iz `tasks/events.jsonl`. */
+  async metrics({ config, flags }) {
+    let raw = '';
+    try { raw = await fs.readFile(config.paths.events, 'utf8'); } catch { raw = ''; }
+    const calls = [];
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const record = JSON.parse(trimmed);
+        if (record.kind === 'agent.call') calls.push(record);
+      } catch { /* nepotpun zapis u toku pisanja */ }
+    }
+    const byRole = new Map();
+    for (const call of calls) {
+      const role = call.role ?? '(nepoznato)';
+      const agg = byRole.get(role) ?? { role, calls: 0, ok: 0, failed: 0, aborted: 0, totalMs: 0, maxMs: 0 };
+      agg.calls += 1;
+      if (call.ok === true) agg.ok += 1; else agg.failed += 1;
+      if (call.aborted === true) agg.aborted += 1;
+      const ms = Number(call.durationMs ?? 0);
+      agg.totalMs += Number.isFinite(ms) ? ms : 0;
+      agg.maxMs = Math.max(agg.maxMs, Number.isFinite(ms) ? ms : 0);
+      byRole.set(role, agg);
+    }
+    const rows = [...byRole.values()].map((a) => ({
+      ...a, avgMs: a.calls ? Math.round(a.totalMs / a.calls) : 0,
+    }));
+    rows.sort((a, b) => b.calls - a.calls);
+    if (flags.json) { json(rows); return 0; }
+    out(table(rows.map((r) => [r.role, String(r.calls), String(r.ok), String(r.failed), String(r.aborted), `${r.avgMs} ms`, `${r.maxMs} ms`]),
+      ['ULOGA', 'POZIVA', 'OK', 'NEUSPEH', 'PREKINUTO', 'PROSEK', 'MAKS']));
+    out(`ukupno agent poziva: ${calls.length}`);
+    return 0;
+  },
+
+  /**
+   * Slepi brief za verifikaciju worker grane: spec + tvrdnje + diff, bez
+   * reasoninga izvršioca. Brief ide drugom vendoru (`agy` verify nit); ovaj
+   * proces ne ocenjuje ništa sam — samo priprema ulaz i beleži putanju.
+   */
+  async 'worker-review'({ config, flags }, positional) {
+    const branch = String(flags.branch ?? positional[0] ?? '');
+    if (!branch) throw new Error('worker-review zahteva --branch <grana>');
+    const base = String(flags.base ?? MAIN_BRANCH);
+    if (!(await branchExists(config.root, branch))) throw new Error(`grana ${branch} ne postoji`);
+    const commits = await git(config.root, ['log', '--oneline', `${base}..${branch}`]);
+    const stat = await git(config.root, ['diff', '--stat', `${base}...${branch}`]);
+    const diff = await git(config.root, ['diff', `${base}...${branch}`]);
+    const diffText = diff.stdout.length > 200_000
+      ? `${diff.stdout.slice(0, 200_000)}\n… (diff skraćen na 200 KB)`
+      : diff.stdout;
+    const zadatak = typeof flags.task === 'string' ? flags.task : '(nije zadat)';
+    const tvrdnje = typeof flags.claims === 'string'
+      ? flags.claims.split(';').map((c) => c.trim()).filter(Boolean)
+      : [];
+    const runtime = config.paths.runtime ?? path.join(config.root, '.runtime');
+    await fs.mkdir(runtime, { recursive: true });
+    const ime = branch.replace(/[^a-zA-Z0-9._-]+/g, '-');
+    const putanja = path.join(runtime, `worker-review-${ime}.md`);
+    const sadrzaj = [
+      '# Slepa verifikacija worker grane',
+      '',
+      `- Grana: \`${branch}\``,
+      `- Osnova: \`${base}\``,
+      `- Commit-ova: ${commits.stdout.trim().split('\n').filter(Boolean).length}`,
+      '',
+      '## Zadatak (kontekst)',
+      '',
+      zadatak,
+      '',
+      '## Tvrdnje koje worker daje',
+      '',
+      ...(tvrdnje.length ? tvrdnje.map((c) => `- ${c}`) : ['- (worker nije dao izričite tvrdnje)']),
+      '',
+      '## Diff',
+      '',
+      '```diff',
+      diffText,
+      '```',
+      '',
+      '## Pravila verifikacije',
+      '',
+      '- Ne veruj opisu i ne ponavljaj tuđi test; proveri kod i, gde možeš, izvrši sopstveni kontrolni slučaj.',
+      '- Za svaku tvrdnju: `DRZI | NE_DRZI | NEPROVERENO` + dokaz (fajl:linija ili komanda).',
+      '- Nađi najozbiljniju rupu i svaki lažno-zelen test; ne popravljaj kod.',
+      '- Kratak odgovor sa dokazima.',
+      '',
+      '## Komitovi',
+      '',
+      '```',
+      commits.stdout.trim(),
+      '```',
+      '',
+      '## Stat',
+      '',
+      '```',
+      stat.stdout.trim(),
+      '```',
+      '',
+    ].join('\n');
+    await fs.writeFile(putanja, sadrzaj);
+    out(`brief: ${putanja}`);
+    out(`grana: ${branch} (${commits.stdout.trim().split('\n').filter(Boolean).length} komitova, osnova ${base})`);
+    return 0;
   },
 
   async status({ pipeline, flags }) {

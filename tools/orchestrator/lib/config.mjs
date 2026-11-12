@@ -36,6 +36,9 @@ export const DEFAULT_CONFIG = {
     challenge: true,
     challengeExecute: true,
     challengeTimeoutMs: 60_000,
+    // 'auto' = bwrap ako radi (kompatibilnost); 'docker' = kontejner sa read-only
+    // rootfs i bez mreže (produkcija); 'none' = svesno na hostu.
+    challengeSandbox: 'auto',
     challengeMaxScripts: 3,
     maxRounds: 10,
     intervalMs: 0,

@@ -113,6 +113,22 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
    * infrastrukture. Ako obnova ne uspe, zakup je stvarno izgubljen i posao se ne
    * sme nastaviti kao uspešan.
    */
+  /** Metrika poziva uloge; sekundarna u odnosu na tok, ne obara fazu. */
+  async function zabeleziPoziv(id, role, rezultat) {
+    try {
+      await store.emit('agent.call', {
+        task: id,
+        role,
+        harness: rezultat.harness ?? null,
+        adapter: rezultat.adapter ?? null,
+        ok: rezultat.ok === true,
+        exitCode: rezultat.exitCode ?? null,
+        durationMs: rezultat.durationMs ?? null,
+        aborted: rezultat.aborted === true,
+      });
+    } catch { /* metrika je sekundarna */ }
+  }
+
   async function saZakupom(id, token, fn) {
     // Isti ugovor kao dokumentni tok: gubitak zakupa prekida poziv harnesa
     // odmah, a faza se odbija na kraju.
@@ -462,6 +478,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         return await odbij(id, ev, `zakup je izgubljen tokom poziva programera: ${poziv.izgubljen.message}`, token);
       }
       const rezultat = poziv.rezultat;
+      await zabeleziPoziv(id, ROLE_IMPLEMENT, rezultat);
       impl = { harness: rezultat.harness, exitCode: rezultat.exitCode, at: now() };
       if (!rezultat.ok) return await odbij(id, ev, `programer nije uspeo (exit ${rezultat.exitCode})`, token);
 
@@ -627,6 +644,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
         return await odbij(id, ev, `zakup je izgubljen tokom pregleda: ${poziv.izgubljen.message}`, token);
       }
       const rezultat = poziv.rezultat;
+      await zabeleziPoziv(id, ROLE_REVIEW, rezultat);
       // Reviewer-ov SOPSTVENI scenario je dokaz: čuva se uz evidenciju PRE nego
       // što se radno stablo obriše, inače ostaje samo opis u nalazu.
       const scenarioDir = path.join(config.paths.reviews, `${id}-review`);

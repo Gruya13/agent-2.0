@@ -17,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { git } from './git.mjs';
+import { dockerSandboxDostupan, runInDockerSandbox } from './sandbox.mjs';
 
 /**
  * Does bwrap actually work here? `which` alone lies: the binary can exist while
@@ -158,13 +159,32 @@ function runProcess(command, args, { cwd, timeoutMs, env }) {
 }
 
 /**
+ * Izbor sandboxa. `auto` zadržava postojeće ponašanje (bwrap ako radi),
+ * `docker` je jača izolacija i koristi se iz produkcione konfiguracije
+ * (`pipeline.challengeSandbox: docker`); `none` je svesno izvršavanje na hostu.
+ */
+async function izaberiSandbox({ sandbox, bwrap }) {
+  if (bwrap !== null) return bwrap ? 'bwrap' : 'none';
+  if (sandbox === 'none') return 'none';
+  if (sandbox === 'docker') {
+    // Produkcija traži kontejner; ako Docker nije dostupan, bolje je pasti
+    // na bwrap nego na host.
+    if (await dockerSandboxDostupan()) return 'docker';
+    return (await bwrapRadi()) ? 'bwrap' : 'none';
+  }
+  if (sandbox === 'bwrap') return (await bwrapRadi()) ? 'bwrap' : 'none';
+  // `auto`: zadržava predvidljivo ponašanje testova — bwrap ako radi, inače host.
+  return (await bwrapRadi()) ? 'bwrap' : 'none';
+}
+
+/**
  * Pokreni skripte u svežem klonu `repoRoot` na `revision`.
  * Vraća po skriptu: `{ script, reproduced, exitCode, timedOut, output }`.
  */
 export async function runReproductionScripts({
-  repoRoot, revision, worktreeDir, scripts, max = 3, timeoutMs = 60_000, bwrap = null,
+  repoRoot, revision, worktreeDir, scripts, max = 3, timeoutMs = 60_000, bwrap = null, sandbox = 'auto',
 }) {
-  const sandbox = bwrap ?? (await bwrapRadi() ? 'bwrap' : null);
+  const vrsta = await izaberiSandbox({ sandbox, bwrap });
   const odabrani = scripts.slice(0, max);
   const rezultati = [];
   for (const rel of odabrani) {
@@ -176,14 +196,19 @@ export async function runReproductionScripts({
       const ime = path.basename(rel);
       await fs.copyFile(path.join(worktreeDir, rel), path.join(klon, ime));
       const interpreter = ime.toLowerCase().endsWith('.py') ? 'python3' : 'bash';
-      const { command, args } = omotaj(sandbox, klon, ime, interpreter);
-      const r = await runProcess(command, args, {
-        cwd: klon,
-        timeoutMs,
-        // Bez bwrap-a skript vidi pravi $HOME; dajemo mu privremeni da bar ne
-        // piše u korisničke fajlove.
-        env: sandbox ? {} : { HOME: tmp },
-      });
+      let r;
+      if (vrsta === 'docker') {
+        r = await runInDockerSandbox({ workdir: klon, payload: pokretac(interpreter, ime), timeoutMs });
+      } else {
+        const { command, args } = omotaj(vrsta === 'bwrap', klon, ime, interpreter);
+        r = await runProcess(command, args, {
+          cwd: klon,
+          timeoutMs,
+          // Bez sandboxa skript vidi pravi $HOME; dajemo mu privremeni da bar ne
+          // piše u korisničke fajlove.
+          env: vrsta === 'bwrap' ? {} : { HOME: tmp },
+        });
+      }
       const izlaz = `${r.stdout}\n${r.stderr}`.trim();
       const prijavio = /OBORENO/i.test(r.stdout);
       // Sandbox koji je pukao nije „lažni nalaz": bwrap se prekida pre nego što

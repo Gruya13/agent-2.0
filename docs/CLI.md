@@ -22,7 +22,10 @@ Ulaz je `node tools/orchestrator/cli.mjs <komanda> [argumenti] [opcije]`. Naziv 
 | `ready` | `<TASK-ID>`, `--reason TEKST` | blocked → ready |
 | `override` | `<TASK-ID> --reason TEKST` | zapisano preglasavanje challenge verdikta u clean |
 | `phase` | `<extract\|research\|verify\|challenge\|audit\|consolidate> <TASK-ID>`, json | jedna faza |
-| `run` | `--rounds N`, `--only FAZA`, json | konačna kontrolna petlja ili jedan ograničeni prolaz |
+| `run` | `--rounds N`, `--only FAZA`, `--strict`, json | konačna kontrolna petlja ili jedan ograničeni prolaz |
+| `tick` | `--strict`, json | jedan deterministički prolaz za tajmer (`systemd --user` / cron) |
+| `metrics` | json | agregirane metrike harnes poziva iz `tasks/events.jsonl` |
+| `worker-review` | `--branch G`, `--base G`, `--task "..."`, `--claims "a;b"` | slepi brief za verifikaciju worker grane (diff + tvrdnje) |
 | `status` | json | zadaci, grana i broj lint nalaza |
 | `lint` | json | puni lint nalaz |
 | `index` | json | reflect: regeneracija indeksa/manifesta i knjigovodstvo |
@@ -51,6 +54,9 @@ Ulaz je `node tools/orchestrator/cli.mjs <komanda> [argumenti] [opcije]`. Naziv 
 | `--reason TEKST` | obrazloženje ready/override; obavezno za override |
 | `--rounds N` | maksimalni broj krugova; default iz konfiguracije |
 | `--only FAZA` | jedan prolaz faze; bez automatskog reflect-a |
+| `--strict` | za `run`/`tick`: izlazni kod 1 ako ijedna akcija nije uspela |
+| `--branch G`, `--base G` | grana i osnova za `worker-review` |
+| `--claims "a;b"` | tvrdnje workera za slepi brief; razdvojene tačkom-zarezom |
 | `--status STATUS` | filter list komande |
 | `--limit N` | broj Git zapisa |
 
@@ -82,7 +88,7 @@ Ne uzimaj ručni zakup pre standardnog `phase` ili `run`: oni sami uzimaju zakup
 | `1` | izuzetak/greška; phase takođe koristi 1 za neuspešan rezultat |
 | `2` | lint/status sa lint greškama; nepoznata komanda |
 
-`doctor` vraća `1` ako ijedna provera nije `ok` (i u tekstualnom i u JSON režimu), pa skripta spremnosti ne može da prijavi lažan uspeh. `run` podrazumevano vraća `0` radi kompatibilnosti sa postojećim pozivaocima; sa `--strict` vraća `1` ako ijedna akcija ima `ok: false`. Za automatizaciju koristi `run --strict` (ili proveri sadržaj rezultata).
+`doctor` vraća `1` ako ijedna provera nije `ok` (i u tekstualnom i u JSON režimu), pa skripta spremnosti ne može da prijavi lažan uspeh. `run` podrazumevano vraća `0` radi kompatibilnosti sa postojećim pozivaocima; sa `--strict` vraća `1` ako ijedna akcija ima `ok: false`. Isto važi za `tick --strict`, koji je namenjen tajmeru. Za automatizaciju koristi `run --strict` (ili proveri sadržaj rezultata).
 
 ## npm skripte
 

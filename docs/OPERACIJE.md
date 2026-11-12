@@ -12,7 +12,45 @@ node tools/orchestrator/cli.mjs lint
 node tools/orchestrator/cli.mjs log --limit 20
 ```
 
-Pregledaj telo zadatka, verification/challenge metapodatke i `tasks/events.jsonl`. Main treba da bude glavna radna grana. Izbegavaj više istovremenih kontrolnih petlji nad istim skladištem: zaključavanje pojedinačnog zadatka ne čini ceo unos, raspodelu ID-eva i merge globalnom transakcijom.
+Pregledaj telo zadatka, verification/challenge metapodatke i `tasks/events.jsonl`. Main treba da bude glavna radna grana.
+
+## Tajmer (autonomni prolaz)
+
+`agentctl tick` radi jedan deterministički prolaz: reclaim isteklih zakupa i
+dovršavanje započetih faza. Namenjen je `systemd --user` tajmeru, ne daemonu —
+stanje ostaje u Git-u i `tasks/`, pa je bezbedno pokrenuti ga i ručno.
+
+```ini
+# ~/.config/systemd/user/agent2-tick.service
+[Unit]
+Description=Agent 2.0 tick
+[Service]
+Type=oneshot
+WorkingDirectory=/home/gru/Projects/Agent 2.0
+ExecStart=/usr/bin/node tools/orchestrator/cli.mjs tick --strict
+```
+
+```ini
+# ~/.config/systemd/user/agent2-tick.timer
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+```
+
+`systemctl --user enable --now agent2-tick.timer` uključuje petlju; `--strict` daje
+izlazni kod 1 kada akcija padne, pa `systemd` vidi neuspeh.
+
+## Metrike
+
+```bash
+node tools/orchestrator/cli.mjs metrics --json
+```
+
+Agregira `agent.call` događaje (uloga, trajanje, ishod, prekid) iz
+`tasks/events.jsonl`. Služi za nedeljni pregled i za odluke o modelima; eval
+zlatni set je u `evals/` i pokreće se sa `node tools/evals/run.mjs`. Izbegavaj više istovremenih kontrolnih petlji nad istim skladištem: zaključavanje pojedinačnog zadatka ne čini ceo unos, raspodelu ID-eva i merge globalnom transakcijom.
 
 ## Istekao zakup
 

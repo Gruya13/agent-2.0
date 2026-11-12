@@ -76,6 +76,8 @@ tools/mcp/                   lokalni MCP server
 tools/config/                mock/real YAML i MCP šabloni
 tests/                       jedinični, integracioni i protokolski testovi
 scripts/demo.mjs             demo u privremenom skladištu
+tools/evals/                 zlatni set evala (poznati scenariji, mock adapteri)
+evals/                      slučajevi i dokumentacija evala
 docs/                        tehnička dokumentacija
 .worktrees/ .locks/ .runtime/ lokalni izvedeni radni podaci, ignorisani u Git-u
 ```
@@ -96,7 +98,8 @@ docs/                        tehnička dokumentacija
 | `vault.mjs` | beleške, frontmatter, Vikilinkovi, backlinkovi i indeks |
 | `lint.mjs` | manifest i provere izvora, belešaka i zadataka |
 | `scope.mjs` | obrasci audit opsega |
-| `reproduce.mjs` | kloniranje revizije i izvršavanje red-team skripti |
+| `reproduce.mjs` | kloniranje revizije i izvršavanje red-team skripti (bwrap ili docker) |
+| `sandbox.mjs` | Docker sandbox za nepoverljive skripte: read-only rootfs, bez mreže, samo `/work` |
 | `yaml.mjs` | ograničeni YAML/frontmatter parser i serializer |
 | `fsx.mjs` | atomski upisi, realne putanje, hash, JSONL i file-lock |
 | `agents/index.mjs` | izbor adaptera, identitet i kontekst procesa |

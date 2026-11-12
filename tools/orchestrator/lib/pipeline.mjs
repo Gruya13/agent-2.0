@@ -83,6 +83,21 @@ export function createPipeline(config, options = {}) {
     });
     try {
       const rezultat = await runAgent(config, { ...args, signal: abort.signal });
+      // Metrika poziva: trajanje, ishod i prekid po ulozi — osnova za evals i
+      // budžete. Beleženje ne sme da obori fazu ako zapis ne uspe.
+      try {
+        await store.emit('agent.call', {
+          task: id,
+          role: args.role ?? null,
+          harness: rezultat.harness ?? null,
+          adapter: rezultat.adapter ?? null,
+          ok: rezultat.ok === true,
+          exitCode: rezultat.exitCode ?? null,
+          durationMs: rezultat.durationMs ?? null,
+          aborted: rezultat.aborted === true,
+          leaseLost: Boolean(lease.izgubljen),
+        });
+      } catch { /* metrika je sekundarna */ }
       // Neuspeh obnove nije detalj za dnevnik: rad pod izgubljenim zakupom se
       // ne sme prijaviti kao uspešna faza.
       if (lease.izgubljen) {
@@ -881,6 +896,7 @@ export function createPipeline(config, options = {}) {
         scripts,
         max: maxSkripti,
         timeoutMs: config.pipeline.challengeTimeoutMs,
+        sandbox: config.pipeline.challengeSandbox ?? 'auto',
       });
     }
     const reprodukovani = rezultati.filter((r) => r.reproduced === true);

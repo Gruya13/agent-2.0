@@ -9,6 +9,7 @@ repozitorijum i baza znanja.
 
 ```bash
 npm test                                   # 220 testova: jedinica + E2E + MCP protokol
+node tools/evals/run.mjs                   # zlatni set evala: 3 poznata scenarija, očekivani ishodi
 node scripts/demo.mjs                      # cela petofazna demonstracija u privremenom vault-u
 node tools/orchestrator/cli.mjs status     # stanje sistema u ovom repozitorijumu
 node tools/orchestrator/cli.mjs doctor     # provera okruženja i harnesa

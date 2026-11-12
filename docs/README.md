@@ -19,6 +19,7 @@ Agent 2.0 pretvara izvore u povezanu Markdown bazu znanja. Šest uloga koordinir
 | [Izolovane kopije DSH-a](IZOLACIJA-KOPIJA.md) | worker u Dockeru: granica, tok, provera i ograničenja |
 | [Plan bez Codex-a](PLAN-BEZ-CODEX.md) | uklanjanje OpenAI Codex-a, nove uloge i dokazi |
 | [Dogfood: samopregled sistema](DOGFOOD.md) | protokol samopregleda, nalazi P1–P7, popravke i slepe verifikacije |
+| [Mrežna izolacija `agy`-ja](AGY-MREZNA-IZOLACIJA.md) | analiza i odluka: zašto mrežni sandbox još nije moguć bez promene `agy`-ja |
 | [Operacije i rešavanje problema](OPERACIJE.md) | nadzor, zakupi, blokade, oporavak i rezervne kopije |
 | [Razvoj i testiranje](RAZVOJ.md) | interni API, proširivanje i testni skup |
 | [Izveštaj provere](PROVERA.md) | rezultat proveravanja dokumentacije i postojećeg sistema |

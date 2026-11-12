@@ -246,3 +246,48 @@ test('CLI: run --strict ne kvari uspešan tok (logika koda je u lib/exit.mjs)', 
   assert.equal(run.code, 0, run.stderr);
   await vault.cleanup();
 });
+
+test('CLI: tick radi jedan prolaz, metrics agregira agent pozive', async () => {
+  const vault = await makeVault();
+  await runCli(vault.root, ['init']);
+  const ingest = await runCli(vault.root, ['ingest', 'raw/dokument.md', '--title', 'Tick proba']);
+  assert.equal(ingest.code, 0, ingest.stderr);
+
+  const tick = await runCli(vault.root, ['tick', '--json']);
+  assert.equal(tick.code, 0, tick.stderr);
+  const result = JSON.parse(tick.stdout);
+  assert.ok(Array.isArray(result.actions), 'tick mora da vrati akcije');
+
+  const metrics = await runCli(vault.root, ['metrics', '--json']);
+  assert.equal(metrics.code, 0, metrics.stderr);
+  const rows = JSON.parse(metrics.stdout);
+  assert.ok(Array.isArray(rows));
+  const calls = rows.reduce((sum, r) => sum + r.calls, 0);
+  assert.ok(calls >= 1, 'tick mora da zabeleži najmanje jedan agent poziv');
+  assert.ok(rows.some((r) => r.role && r.calls > 0));
+  await vault.cleanup();
+});
+
+test('CLI: worker-review generiše slepi brief za verifikaciju grane', async () => {
+  const vault = await makeVault();
+  await runCli(vault.root, ['init']);
+  await gitExec(vault.root, ['checkout', '-q', '-b', 'agent/worker/probe']);
+  await vault.write('docs/WORKER.md', '# Worker izlaz\n\nTvrdnja: radi.\n');
+  await gitExec(vault.root, ['add', '-A']);
+  await gitExec(vault.root, ['-c', 'user.name=w', '-c', 'user.email=w@local', 'commit', '-q', '-m', 'worker izlaz']);
+  await gitExec(vault.root, ['checkout', '-q', 'main']);
+
+  const res = await runCli(vault.root, [
+    'worker-review', '--branch', 'agent/worker/probe',
+    '--task', 'Proveri worker izlaz', '--claims', 'docs/WORKER.md je dodat',
+  ]);
+  assert.equal(res.code, 0, res.stderr);
+  const match = res.stdout.match(/brief: (.+)/);
+  assert.ok(match, res.stdout);
+  const sadrzaj = await fs.readFile(match[1].trim(), 'utf8');
+  assert.match(sadrzaj, /DRZI \| NE_DRZI \| NEPROVERENO/);
+  assert.match(sadrzaj, /docs\/WORKER\.md je dodat/);
+  assert.match(sadrzaj, /Proveri worker izlaz/);
+  assert.match(sadrzaj, /Worker izlaz/);
+  await vault.cleanup();
+});
