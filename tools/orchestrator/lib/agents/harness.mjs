@@ -43,7 +43,7 @@ export const HARNESS_COMMANDS = {
   },
 };
 
-function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
+function runProcess(command, args, { cwd, env, timeoutMs, onSpawn, signal }) {
   return new Promise((resolve) => {
     const started = Date.now();
     const child = spawn(command, args, {
@@ -58,6 +58,7 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let aborted = false;
     let settled = false;
     let spawnError = null;
 
@@ -95,16 +96,35 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
       settled = true;
       if (timer) clearTimeout(timer);
       if (forceTimer) clearTimeout(forceTimer);
+      if (signal !== undefined) signal.removeEventListener('abort', onAbort);
       resolve({
         exitCode: code,
         stdout,
         stderr: error ? `${stderr}\n${error.message}` : stderr,
         spawnError: spawnError?.code ?? null,
         timedOut,
+        aborted,
         durationMs: Date.now() - started,
         command: `${command} ${args.map((a) => (a.length > 60 ? `${a.slice(0, 60)}…` : a)).join(' ')}`,
       });
     };
+
+    // Prekid pozivača (npr. izgubljen zakup): prekida se celo stablo odmah,
+    // umesto da se čeka da harnes završi posao koji više nije njegov.
+    const onAbort = () => {
+      if (settled) return;
+      aborted = true;
+      killTree('SIGTERM');
+      forceTimer = setTimeout(() => {
+        killTree('SIGKILL');
+        finish(null, null);
+      }, 3_000);
+      forceTimer.unref?.();
+    };
+    if (signal !== undefined) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
 
     child.on('error', (error) => {
       // Samo greška PRI SPAWN-ovanju znači da harnes ne postoji. Tekst stderr-a
@@ -121,12 +141,12 @@ function runProcess(command, args, { cwd, env, timeoutMs, onSpawn }) {
  * Izvrši harnes. `agy` je globalno serijalizovan (jedan proces u datom trenutku),
  * jer Antigravity ne trpi paralelne sesije.
  */
-export async function runHarness(harness, { prompt, cwd, timeoutMs = 15 * 60 * 1000, env = {}, config } = {}) {
+export async function runHarness(harness, { prompt, cwd, timeoutMs = 15 * 60 * 1000, env = {}, config, signal } = {}) {
   const spec = HARNESS_COMMANDS[harness];
   if (!spec) throw new HarnessError(`nepoznat harness "${harness}"`);
   const bin = env.AGENT_2_0_BIN ?? spec.bin;
   const args = spec.build(prompt, cwd);
-  const exec = () => runProcess(bin, args, { cwd, env, timeoutMs });
+  const exec = () => runProcess(bin, args, { cwd, env, timeoutMs, signal });
 
   let result;
   if (spec.serialized) {
@@ -147,6 +167,7 @@ export async function runHarness(harness, { prompt, cwd, timeoutMs = 15 * 60 * 1
     durationMs: result.durationMs,
     command: result.command,
     timedOut: result.timedOut,
+    aborted: result.aborted === true,
     harness,
   };
 }

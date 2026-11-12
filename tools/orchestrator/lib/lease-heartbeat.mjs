@@ -31,13 +31,16 @@ export function heartbeatPeriodMs(config) {
  * @param {{store: object, id: string, owner: string, token: string, config: object, logger?: Function}} options
  * @returns {{period: number, izgubljen: Error|null, stop: () => void}}
  */
-export function startLeaseHeartbeat({ store, id, owner, token, config, logger = () => {} }) {
+export function startLeaseHeartbeat({ store, id, owner, token, config, logger = () => {}, onError }) {
   let prvaGreska = null;
   const period = heartbeatPeriodMs(config);
   const timer = setInterval(() => {
     store.renew(id, owner, { token }).catch((error) => {
+      const prva = prvaGreska === null;
       prvaGreska = prvaGreska ?? error;
       logger(`obnova zakupa nije uspela za ${id}: ${error.message}`);
+      // Pozivalac može da prekine rad odmah; samo prva greška ga obaveštava.
+      if (prva && typeof onError === 'function') onError(error);
     });
   }, period);
   timer.unref?.();

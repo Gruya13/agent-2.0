@@ -28,9 +28,14 @@ function bwrapRadi() {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn('bwrap', ['--ro-bind', '/usr', '/usr', '--', '/usr/bin/true'], {
-        stdio: 'ignore', timeout: 1500,
-      });
+      // Ista ograničenja kao pravi omotač (`omotaj`): ako host dozvoljava
+      // user namespace ali blokira net/pid namespace, proba to mora da vidi.
+      child = spawn('bwrap', [
+        '--ro-bind', '/usr', '/usr', '--ro-bind-try', '/lib', '/lib',
+        '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp',
+        '--unshare-pid', '--unshare-net', '--die-with-parent',
+        '--', '/usr/bin/true',
+      ], { stdio: 'ignore', timeout: 1500 });
     } catch { resolve(false); return; }
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0));

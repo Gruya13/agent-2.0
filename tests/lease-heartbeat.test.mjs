@@ -45,3 +45,19 @@ test('LeaseLostError nosi prepoznatljiv kod za faze', () => {
   assert.equal(error.code, 'LEASE_LOST');
   assert.equal(error.name, 'LeaseLostError');
 });
+
+test('startLeaseHeartbeat: onError se obaveštava samo za prvu grešku', async () => {
+  const pozivi = [];
+  const store = { renew: async () => { throw new Error('zakup je tuđ'); } };
+  const lease = startLeaseHeartbeat({
+    store, id: 'TASK-101', owner: 'dsh', token: 't', config: { lease: { heartbeatMs: 50 } },
+    onError: (error) => pozivi.push(error.message),
+  });
+  try {
+    await cekaj(220);
+    assert.equal(pozivi.length, 1, 'samo prva greška obaveštava pozivaoca');
+    assert.match(pozivi[0], /tuđ/);
+  } finally {
+    lease.stop();
+  }
+});

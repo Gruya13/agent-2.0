@@ -119,3 +119,17 @@ test('materializeTaskContext: harnes dobija zadatak i kontrolni koren u radnom s
   assert.equal(drugi.taskRoot, cwd);
   await fs.rm(cwd, { recursive: true, force: true });
 });
+
+test('runHarness: AbortSignal prekida proces odmah (izgubljen zakup)', async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'agent2-abort-'));
+  const slow = await fakeBin('sleep 10');
+  const abort = new AbortController();
+  const started = Date.now();
+  const tok = runHarness('dsh', { prompt: PROMPT, cwd, timeoutMs: 30_000, env: { AGENT_2_0_BIN: slow.file }, signal: abort.signal });
+  setTimeout(() => abort.abort(), 150);
+  const result = await tok;
+  assert.equal(result.ok, false);
+  assert.equal(result.aborted, true, 'rezultat mora da zabeleži prekid');
+  assert.ok(Date.now() - started < 8000, `proces je moralo biti prekinut (${Date.now() - started} ms)`);
+  await fs.rm(cwd, { recursive: true, force: true });
+});

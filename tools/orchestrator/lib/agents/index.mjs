@@ -75,7 +75,7 @@ export async function materializeTaskContext({ cwd, role, harness, task, config 
   return file;
 }
 
-export async function runAgent(config, { role, task, cwd, prompt, now, logger = () => {} }) {
+export async function runAgent(config, { role, task, cwd, prompt, now, signal, logger = () => {} }) {
   const spec = roleOf(config, role);
   const started = Date.now();
   await materializeTaskContext({
@@ -93,6 +93,7 @@ export async function runAgent(config, { role, task, cwd, prompt, now, logger = 
       timeoutMs: spec.timeoutMs ?? config.pipeline.agentTimeoutMs,
       env: agentEnv({ role, harness: spec.harness, cwd, task, config }),
       config,
+      signal,
     });
     if (result.harness === 'dsh' || result.harness === 'agy') {
       // Verdikt se čita iz izlaza samo za ulogu verifikatora; ostalo odlučuje

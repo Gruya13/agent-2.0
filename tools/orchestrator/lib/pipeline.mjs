@@ -75,9 +75,14 @@ export function createPipeline(config, options = {}) {
    */
   async function runAgentDrzeciZakup(id, owner, args) {
     const token = leaseTokens.get(id);
-    const lease = startLeaseHeartbeat({ store, id, owner, token, config, logger });
+    // Ako se zakup izgubi, poziv harnesa nema smisla nastaviti: prekida se
+    // odmah, a faza se odbija na kraju (LeaseLostError).
+    const abort = new AbortController();
+    const lease = startLeaseHeartbeat({
+      store, id, owner, token, config, logger, onError: () => abort.abort(),
+    });
     try {
-      const rezultat = await runAgent(config, args);
+      const rezultat = await runAgent(config, { ...args, signal: abort.signal });
       // Neuspeh obnove nije detalj za dnevnik: rad pod izgubljenim zakupom se
       // ne sme prijaviti kao uspešna faza.
       if (lease.izgubljen) {
