@@ -114,9 +114,14 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
    * sme nastaviti kao uspešan.
    */
   async function saZakupom(id, token, fn) {
-    const lease = startLeaseHeartbeat({ store, id, owner: OWNER, token, config, logger });
+    // Isti ugovor kao dokumentni tok: gubitak zakupa prekida poziv harnesa
+    // odmah, a faza se odbija na kraju.
+    const abort = new AbortController();
+    const lease = startLeaseHeartbeat({
+      store, id, owner: OWNER, token, config, logger, onError: () => abort.abort(),
+    });
     try {
-      const rezultat = await fn();
+      const rezultat = await fn(abort.signal);
       return { rezultat, izgubljen: lease.izgubljen };
     } catch (error) {
       return { rezultat: null, izgubljen: lease.izgubljen, error };
@@ -451,7 +456,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
       const autor = identityFor(config, ROLE_IMPLEMENT);
       // Zakup se obnavlja dok traje poziv: bez toga dug poziv ostavlja zadatak
       // bez važećeg zakupa (kontrolni test R2).
-      const poziv = await saZakupom(id, token, () => runAgent(config, { role: ROLE_IMPLEMENT, task, cwd: dir, prompt, now: now(), logger }));
+      const poziv = await saZakupom(id, token, (signal) => runAgent(config, { role: ROLE_IMPLEMENT, task, cwd: dir, prompt, now: now(), signal, logger }));
       if (poziv.error) throw poziv.error;
       if (poziv.izgubljen) {
         return await odbij(id, ev, `zakup je izgubljen tokom poziva programera: ${poziv.izgubljen.message}`, token);
@@ -616,7 +621,7 @@ export function createCodingPipeline(config, { store, logger = () => {} } = {}) 
           ].join('\n'),
         },
       });
-      const poziv = await saZakupom(id, token, () => runAgent(config, { role: ROLE_REVIEW, task, cwd: dir, prompt, now: now(), logger }));
+      const poziv = await saZakupom(id, token, (signal) => runAgent(config, { role: ROLE_REVIEW, task, cwd: dir, prompt, now: now(), signal, logger }));
       if (poziv.error) throw poziv.error;
       if (poziv.izgubljen) {
         return await odbij(id, ev, `zakup je izgubljen tokom pregleda: ${poziv.izgubljen.message}`, token);
